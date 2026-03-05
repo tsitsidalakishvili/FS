@@ -1647,6 +1647,9 @@ if not db_ok or neo4j_db.driver is None:
             "Missing or invalid Sandbox Neo4j credentials. Set NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD."
         )
     else:
+        st.info(
+            "Local DBMS not reachable. Start your Neo4j Desktop database and ensure Bolt is running on port 7687."
+        )
         st.error("Missing or invalid Neo4j credentials. Set NEO4J_URI and NEO4J_PASSWORD in .env.")
     st.stop()
 
