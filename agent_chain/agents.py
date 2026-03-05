@@ -75,8 +75,11 @@ def format_run_context(*, objective: str, repo_snapshot_md: str | None, state: d
             parts.append(f"- {item}")
 
     if repo_snapshot_md:
+        # Hard cap prompt bloat; the full snapshot is stored on disk in the run folder.
+        max_chars = 15000
+        snap = repo_snapshot_md if len(repo_snapshot_md) <= max_chars else (repo_snapshot_md[: max_chars - 120] + "\n\n... [truncated] ...\n")
         parts.append("\n\n## Repo snapshot (excerpted)\n")
-        parts.append(repo_snapshot_md)
+        parts.append(snap)
 
     return "\n".join(parts).strip()
 

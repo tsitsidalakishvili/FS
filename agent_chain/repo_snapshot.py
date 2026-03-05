@@ -37,7 +37,6 @@ def _is_text_candidate(path: Path) -> bool:
         ".json",
         ".yml",
         ".yaml",
-        ".csv",
     }
 
 
