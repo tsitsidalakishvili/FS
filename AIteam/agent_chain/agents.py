@@ -26,8 +26,8 @@ class AgentsConfig:
     kickoff_pipeline: list[KickoffStep]
 
 
-def load_agents_config(repo_root: Path) -> AgentsConfig:
-    cfg_path = (repo_root / "agent_chain" / "agents.json").resolve()
+def load_agents_config(framework_root: Path) -> AgentsConfig:
+    cfg_path = (framework_root / "agents.json").resolve()
     raw = json.loads(cfg_path.read_text(encoding="utf-8"))
 
     agents: dict[str, AgentSpec] = {}
@@ -46,8 +46,8 @@ def load_agents_config(repo_root: Path) -> AgentsConfig:
     return AgentsConfig(agents=agents, kickoff_pipeline=kickoff_pipeline)
 
 
-def load_prompt_text(repo_root: Path, prompt_path: str) -> str:
-    prompt_file = (repo_root / "agent_chain" / prompt_path).resolve()
+def load_prompt_text(framework_root: Path, prompt_path: str) -> str:
+    prompt_file = (framework_root / prompt_path).resolve()
     return prompt_file.read_text(encoding="utf-8")
 
 

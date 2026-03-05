@@ -104,7 +104,14 @@ def build_repo_snapshot_md(repo_root: Path, *, options: SnapshotOptions | None =
         rel = p.relative_to(repo_root)
         if rel.parts and rel.parts[0] in DEFAULT_IGNORE_DIRS:
             continue
-        if rel.parts[:2] == ("agent_chain", "runs"):
+        # Always exclude run outputs from snapshots (regardless of where the framework lives).
+        parts = rel.parts
+        for i in range(len(parts) - 1):
+            if parts[i] == "agent_chain" and parts[i + 1] == "runs":
+                break
+        else:
+            i = -1
+        if i != -1:
             continue
         if not _is_text_candidate(p):
             continue

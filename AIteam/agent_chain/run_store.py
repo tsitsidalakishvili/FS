@@ -29,9 +29,9 @@ class RunPaths:
 
 
 class RunStore:
-    def __init__(self, *, repo_root: Path):
-        self.repo_root = repo_root.resolve()
-        self.runs_root = (self.repo_root / "agent_chain" / "runs").resolve()
+    def __init__(self, *, framework_root: Path):
+        self.framework_root = framework_root.resolve()
+        self.runs_root = (self.framework_root / "runs").resolve()
         self.runs_root.mkdir(parents=True, exist_ok=True)
 
     def create_run(self, *, objective: str, created_by: str = "user") -> RunPaths:

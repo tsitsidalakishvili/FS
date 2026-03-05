@@ -4,12 +4,24 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv  # type: ignore
+except Exception:  # pragma: no cover
+    load_dotenv = None  # type: ignore
+
+
+def _find_repo_root(start: Path) -> Path:
+    for p in [start, *start.parents]:
+        if (p / ".git").exists():
+            return p
+    return start.parents[2] if len(start.parents) >= 3 else start.parent
 
 
 def _load_dotenv_once() -> None:
     # Load repo-local .env (if present) to match existing app behavior.
-    repo_root = Path(__file__).resolve().parents[1]
+    if load_dotenv is None:
+        return
+    repo_root = _find_repo_root(Path(__file__).resolve())
     dotenv_path = repo_root / ".env"
     if dotenv_path.exists():
         load_dotenv(dotenv_path=str(dotenv_path), override=True)

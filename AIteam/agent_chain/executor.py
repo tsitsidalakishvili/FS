@@ -16,6 +16,7 @@ BLOCKED_EXACT = {
 BLOCKED_PREFIXES = (
     ".git/",
     "agent_chain/runs/",
+    "AIteam/agent_chain/runs/",
 )
 
 

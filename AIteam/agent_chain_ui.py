@@ -4,10 +4,10 @@ from pathlib import Path
 
 import streamlit as st
 
-from agent_chain.orchestrator import AutopilotOptions, Orchestrator
+from AIteam.agent_chain.orchestrator import AutopilotOptions, Orchestrator
 
 
-REPO_ROOT = Path(__file__).resolve().parent
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 st.set_page_config(page_title="Agent Chain (agents-only)", layout="wide")
 st.title("Agent Chain (agents-only UI)")

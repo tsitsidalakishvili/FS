@@ -34,5 +34,5 @@ Rules:
 - Prefer small, safe changes.
 - For `replace_once`, ensure the `find` string is unique and unambiguous.
 - Never reference absolute paths.
-- Never write to: `.env`, `.streamlit/secrets.toml`, `.git/*`, `agent_chain/runs/*`.
+- Never write to: `.env`, `.streamlit/secrets.toml`, `.git/*`, `AIteam/agent_chain/runs/*` (or any run output folder).
 

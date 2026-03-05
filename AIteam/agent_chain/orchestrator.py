@@ -61,8 +61,9 @@ class AutopilotOptions:
 class Orchestrator:
     def __init__(self, *, repo_root: str | Path = "."):
         self.repo_root = Path(repo_root).resolve()
-        self.run_store = RunStore(repo_root=self.repo_root)
-        self.agents_config: AgentsConfig = load_agents_config(self.repo_root)
+        self.framework_root = Path(__file__).resolve().parent
+        self.run_store = RunStore(framework_root=self.framework_root)
+        self.agents_config: AgentsConfig = load_agents_config(self.framework_root)
         self.openai_cfg = load_openai_config()
         self.slack_cfg = load_slack_config()
 
@@ -72,7 +73,7 @@ class Orchestrator:
         return paths
 
     def get_run(self, run_id: str) -> RunPaths:
-        run_dir = (self.repo_root / "agent_chain" / "runs" / run_id).resolve()
+        run_dir = (self.run_store.runs_root / run_id).resolve()
         return RunPaths(
             run_id=run_id,
             run_dir=run_dir,
@@ -114,7 +115,7 @@ class Orchestrator:
         if paths.repo_snapshot_path.exists():
             repo_snapshot_md = paths.repo_snapshot_path.read_text(encoding="utf-8")
 
-        prompt = load_prompt_text(self.repo_root, self.agents_config.agents[agent_name].prompt_path)
+        prompt = load_prompt_text(self.framework_root, self.agents_config.agents[agent_name].prompt_path)
         context = format_run_context(objective=objective, repo_snapshot_md=repo_snapshot_md, state=state)
 
         system_msgs = [ChatMessage(role="system", content=prompt)]
@@ -272,8 +273,9 @@ class Orchestrator:
                             raise ValueError(f"Repo artifact escapes repo root: {rel_path}")
                         if repo_target.parts and ".git" in repo_target.parts:
                             raise ValueError("Refusing to write into .git")
-                        if repo_target.relative_to(self.repo_root).parts[:2] == ("agent_chain", "runs"):
-                            raise ValueError("Refusing to write into agent_chain/runs")
+                        rel_parts = repo_target.relative_to(self.repo_root).parts
+                        if rel_parts[:2] == ("agent_chain", "runs") or rel_parts[:3] == ("AIteam", "agent_chain", "runs"):
+                            raise ValueError("Refusing to write into agent_chain runs")
                         if repo_target.name == ".env" or str(repo_target).endswith(".streamlit/secrets.toml"):
                             raise ValueError("Refusing to write secret files")
                         repo_target.parent.mkdir(parents=True, exist_ok=True)

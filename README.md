@@ -8,14 +8,15 @@ This folder now contains the **combined** application:
 ```
 ./
   app.py                  # CRM + Deliberation UI (platform app)
-  console.py              # Agent Chain console UI
+  AIteam/
+    console.py            # Agent Chain console UI
+    agent_chain/          # in-repo multi-agent framework (runs are not committed)
   .env                    # local env config (not committed)
   .env.example            # env template
   deliberation/
     api/                  # FastAPI service
     data/                 # seed CSVs
     scripts/              # import/generate helpers
-  agent_chain/            # in-repo multi-agent framework (runs are not committed)
 ```
 
 ## Run locally
@@ -45,7 +46,7 @@ The console orchestrates specialist agents over a shared run state (blackboard),
 
 ### 2) Run the console
 ```
-python -m streamlit run console.py --server.address 0.0.0.0 --server.port 8501
+python -m streamlit run AIteam/console.py --server.address 0.0.0.0 --server.port 8501
 ```
 
 ## Seed data

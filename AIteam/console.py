@@ -7,11 +7,11 @@ from pathlib import Path
 
 import streamlit as st
 
-from agent_chain.git_ops import changed_files, commit, push, stage_changed_files
-from agent_chain.orchestrator import AutopilotOptions, Orchestrator
+from AIteam.agent_chain.git_ops import changed_files, commit, push, stage_changed_files
+from AIteam.agent_chain.orchestrator import AutopilotOptions, Orchestrator
 
 
-REPO_ROOT = Path(__file__).resolve().parent
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _get_orchestrator() -> Orchestrator:
