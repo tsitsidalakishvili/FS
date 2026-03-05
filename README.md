@@ -7,7 +7,10 @@ This folder now contains the **combined** application:
 ## Folder structure
 ```
 ./
-  app.py                  # CRM + Deliberation UI (platform app)
+  app.py                  # CRM + Deliberation UI entrypoint
+  crm/                    # modularized CRM app code
+  data/                   # sample CSVs (imports)
+  scripts/                # local utilities (e.g., testneo4j.py)
   AIteam/
     console.py            # Agent Chain console UI
     agent_chain/          # in-repo multi-agent framework (runs are not committed)

@@ -1,16 +1,44 @@
 import os
 import json
-import smtplib
 from uuid import uuid4
-from email.message import EmailMessage
 
 import altair as alt
 import pandas as pd
 import pydeck as pdk
 import requests
 import streamlit as st
-from dotenv import load_dotenv
-from neo4j import GraphDatabase, basic_auth
+
+from crm.clients.deliberation import (
+    delib_api_get,
+    delib_api_patch,
+    delib_api_post,
+    render_delib_api_unavailable,
+)
+from crm.config import (
+    PUBLIC_ONLY,
+    SUPPORTER_ACCESS_CODE,
+    NEO4J_SANDBOX_DATABASE,
+    NEO4J_SANDBOX_PASSWORD,
+    NEO4J_SANDBOX_URI,
+    NEO4J_SANDBOX_USER,
+)
+from crm.db.neo4j import init_driver, run_query, run_write
+import crm.db.neo4j as neo4j_db
+from crm.services.feedback import render_feedback_widget
+from crm.ui.components.import_export import (
+    render_import_export_section as render_import_export_section_ui,
+)
+from crm.ui.pages.admin import render_admin_page
+from crm.ui.pages.dashboard import render_dashboard_page
+from crm.ui.pages.deliberation import render_deliberation as render_deliberation_page
+from crm.ui.pages.events import render_events_page
+from crm.ui.pages.map import render_map_page
+from crm.ui.pages.outreach import render_outreach_page
+from crm.ui.pages.profiles import render_profiles_tab as render_profiles_tab_page
+from crm.ui.pages.segments import render_segments_tab as render_segments_tab_page
+from crm.ui.pages.tasks import render_tasks_tab as render_tasks_tab_page
+from crm.ui.pages.volunteers import render_volunteers_page
+from crm.ui.pages.data import render_data_page
 
 try:
     import matplotlib.pyplot as plt
@@ -20,15 +48,7 @@ except Exception:
     venn2 = None
     venn3 = None
 
-try:
-    from streamlit.errors import StreamlitSecretNotFoundError
-except Exception:
-    class StreamlitSecretNotFoundError(Exception):
-        """Fallback for older Streamlit versions."""
-
 st.set_page_config(page_title="Freedom Square CRM (Short)", layout="wide")
-
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
 st.markdown(
     """
@@ -47,278 +67,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-def _secrets_file_exists():
-    app_secrets = os.path.join(os.path.dirname(__file__), ".streamlit", "secrets.toml")
-    user_secrets = os.path.join(os.path.expanduser("~"), ".streamlit", "secrets.toml")
-    return os.path.exists(app_secrets) or os.path.exists(user_secrets)
-
-
-def get_config(key, default=None):
-    try:
-        if _secrets_file_exists():
-            if key in st.secrets:
-                return st.secrets.get(key, default)
-    except (StreamlitSecretNotFoundError, FileNotFoundError):
-        pass
-    value = os.getenv(key)
-    return value if value is not None else default
-
-
-NEO4J_URI = get_config("NEO4J_URI")
-NEO4J_USER = get_config("NEO4J_USER") or get_config("NEO4J_USERNAME") or "neo4j"
-NEO4J_PASSWORD = get_config("NEO4J_PASSWORD")
-NEO4J_DATABASE = get_config("NEO4J_DATABASE", "neo4j")
-DELIBERATION_API_URL = (
-    get_config("DELIBERATION_API_URL")
-    or get_config("API_URL")
-    or "http://localhost:8010"
-)
-SUPPORTER_ACCESS_CODE = get_config("SUPPORTER_ACCESS_CODE")
-PUBLIC_ONLY = str(get_config("PUBLIC_ONLY", "false")).lower() in {"1", "true", "yes", "y"}
-FEEDBACK_EMAIL_TO = get_config("FEEDBACK_EMAIL_TO")
-FEEDBACK_EMAIL_FROM = get_config("FEEDBACK_EMAIL_FROM") or FEEDBACK_EMAIL_TO
-SMTP_HOST = get_config("SMTP_HOST")
-SMTP_PORT = get_config("SMTP_PORT", "587")
-SMTP_USER = get_config("SMTP_USER")
-SMTP_PASSWORD = get_config("SMTP_PASSWORD")
-SMTP_USE_TLS = str(get_config("SMTP_USE_TLS", "true")).lower() in {"1", "true", "yes", "y"}
-
-driver = None
-_auth_rate_limited = False
-
-
-def _session_execute_read(session, func, *args):
-    if hasattr(session, "execute_read"):
-        return session.execute_read(func, *args)
-    return session.read_transaction(func, *args)
-
-
-def _session_execute_write(session, func, *args):
-    if hasattr(session, "execute_write"):
-        return session.execute_write(func, *args)
-    return session.write_transaction(func, *args)
-
-
-def init_driver():
-    global driver, _auth_rate_limited
-    if _auth_rate_limited:
-        return False
-    if not NEO4J_URI or not NEO4J_PASSWORD:
-        driver = None
-        return False
-    try:
-        driver = GraphDatabase.driver(NEO4J_URI, auth=basic_auth(NEO4J_USER, NEO4J_PASSWORD))
-        with driver.session(database=NEO4J_DATABASE) as session:
-            _session_execute_read(session, lambda tx: list(tx.run("RETURN 1")))
-        return True
-    except Exception as exc:
-        error_str = str(exc)
-        if "AuthenticationRateLimit" in error_str or "authentication details too many times" in error_str:
-            _auth_rate_limited = True
-            st.error("Neo4j authentication rate limit reached. Please wait a few minutes.")
-        else:
-            st.error(f"Could not initialize Neo4j driver: {exc}")
-        driver = None
-        return False
-
-
-def _run_read(tx, query, params):
-    result = tx.run(query, params or {})
-    return [r.data() for r in result]
-
-
-def run_query(query, params=None, silent=False):
-    if driver is None:
-        if not silent:
-            st.warning("Neo4j driver not available. Check connection settings.")
-        return pd.DataFrame()
-    if _auth_rate_limited:
-        if not silent:
-            st.error("Neo4j authentication rate limit active. Please wait before retrying.")
-        return pd.DataFrame()
-    try:
-        with driver.session(database=NEO4J_DATABASE) as session:
-            data = _session_execute_read(session, _run_read, query, params)
-            return pd.DataFrame(data)
-    except Exception as exc:
-        if not silent:
-            st.error(f"Neo4j query failed: {exc}")
-        return pd.DataFrame()
-
-
-def _run_write(tx, query, params):
-    tx.run(query, params or {})
-
-
-def run_write(query, params=None):
-    if driver is None:
-        st.warning("Neo4j driver not available. Check connection settings.")
-        return False
-    if _auth_rate_limited:
-        st.error("Neo4j authentication rate limit active. Please wait before retrying.")
-        return False
-    try:
-        with driver.session(database=NEO4J_DATABASE) as session:
-            _session_execute_write(session, _run_write, query, params)
-        return True
-    except Exception as exc:
-        st.error(f"Neo4j write failed: {exc}")
-        return False
-
-
-def _delib_api_base_url():
-    base = (DELIBERATION_API_URL or "").strip()
-    return base.rstrip("/") if base else None
-
-
-def _delib_api_url(path: str):
-    base = _delib_api_base_url()
-    if not base:
-        return None
-    if not path.startswith("/"):
-        path = f"/{path}"
-    return f"{base}{path}"
-
-
-def render_delib_api_unavailable():
-    base = _delib_api_base_url()
-    if base:
-        st.warning("Deliberation backend is not reachable.")
-        st.caption(f"Expected at `{base}`.")
-        if "localhost" in base or "127.0.0.1" in base:
-            st.caption(
-                "Streamlit Cloud cannot reach your local machine. "
-                "Deploy the deliberation API separately and set `DELIBERATION_API_URL`."
-            )
-    else:
-        st.warning("Deliberation backend is not configured.")
-        st.caption("Set `DELIBERATION_API_URL` (or `API_URL`) in `.env`.")
-    st.caption("If running locally, start the service with:")
-    st.code(
-        "python -m uvicorn deliberation.api.app.main:app --host 0.0.0.0 --port 8010"
-    )
-
-
-def delib_api_get(path, show_error=True):
-    url = _delib_api_url(path)
-    if not url:
-        if show_error:
-            render_delib_api_unavailable()
-        return None
-    try:
-        response = requests.get(url, timeout=15)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as exc:
-        if show_error:
-            st.error(f"Deliberation API error: {exc}")
-        return None
-
-
-def delib_api_post(path, payload, headers=None, show_error=True):
-    url = _delib_api_url(path)
-    if not url:
-        if show_error:
-            render_delib_api_unavailable()
-        return None
-    try:
-        response = requests.post(url, json=payload, headers=headers, timeout=20)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as exc:
-        if show_error:
-            st.error(f"Deliberation API error: {exc}")
-        return None
-
-
-def delib_api_patch(path, payload, show_error=True):
-    url = _delib_api_url(path)
-    if not url:
-        if show_error:
-            render_delib_api_unavailable()
-        return None
-    try:
-        response = requests.patch(url, json=payload, timeout=15)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as exc:
-        if show_error:
-            st.error(f"Deliberation API error: {exc}")
-        return None
-
-
-def _parse_int(value, default):
-    try:
-        return int(value)
-    except Exception:
-        return default
-
-
-def feedback_email_configured():
-    return bool(FEEDBACK_EMAIL_TO and SMTP_HOST)
-
-
-def send_feedback_email(name, email, message, page=None):
-    if not feedback_email_configured():
-        return False, "Email feedback is not configured."
-    from_email = FEEDBACK_EMAIL_FROM or FEEDBACK_EMAIL_TO
-    msg = EmailMessage()
-    msg["Subject"] = f"Feedback ({page or 'app'})"
-    msg["From"] = from_email
-    msg["To"] = FEEDBACK_EMAIL_TO
-    if email:
-        msg["Reply-To"] = email
-
-    body_lines = [
-        f"Name: {name or 'Anonymous'}",
-        f"Email: {email or 'Not provided'}",
-        f"Page: {page or 'Unknown'}",
-        "",
-        message,
-    ]
-    msg.set_content("\n".join(body_lines))
-
-    port = _parse_int(SMTP_PORT, 587)
-    try:
-        with smtplib.SMTP(SMTP_HOST, port, timeout=20) as server:
-            server.ehlo()
-            if SMTP_USE_TLS:
-                server.starttls()
-                server.ehlo()
-            if SMTP_USER:
-                server.login(SMTP_USER, SMTP_PASSWORD or "")
-            server.send_message(msg)
-        return True, None
-    except Exception as exc:
-        return False, str(exc)
-
-
-def render_feedback_widget(page_label="App"):
-    with st.sidebar.expander("Feedback", expanded=False):
-        st.caption("Send feedback directly to the team.")
-        if not feedback_email_configured():
-            st.info("Email feedback is not configured yet.")
-            st.caption("Set `FEEDBACK_EMAIL_TO` and SMTP settings in `.env` or Streamlit secrets.")
-            return
-        with st.form("feedback_form", clear_on_submit=True):
-            name = st.text_input("Name (optional)", key="feedback_name")
-            email = st.text_input("Email (optional)", key="feedback_email")
-            message = st.text_area("Your feedback", key="feedback_message")
-            submitted = st.form_submit_button("Send feedback")
-        if submitted:
-            if not message.strip():
-                st.warning("Please enter a message.")
-            else:
-                ok, error = send_feedback_email(
-                    name.strip(),
-                    email.strip(),
-                    message.strip(),
-                    page=page_label,
-                )
-                if ok:
-                    st.success("Thanks! Your feedback was sent.")
-                else:
-                    st.error(f"Could not send feedback: {error}")
 
 
 def upsert_person(payload):
@@ -653,7 +401,7 @@ def run_segment(filter_spec, limit=500):
 
     address_contains = clean_text(filter_spec.get("addressContains"))
     if address_contains:
-        clauses.append("toLower(coalesce(p.address,'')) CONTAINS toLower($addressContains)")
+        clauses.append("toLower(address) CONTAINS toLower($addressContains)")
         params["addressContains"] = address_contains
 
     min_effort = filter_spec.get("minEffortHours")
@@ -669,15 +417,18 @@ def run_segment(filter_spec, limit=500):
 
     query = f"""
     MATCH (p:Person)
+    OPTIONAL MATCH (p)-[:LIVES_AT]->(addr:Address)
     OPTIONAL MATCH (p)-[:CLASSIFIED_AS]->(st:SupporterType)
-    WITH p, collect(DISTINCT st.name) AS types
-    WITH p,
+    WITH p, addr, collect(DISTINCT st.name) AS types
+    WITH p, addr,
       (trim(coalesce(p.firstName,'') + ' ' + coalesce(p.lastName,''))) AS fullName,
       CASE WHEN any(x IN types WHERE toLower(x) CONTAINS 'member') THEN 'Member' ELSE 'Supporter' END AS group
     OPTIONAL MATCH (p)-[:HAS_TAG]->(tag:Tag)
-    WITH p, fullName, group, collect(DISTINCT tag.name) AS tags
+    WITH p, addr, fullName, group, collect(DISTINCT tag.name) AS tags
     OPTIONAL MATCH (p)-[:CAN_CONTRIBUTE_WITH]->(sk:Skill)
-    WITH p, fullName, group, tags, collect(DISTINCT sk.name) AS skills, coalesce(p.effortHours, 0.0) AS effortHours
+    WITH p, addr, fullName, group, tags, collect(DISTINCT sk.name) AS skills,
+         coalesce(p.effortHours, 0.0) AS effortHours,
+         coalesce(p.address, addr.fullAddress, '') AS address
     {where}
     RETURN
       CASE WHEN fullName = '' THEN p.email ELSE fullName END AS fullName,
@@ -850,7 +601,7 @@ def nominatim_search(query, limit=5):
 
 
 def get_distinct_values(label, prop="name"):
-    if driver is None:
+    if neo4j_db.driver is None:
         return []
     query = f"""
     MATCH (n:{label})
@@ -904,82 +655,6 @@ def bulk_upsert_people(rows):
     )
     """
     return run_write(query, {"rows": rows})
-
-
-def render_import_export_section(section_id, default_type_value, export_group):
-    st.markdown("---")
-    st.markdown("**Import / Export (CSV)**")
-    upload = st.file_uploader("Upload CSV", type=["csv"], key=f"{section_id}_upload")
-    if upload is not None:
-        try:
-            df_upload = pd.read_csv(upload)
-        except Exception as exc:
-            st.error(f"Could not read CSV: {exc}")
-            df_upload = pd.DataFrame()
-
-        if not df_upload.empty:
-            st.caption("Preview")
-            st.dataframe(df_upload.head(10), use_container_width=True)
-
-            if st.button("Import CSV", key=f"{section_id}_import_btn", help="Bulk upsert people from CSV. Requires an email column."):
-                rows = _build_import_rows(df_upload, default_type_value)
-                if not rows:
-                    st.error("No valid rows found. Ensure the CSV has an email column.")
-                elif bulk_upsert_people(rows):
-                    load_supporter_summary.clear()
-                    load_map_data.clear()
-                    st.success(f"Imported {len(rows)} rows.")
-
-    st.markdown("**Export current data (CSV)**")
-    df_export = load_supporter_summary()
-    if df_export.empty:
-        st.info("No data available to export.")
-    else:
-        df_export = df_export[df_export["group"] == export_group]
-        if df_export.empty:
-            st.info(f"No {export_group.lower()} data available to export.")
-        else:
-            export_df = df_export[
-                [
-                    "fullName",
-                    "email",
-                    "group",
-                    "effortScore",
-                    "effortHours",
-                    "eventAttendCount",
-                    "referralCount",
-                    "joinCount",
-                    "skillCount",
-                    "educationLevel",
-                    "ratingStars",
-                    "gender",
-                    "age",
-                ]
-            ].rename(
-                columns={
-                    "fullName": "name",
-                    "email": "email",
-                    "group": "group",
-                    "effortScore": "effort_score",
-                    "effortHours": "effort_hours",
-                    "eventAttendCount": "events_attended",
-                    "referralCount": "referrals",
-                    "joinCount": "joined",
-                    "skillCount": "skills_count",
-                    "educationLevel": "education",
-                    "ratingStars": "rating",
-                    "gender": "gender",
-                    "age": "age",
-                }
-            )
-            csv_data = export_df.to_csv(index=False)
-            st.download_button(
-                "Download CSV",
-                data=csv_data,
-                file_name=f"{export_group.lower()}_export.csv",
-                mime="text/csv",
-                key=f"{section_id}_export_btn",
-            )
 
 
 def classify_group(types):
@@ -1067,6 +742,44 @@ def age_group(value):
     return "65+"
 
 
+def enrich_people_core(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    df["types"] = df["types"].apply(lambda v: v or [])
+    df["group"] = df["types"].apply(classify_group)
+    df["age"] = pd.to_numeric(df["age"], errors="coerce")
+    df["ageGroup"] = df["age"].apply(age_group)
+    df["activityCount"] = pd.to_numeric(df["activityCount"], errors="coerce").fillna(0).astype(int)
+    df["eventJoinCount"] = pd.to_numeric(df["eventJoinCount"], errors="coerce").fillna(0).astype(int)
+    df["eventAttendRelCount"] = pd.to_numeric(df["eventAttendRelCount"], errors="coerce").fillna(0).astype(int)
+    df["skills"] = df["skills"].apply(lambda v: v or [])
+    df["skillCount"] = df["skills"].apply(lambda v: len([x for x in v if x]))
+    df["skillsLabel"] = df["skills"].apply(format_list_label)
+    df["eventAttendProp"] = pd.to_numeric(df["eventAttendProp"], errors="coerce").fillna(0).astype(int)
+    df["referredCount"] = pd.to_numeric(df["referredCount"], errors="coerce").fillna(0).astype(int)
+    df["recruitedCount"] = pd.to_numeric(df["recruitedCount"], errors="coerce").fillna(0).astype(int)
+    df["referralProp"] = pd.to_numeric(df["referralProp"], errors="coerce").fillna(0).astype(int)
+    df["eventAttendCount"] = df["eventAttendRelCount"] + df["eventAttendProp"]
+    df["referralCount"] = df["referredCount"] + df["recruitedCount"] + df["referralProp"]
+    df["joinCount"] = df["activityCount"] + df["eventJoinCount"]
+    df["effortHours"] = pd.to_numeric(df["effortHours"], errors="coerce").fillna(0.0)
+    df["donationTotal"] = pd.to_numeric(df["donationTotal"], errors="coerce").fillna(0.0)
+    education_values = df["educationLevels"].apply(pick_education)
+    df["educationLevel"] = education_values.apply(lambda value: value[0])
+    df["educationScore"] = education_values.apply(lambda value: value[1])
+    df["effortScore"] = df["effortHours"] + df["eventAttendCount"] + df["referralCount"]
+    df["hasParticipation"] = (
+        df["activityCount"] + df["eventJoinCount"] + df["eventAttendCount"]
+    ) > 0
+    df["rating"] = df["effortScore"].apply(calc_rating)
+    df.loc[~df["hasParticipation"], "rating"] = pd.NA
+    df["ratingStars"] = df["rating"].apply(rating_stars)
+    full_name = (df["firstName"].fillna("") + " " + df["lastName"].fillna("")).str.strip()
+    df["fullName"] = full_name.mask(full_name == "", df["email"])
+    df["age"] = pd.to_numeric(df["age"], errors="coerce")
+    return df
+
+
 @st.cache_data(ttl=60)
 def load_supporter_summary():
     df = run_query(
@@ -1112,39 +825,7 @@ def load_supporter_summary():
     )
     if df.empty:
         return df
-    df["types"] = df["types"].apply(lambda v: v or [])
-    df["group"] = df["types"].apply(classify_group)
-    df["age"] = pd.to_numeric(df["age"], errors="coerce")
-    df["ageGroup"] = df["age"].apply(age_group)
-    df["activityCount"] = pd.to_numeric(df["activityCount"], errors="coerce").fillna(0).astype(int)
-    df["eventJoinCount"] = pd.to_numeric(df["eventJoinCount"], errors="coerce").fillna(0).astype(int)
-    df["eventAttendRelCount"] = pd.to_numeric(df["eventAttendRelCount"], errors="coerce").fillna(0).astype(int)
-    df["skills"] = df["skills"].apply(lambda v: v or [])
-    df["skillCount"] = df["skills"].apply(lambda v: len([x for x in v if x]))
-    df["skillsLabel"] = df["skills"].apply(format_list_label)
-    df["eventAttendProp"] = pd.to_numeric(df["eventAttendProp"], errors="coerce").fillna(0).astype(int)
-    df["referredCount"] = pd.to_numeric(df["referredCount"], errors="coerce").fillna(0).astype(int)
-    df["recruitedCount"] = pd.to_numeric(df["recruitedCount"], errors="coerce").fillna(0).astype(int)
-    df["referralProp"] = pd.to_numeric(df["referralProp"], errors="coerce").fillna(0).astype(int)
-    df["eventAttendCount"] = df["eventAttendRelCount"] + df["eventAttendProp"]
-    df["referralCount"] = df["referredCount"] + df["recruitedCount"] + df["referralProp"]
-    df["joinCount"] = df["activityCount"] + df["eventJoinCount"]
-    df["effortHours"] = pd.to_numeric(df["effortHours"], errors="coerce").fillna(0.0)
-    df["donationTotal"] = pd.to_numeric(df["donationTotal"], errors="coerce").fillna(0.0)
-    education_values = df["educationLevels"].apply(pick_education)
-    df["educationLevel"] = education_values.apply(lambda value: value[0])
-    df["educationScore"] = education_values.apply(lambda value: value[1])
-    df["effortScore"] = df["effortHours"] + df["eventAttendCount"] + df["referralCount"]
-    df["hasParticipation"] = (
-        df["activityCount"] + df["eventJoinCount"] + df["eventAttendCount"]
-    ) > 0
-    df["rating"] = df["effortScore"].apply(calc_rating)
-    df.loc[~df["hasParticipation"], "rating"] = pd.NA
-    df["ratingStars"] = df["rating"].apply(rating_stars)
-    full_name = (df["firstName"].fillna("") + " " + df["lastName"].fillna("")).str.strip()
-    df["fullName"] = full_name.mask(full_name == "", df["email"])
-    df["age"] = pd.to_numeric(df["age"], errors="coerce")
-    return df
+    return enrich_people_core(df)
 
 
 @st.cache_data(ttl=60)
@@ -1209,10 +890,6 @@ def load_map_data():
     df["lat"] = pd.to_numeric(df["lat"], errors="coerce")
     df["lon"] = pd.to_numeric(df["lon"], errors="coerce")
     df = df.dropna(subset=["lat", "lon"])
-    df["types"] = df["types"].apply(lambda v: v or [])
-    df["group"] = df["types"].apply(classify_group)
-    df["age"] = pd.to_numeric(df["age"], errors="coerce")
-    df["ageGroup"] = df["age"].apply(age_group)
     df["timeAvailability"] = df["timeAvailability"].fillna("Unspecified")
     df["about"] = df["about"].fillna("")
     df["address"] = df["address"].fillna("")
@@ -1221,38 +898,12 @@ def load_map_data():
     )
     df["involvementAreas"] = df["involvementAreas"].apply(lambda v: v or [])
     df["involvementLabel"] = df["involvementAreas"].apply(format_list_label)
-    df["activityCount"] = pd.to_numeric(df["activityCount"], errors="coerce").fillna(0).astype(int)
-    df["eventJoinCount"] = pd.to_numeric(df["eventJoinCount"], errors="coerce").fillna(0).astype(int)
-    df["eventAttendRelCount"] = pd.to_numeric(df["eventAttendRelCount"], errors="coerce").fillna(0).astype(int)
-    df["skills"] = df["skills"].apply(lambda v: v or [])
-    df["skillCount"] = df["skills"].apply(lambda v: len([x for x in v if x]))
-    df["skillsLabel"] = df["skills"].apply(format_list_label)
-    df["eventAttendProp"] = pd.to_numeric(df["eventAttendProp"], errors="coerce").fillna(0).astype(int)
-    df["referredCount"] = pd.to_numeric(df["referredCount"], errors="coerce").fillna(0).astype(int)
-    df["recruitedCount"] = pd.to_numeric(df["recruitedCount"], errors="coerce").fillna(0).astype(int)
-    df["referralProp"] = pd.to_numeric(df["referralProp"], errors="coerce").fillna(0).astype(int)
-    df["eventAttendCount"] = df["eventAttendRelCount"] + df["eventAttendProp"]
-    df["referralCount"] = df["referredCount"] + df["recruitedCount"] + df["referralProp"]
-    df["joinCount"] = df["activityCount"] + df["eventJoinCount"]
-    df["effortHours"] = pd.to_numeric(df["effortHours"], errors="coerce").fillna(0.0)
-    df["donationTotal"] = pd.to_numeric(df["donationTotal"], errors="coerce").fillna(0.0)
-    education_values = df["educationLevels"].apply(pick_education)
-    df["educationLevel"] = education_values.apply(lambda value: value[0])
-    df["educationScore"] = education_values.apply(lambda value: value[1])
-    df["effortScore"] = df["effortHours"] + df["eventAttendCount"] + df["referralCount"]
-    df["hasParticipation"] = (
-        df["activityCount"] + df["eventJoinCount"] + df["eventAttendCount"]
-    ) > 0
-    df["rating"] = df["effortScore"].apply(calc_rating)
-    df.loc[~df["hasParticipation"], "rating"] = pd.NA
-    df["ratingStars"] = df["rating"].apply(rating_stars)
+    df = enrich_people_core(df)
     df["involvementTitle"] = df["group"].apply(
         lambda value: "Desired involvement"
         if value == "Supporter"
         else "Current involvement"
     )
-    full_name = (df["firstName"].fillna("") + " " + df["lastName"].fillna("")).str.strip()
-    df["fullName"] = full_name.mask(full_name == "", df["email"])
     df["pointSize"] = (6 + df["effortScore"].clip(lower=0) * 0.2).clip(4, 60)
     df["color"] = df["group"].map(
         {"Supporter": [51, 136, 255, 180], "Member": [142, 68, 173, 180]}
@@ -1379,292 +1030,6 @@ def _csv_cluster_by_columns(
     summary = safe["cluster_id"].value_counts().reset_index()
     summary.columns = ["cluster_id", "count"]
     return safe.drop(columns=["_cluster_key"]), summary
-
-
-def render_tasks_tab():
-    st.subheader("Tasks / Follow-ups")
-    st.caption("Track follow-ups as tasks linked to people. This is a new feature and does not change existing tabs.")
-
-    filter_cols = st.columns([1, 1, 1, 1])
-    with filter_cols[0]:
-        status_filter = st.selectbox(
-            "Status",
-            ["(any)"] + TASK_STATUSES,
-            index=0,
-            key="tasks_status_filter",
-            help="Filter the task queue by status.",
-        )
-    with filter_cols[1]:
-        group_filter = st.selectbox(
-            "Group",
-            ["(any)", "Supporter", "Member"],
-            index=0,
-            key="tasks_group_filter",
-            help="Filter tasks by the person’s group (Supporter/Member).",
-        )
-    with filter_cols[2]:
-        limit = st.number_input(
-            "Limit",
-            min_value=10,
-            max_value=1000,
-            value=300,
-            step=10,
-            key="tasks_limit",
-            help="Max number of tasks to load.",
-        )
-    with filter_cols[3]:
-        refresh = st.button("Refresh", key="tasks_refresh", help="Reload the task queue with the selected filters.")
-
-    st.markdown("#### Create task")
-    create_cols = st.columns([2, 2, 2, 1])
-    with create_cols[0]:
-        person_query = st.text_input(
-            "Find Person (Name/Email)",
-            key="tasks_person_query",
-            help="Search people by name/email to attach the task to a person.",
-        )
-        matches = search_people(person_query, limit=30) if person_query else pd.DataFrame()
-        options = [""] + (matches["email"].tolist() if not matches.empty and "email" in matches.columns else [])
-        person_email = st.selectbox(
-            "Person",
-            options=options,
-            key="tasks_person_email",
-            help="Pick the person who should receive this follow-up task.",
-        )
-    with create_cols[1]:
-        title = st.text_input("Title *", key="tasks_title", help="Short task title (required).")
-        due_date = st.text_input(
-            "Due Date (YYYY-MM-DD, optional)",
-            key="tasks_due_date",
-            help="Optional due date. Stored as text (YYYY-MM-DD recommended).",
-        )
-    with create_cols[2]:
-        description = st.text_area("Notes (optional)", height=80, key="tasks_description")
-    with create_cols[3]:
-        status_new = st.selectbox("New Status", TASK_STATUSES, index=0, key="tasks_new_status")
-        if st.button("Add task", key="tasks_add_btn", help="Create a task linked to the selected person."):
-            ok = create_task(person_email, title, description=description, due_date=due_date, status=status_new)
-            if ok:
-                st.success("Task created.")
-            else:
-                st.error("Could not create task (check person + title).")
-
-    st.markdown("---")
-    st.markdown("#### Task queue")
-    status_val = None if status_filter == "(any)" else status_filter
-    group_val = None if group_filter == "(any)" else group_filter
-    if refresh:
-        pass
-    df = list_tasks(status=status_val, group=group_val, limit=limit)
-    if df.empty:
-        st.info("No tasks found (yet).")
-        return
-
-    display_df = df[
-        [
-            "title",
-            "status",
-            "dueDate",
-            "firstName",
-            "lastName",
-            "email",
-            "group",
-            "updatedAt",
-        ]
-    ].rename(
-        columns={
-            "title": "Title",
-            "status": "Status",
-            "dueDate": "Due",
-            "firstName": "First",
-            "lastName": "Last",
-            "email": "Email",
-            "group": "Group",
-            "updatedAt": "Updated",
-        }
-    )
-    st.caption(f"{len(display_df):,} tasks shown")
-    st.download_button(
-        "Download tasks CSV",
-        data=display_df.to_csv(index=False),
-        file_name="tasks.csv",
-        mime="text/csv",
-    )
-    st.dataframe(display_df, use_container_width=True)
-
-    st.markdown("#### Update task status")
-    task_ids = df["taskId"].tolist() if "taskId" in df.columns else []
-    upd_cols = st.columns([2, 1, 1])
-    with upd_cols[0]:
-        selected_task = st.selectbox("Task", options=[""] + task_ids, key="tasks_update_task")
-    with upd_cols[1]:
-        new_status = st.selectbox("Set Status", TASK_STATUSES, key="tasks_update_status")
-    with upd_cols[2]:
-        if st.button("Update", key="tasks_update_btn", help="Update the selected task’s status."):
-            ok = update_task_status(selected_task, new_status)
-            if ok:
-                st.success("Updated.")
-            else:
-                st.error("Update failed.")
-
-
-def render_profiles_tab():
-    st.subheader("Profiles")
-    st.caption("Search and open a person profile. New feature; existing Supporter/Member forms remain unchanged.")
-
-    query = st.text_input("Search by Name or Email", key="profiles_search")
-    matches = search_people(query, limit=80) if query else pd.DataFrame()
-    if matches.empty:
-        st.info("Search to find a person.")
-        return
-
-    label_rows = [
-        f"{row.get('fullName','')} — {row.get('email','')}" for _, row in matches.iterrows()
-    ]
-    selection = st.selectbox("Select Person", options=[""] + label_rows, key="profiles_select")
-    if not selection:
-        return
-    idx = label_rows.index(selection)
-    email = matches.iloc[idx]["email"]
-
-    prof = load_person_profile(email)
-    if prof.empty:
-        st.error("Could not load profile.")
-        return
-
-    row = prof.iloc[0].to_dict()
-    summary_cols = st.columns(3)
-    summary_cols[0].markdown(f"**Email**: `{email}`")
-    summary_cols[1].markdown(f"**Tags**: {format_list_label(row.get('tags') or [])}")
-    summary_cols[2].markdown(f"**Skills**: {format_list_label(row.get('skills') or [])}")
-
-    details_tab, tasks_tab = st.tabs(["Details", "Tasks"])
-    with details_tab:
-        reveal = st.checkbox(
-            "Reveal contact fields (PII)",
-            value=False,
-            key="profiles_reveal",
-            help="When off, sensitive contact fields are masked to reduce accidental exposure.",
-        )
-
-        form_cols = st.columns(2)
-        with form_cols[0]:
-            first = st.text_input(
-                "First Name", value=row.get("firstName") or "", key="profiles_first"
-            )
-            last = st.text_input(
-                "Last Name", value=row.get("lastName") or "", key="profiles_last"
-            )
-            phone = st.text_input(
-                "Phone",
-                value=(row.get("phone") or "") if reveal else "••••••",
-                key="profiles_phone",
-                disabled=not reveal,
-            )
-            gender = st.selectbox(
-                "Gender", ["", "Male", "Female", "Other"], index=0, key="profiles_gender"
-            )
-            age_val = row.get("age")
-            age = st.number_input(
-                "Age",
-                min_value=0,
-                max_value=120,
-                value=int(age_val)
-                if isinstance(age_val, (int, float)) and not pd.isna(age_val)
-                else 0,
-                step=1,
-                key="profiles_age",
-            )
-        with form_cols[1]:
-            time_availability = st.selectbox(
-                "Time Availability",
-                ["", "Weekends", "Evenings", "Full-time", "Ad-hoc", "Unspecified"],
-                index=0,
-                key="profiles_time",
-            )
-            about = st.text_area(
-                "Motivation / Notes",
-                value=row.get("about") or "",
-                height=120,
-                key="profiles_about",
-            )
-            agrees = st.checkbox(
-                "Agrees with Manifesto",
-                value=bool(row.get("agreesWithManifesto")),
-                key="profiles_agrees",
-            )
-            interested = st.checkbox(
-                "Interested in Party Membership",
-                value=bool(row.get("interestedInMembership")),
-                key="profiles_interested",
-            )
-            fb = st.checkbox(
-                "Facebook Group Member",
-                value=bool(row.get("facebookGroupMember")),
-                key="profiles_fb",
-            )
-
-        if st.button(
-            "Save profile updates",
-            key="profiles_save_btn",
-            help="Write profile field updates to Neo4j.",
-        ):
-            payload = {
-                "firstName": first,
-                "lastName": last,
-                "phone": phone if reveal else row.get("phone"),
-                "gender": gender,
-                "age": age if age else None,
-                "timeAvailability": time_availability
-                if time_availability and time_availability != "Unspecified"
-                else "Unspecified",
-                "about": about,
-                "agreesWithManifesto": agrees,
-                "interestedInMembership": interested,
-                "facebookGroupMember": fb,
-            }
-            ok = update_person_profile(email, payload)
-            if ok:
-                load_supporter_summary.clear()
-                load_map_data.clear()
-                st.success("Saved.")
-            else:
-                st.error("Save failed.")
-
-    with tasks_tab:
-        st.markdown("#### Tasks for this person")
-        tcols = st.columns([2, 2, 1])
-        with tcols[0]:
-            t_title = st.text_input("Task Title *", key="profiles_task_title")
-        with tcols[1]:
-            t_due = st.text_input("Due Date (YYYY-MM-DD, optional)", key="profiles_task_due")
-        with tcols[2]:
-            if st.button(
-                "Add task",
-                key="profiles_add_task",
-                help="Create a follow-up task for this person.",
-            ):
-                ok = create_task(email, t_title, due_date=t_due, status="Open")
-                if ok:
-                    st.success("Task added.")
-                else:
-                    st.error("Could not add task.")
-
-        tdf = list_tasks(person_email=email, limit=200)
-        if tdf.empty:
-            st.caption("No tasks yet.")
-        else:
-            st.dataframe(
-                tdf[["title", "status", "dueDate", "updatedAt"]].rename(
-                    columns={
-                        "title": "Title",
-                        "status": "Status",
-                        "dueDate": "Due",
-                        "updatedAt": "Updated",
-                    }
-                ),
-                use_container_width=True,
-            )
 
 
 def render_segments_tab():
@@ -2185,6 +1550,55 @@ def render_deliberation(public_only: bool):
                 st.subheader("In progress")
 
 
+from crm.analytics import people as people_analytics
+from crm.data import people as people_data
+from crm.data import segments as segments_data
+from crm.data import tasks as tasks_data
+from crm.services import geo as geo_service
+from crm.utils import text as text_utils
+
+upsert_person = people_data.upsert_person
+search_people = people_data.search_people
+load_person_profile = people_data.load_person_profile
+update_person_profile = people_data.update_person_profile
+get_distinct_values = people_data.get_distinct_values
+bulk_upsert_people = people_data.bulk_upsert_people
+
+create_task = tasks_data.create_task
+update_task_status = tasks_data.update_task_status
+list_tasks = tasks_data.list_tasks
+TASK_STATUSES = tasks_data.TASK_STATUSES
+
+upsert_segment = segments_data.upsert_segment
+list_segments = segments_data.list_segments
+delete_segment = segments_data.delete_segment
+load_segment_filter = segments_data.load_segment_filter
+run_segment = segments_data.run_segment
+
+clean_text = text_utils.clean_text
+split_list = text_utils.split_list
+normalize_str_list = text_utils.normalize_str_list
+format_list_label = text_utils.format_list_label
+normalize_supporter_type = text_utils.normalize_supporter_type
+_normalize_column = text_utils._normalize_column
+_get_column = text_utils._get_column
+_build_import_rows = text_utils.build_import_rows
+
+nominatim_search = geo_service.nominatim_search
+
+classify_group = people_analytics.classify_group
+pick_education = people_analytics.pick_education
+calc_rating = people_analytics.calc_rating
+rating_stars = people_analytics.rating_stars
+rating_color = people_analytics.rating_color
+age_group = people_analytics.age_group
+enrich_people_core = people_analytics.enrich_people_core
+load_supporter_summary = people_analytics.load_supporter_summary
+load_map_data = people_analytics.load_map_data
+answer_chat = people_analytics.answer_chat
+sort_people = people_analytics.sort_people
+
+
 st.title("Freedom Square CRM")
 
 supporter_mode = not PUBLIC_ONLY
@@ -2200,18 +1614,55 @@ if SUPPORTER_ACCESS_CODE:
 if not supporter_mode:
     st.info("Public view: deliberation participation only.")
     render_feedback_widget("Deliberation (Public)")
-    render_deliberation(public_only=True)
+    render_deliberation_page(public_only=True)
     st.stop()
 
-init_driver()
+st.sidebar.markdown("### Database")
+db_choice = st.sidebar.radio(
+    "Connection",
+    ["Local (Desktop)", "Sandbox (Web)"],
+    index=0,
+    key="db_connection_choice",
+    help="Switch between your local Neo4j Desktop DB and the Neo4j Sandbox.",
+)
+if db_choice == "Sandbox (Web)":
+    if not NEO4J_SANDBOX_URI or not NEO4J_SANDBOX_PASSWORD:
+        st.sidebar.warning(
+            "Sandbox credentials missing. Set NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD in .env or Streamlit secrets."
+        )
+        db_ok = False
+    else:
+        db_ok = init_driver(
+            uri=NEO4J_SANDBOX_URI,
+            user=NEO4J_SANDBOX_USER,
+            password=NEO4J_SANDBOX_PASSWORD,
+            database=NEO4J_SANDBOX_DATABASE,
+        )
+else:
+    db_ok = init_driver()
 
-if driver is None:
-    st.error("Missing or invalid Neo4j credentials. Set NEO4J_URI and NEO4J_PASSWORD in .env.")
+if not db_ok or neo4j_db.driver is None:
+    if db_choice == "Sandbox (Web)":
+        st.error(
+            "Missing or invalid Sandbox Neo4j credentials. Set NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD."
+        )
+    else:
+        st.error("Missing or invalid Neo4j credentials. Set NEO4J_URI and NEO4J_PASSWORD in .env.")
     st.stop()
 
 nav_choice = st.sidebar.radio(
     "Navigate",
-    ["Dashboard", "People", "Map", "Tasks", "Profiles", "Segments", "Deliberation"],
+    [
+        "Dashboard",
+        "People",
+        "Segments",
+        "Outreach",
+        "Events",
+        "Volunteers",
+        "Data",
+        "Admin",
+        "Deliberation",
+    ],
     index=0,
     key="main_nav",
 )
@@ -2220,6 +1671,8 @@ render_feedback_widget(nav_choice)
 
 
 if nav_choice == "Dashboard":
+    render_dashboard_page()
+    st.stop()
     dash_overview, dash_chat = st.tabs(["Overview", "Chatbox"])
     with dash_overview:
         st.subheader("Dashboard")
@@ -2578,6 +2031,22 @@ if nav_choice == "Dashboard":
 
 if nav_choice == "People":
     st.subheader("People")
+    section = st.radio(
+        "Section",
+        ["Directory", "Profiles", "Tasks", "Map"],
+        horizontal=True,
+        key="people_section",
+        help="Switch between people directory, profiles, tasks, and the field map.",
+    )
+    if section == "Profiles":
+        render_profiles_tab_page()
+        st.stop()
+    if section == "Tasks":
+        render_tasks_tab_page()
+        st.stop()
+    if section == "Map":
+        render_map_page()
+        st.stop()
     group_view = st.radio(
         "View",
         ["Supporters", "Members"],
@@ -2755,7 +2224,7 @@ if nav_choice == "People":
                     st.success("Preview new supporter")
                     st.dataframe(pd.DataFrame([row]))
 
-                    if driver is None:
+                    if neo4j_db.driver is None:
                         st.error("Neo4j driver not available. Check connection settings.")
                     elif not email.strip():
                         st.error("Email is required to upsert the supporter.")
@@ -2913,7 +2382,7 @@ if nav_choice == "People":
                 st.caption(f"{len(display_df):,} people shown")
                 st.dataframe(display_df, use_container_width=True)
 
-        render_import_export_section("supporters", "Supporter", "Supporter")
+        render_import_export_section_ui("supporters", "Supporter", "Supporter")
 
     else:
         st.subheader("Members")
@@ -3102,7 +2571,7 @@ if nav_choice == "People":
                     st.success("Preview new member")
                     st.dataframe(pd.DataFrame([row]))
 
-                    if driver is None:
+                    if neo4j_db.driver is None:
                         st.error("Neo4j driver not available. Check connection settings.")
                     elif not email.strip():
                         st.error("Email is required to upsert the member.")
@@ -3260,7 +2729,7 @@ if nav_choice == "People":
                 st.caption(f"{len(display_df):,} people shown")
                 st.dataframe(display_df, use_container_width=True)
 
-        render_import_export_section("members", "Member", "Member")
+        render_import_export_section_ui("members", "Member", "Member")
 
 
 if nav_choice == "Map":
@@ -3439,13 +2908,13 @@ if nav_choice == "Map":
                 legend_cols = st.columns(2)
                 legend_cols[0].markdown(
                     "<div style='display:flex;align-items:center;gap:6px;'>"
-                    "<span style='width:14px;height:14px;background:#3388ff;display:inline-block;border-radius:3px;'></span>"
+                    "<span style='width:14px;height:14px;background:#118DC1;display:inline-block;border-radius:3px;'></span>"
                     "<span style='font-size:12px;'>Supporter</span></div>",
                     unsafe_allow_html=True,
                 )
                 legend_cols[1].markdown(
                     "<div style='display:flex;align-items:center;gap:6px;'>"
-                    "<span style='width:14px;height:14px;background:#8e44ad;display:inline-block;border-radius:3px;'></span>"
+                    "<span style='width:14px;height:14px;background:#0B5E85;display:inline-block;border-radius:3px;'></span>"
                     "<span style='font-size:12px;'>Member</span></div>",
                     unsafe_allow_html=True,
                 )
@@ -3513,27 +2982,41 @@ if nav_choice == "Map":
                     }
                 )
 
-                st.download_button(
-                    "Download filtered CSV",
-                    data=table_df.to_csv(index=False),
-                    file_name="filtered_people.csv",
-                    mime="text/csv",
-                )
                 st.dataframe(table_df, use_container_width=True)
 
 
 if nav_choice == "Tasks":
-    render_tasks_tab()
+    render_tasks_tab_page()
 
 
 if nav_choice == "Profiles":
-    render_profiles_tab()
+    render_profiles_tab_page()
 
 
 if nav_choice == "Segments":
-    render_segments_tab()
+    render_segments_tab_page()
+
+
+if nav_choice == "Outreach":
+    render_outreach_page()
+
+
+if nav_choice == "Events":
+    render_events_page()
+
+
+if nav_choice == "Volunteers":
+    render_volunteers_page()
+
+
+if nav_choice == "Data":
+    render_data_page()
+
+
+if nav_choice == "Admin":
+    render_admin_page()
 
 
 if nav_choice == "Deliberation":
-    render_deliberation(public_only=False)
+    render_deliberation_page(public_only=False)
 
