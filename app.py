@@ -1498,29 +1498,57 @@ def render_segments_tab():
     if st.button("Save segment", key="segments_save_btn", help="Save this filter definition as a reusable segment."):
         ok = upsert_segment(seg_name, seg_desc, filter_spec)
         if ok:
-            st.success("Segment saved.")
+            st.session_state["segments_select"] = (seg_name or "").strip()
+            st.session_state["segments_saved_notice"] = "Segment saved."
+            st.rerun()
         else:
             st.error("Could not save segment (name required).")
 
     st.markdown("---")
     st.markdown("#### Saved segments")
+    if st.session_state.get("segments_saved_notice"):
+        st.success(st.session_state.pop("segments_saved_notice"))
     sdf = list_segments()
     if sdf.empty:
         st.info("No segments yet.")
         return
 
-    labels = [f"{row['name']} — {row.get('updatedAt','')}" for _, row in sdf.iterrows()]
-    sel = st.selectbox("Select segment", options=[""] + labels, key="segments_select")
+    st.caption("Existing segments")
+    st.dataframe(
+        sdf[["name", "description", "updatedAt"]].rename(
+            columns={"name": "Name", "description": "Description", "updatedAt": "Updated"}
+        ),
+        use_container_width=True,
+    )
+
+    names = sdf["name"].tolist() if "name" in sdf.columns else []
+    sel = st.selectbox(
+        "Select segment",
+        options=[""] + names,
+        key="segments_select",
+        help="Pick a saved segment to run it and view matching people.",
+    )
     if not sel:
         st.caption("Select a segment to run it.")
         return
 
-    idx = labels.index(sel)
-    seg_id = sdf.iloc[idx]["segmentId"]
+    seg_rows = sdf[sdf["name"] == sel] if "name" in sdf.columns else pd.DataFrame()
+    seg_id = seg_rows["segmentId"].iloc[0] if not seg_rows.empty and "segmentId" in seg_rows.columns else None
+    if not seg_id:
+        st.error("Could not resolve segment id.")
+        return
 
     run_cols = st.columns([1, 1, 2])
     with run_cols[0]:
-        run_limit = st.number_input("Result limit", min_value=10, max_value=2000, value=500, step=50, key="segments_limit")
+        run_limit = st.number_input(
+            "Result limit",
+            min_value=10,
+            max_value=2000,
+            value=500,
+            step=50,
+            key="segments_limit",
+            help="Max number of people to return for this segment.",
+        )
     with run_cols[1]:
         if st.button("Run segment", key="segments_run_btn", help="Execute this saved segment and show matching people."):
             st.session_state["segments_last_run"] = str(seg_id)
@@ -1529,6 +1557,9 @@ def render_segments_tab():
             ok = delete_segment(seg_id)
             if ok:
                 st.success("Deleted.")
+                st.session_state["segments_last_run"] = None
+                st.session_state["segments_select"] = ""
+                st.rerun()
             else:
                 st.error("Delete failed.")
 
@@ -1990,7 +2021,11 @@ st.title("Freedom Square CRM")
 supporter_mode = not PUBLIC_ONLY
 if SUPPORTER_ACCESS_CODE:
     st.sidebar.markdown("### Access")
-    entered_code = st.sidebar.text_input("Supporter access code", type="password")
+    entered_code = st.sidebar.text_input(
+        "Supporter access code",
+        type="password",
+        help="If set in .env, this code gates access to the CRM tabs. Share only with trusted team members.",
+    )
     supporter_mode = entered_code == SUPPORTER_ACCESS_CODE
 
 if not supporter_mode:
@@ -2367,7 +2402,11 @@ with tab_supporters:
     form_col, list_col = st.columns([1, 2])
     with form_col:
         st.markdown("**Search address**")
-        search_query = st.text_input("Search address", key="supporter_address_search")
+        search_query = st.text_input(
+            "Search address",
+            key="supporter_address_search",
+            help="Type an address/place name, then click “Find address” to pick a geocoded match.",
+        )
         if st.button("Find address", key="supporter_address_button", help="Lookup address via OpenStreetMap and fill lat/lon."):
             results = nominatim_search(search_query)
             st.session_state["supporter_address_results"] = results
@@ -2377,7 +2416,10 @@ with tab_supporters:
         options = st.session_state["supporter_address_results"]
         labels = [item.get("display_name", "") for item in options]
         selected_label = st.selectbox(
-            "Matches", [""] + labels, key="supporter_address_select"
+            "Matches",
+            [""] + labels,
+            key="supporter_address_select",
+            help="Select the best match to auto-fill address + latitude/longitude in the form.",
         )
         if selected_label:
             idx = labels.index(selected_label)
@@ -2469,7 +2511,10 @@ with tab_supporters:
             tags_combined = normalize_str_list(tags_selected + split_list(tags_custom))
             about = st.text_area("About / Motivation", value="")
 
-            save = st.form_submit_button("💾 Save to Neo4j and preview")
+            save = st.form_submit_button(
+                "💾 Save to Neo4j and preview",
+                help="Upsert this supporter into Neo4j (email is required).",
+            )
 
             if save:
                 row = {
@@ -2781,7 +2826,10 @@ with tab_members:
             tags_combined = normalize_str_list(tags_selected + split_list(tags_custom))
             about = st.text_area("About / Motivation", value="", key="member_about")
 
-            save = st.form_submit_button("💾 Save to Neo4j and preview")
+            save = st.form_submit_button(
+                "💾 Save to Neo4j and preview",
+                help="Upsert this member into Neo4j (email is required).",
+            )
 
             if save:
                 row = {
@@ -2981,8 +3029,16 @@ with tab_map:
         sidebar_col, map_col = st.columns([1, 4])
         with sidebar_col:
             st.markdown("**Filters**")
-            show_supporters = st.checkbox("Show supporters", value=True)
-            show_members = st.checkbox("Show members", value=True)
+            show_supporters = st.checkbox(
+                "Show supporters",
+                value=True,
+                help="Include supporters on the map and in the filtered table.",
+            )
+            show_members = st.checkbox(
+                "Show members",
+                value=True,
+                help="Include members on the map and in the filtered table.",
+            )
 
             time_options = sorted(
                 [
@@ -2992,7 +3048,10 @@ with tab_map:
                 ]
             )
             selected_time = st.multiselect(
-                "Time availability", time_options, default=[]
+                "Time availability",
+                time_options,
+                default=[],
+                help="Filter by people’s time availability field.",
             )
             age_group_order = [
                 "Under 18",
