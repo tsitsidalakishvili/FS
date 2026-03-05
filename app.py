@@ -28,16 +28,6 @@ st.set_page_config(page_title="Freedom Square CRM (Short)", layout="wide")
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
-
-def ui_help(title: str, markdown: str, expanded: bool = True) -> None:
-    """
-    UI help shown only when the user enables the sidebar toggle.
-    """
-    if st.session_state.get("show_ui_help"):
-        with st.expander(title, expanded=expanded):
-            st.markdown(markdown.strip())
-
-
 def _secrets_file_exists():
     app_secrets = os.path.join(os.path.dirname(__file__), ".streamlit", "secrets.toml")
     user_secrets = os.path.join(os.path.expanduser("~"), ".streamlit", "secrets.toml")
@@ -1236,39 +1226,60 @@ def _csv_cluster_by_columns(df: pd.DataFrame, columns: list[str], max_clusters: 
 def render_tasks_tab():
     st.subheader("Tasks / Follow-ups")
     st.caption("Track follow-ups as tasks linked to people. This is a new feature and does not change existing tabs.")
-    ui_help(
-        "What this tab does",
-        """
-- Create follow-up tasks linked to a person (stored in Neo4j).
-- Keep a simple queue so organizers always know the “next action”.
-
-**Buttons**
-- **Add task**: creates a `Task` node linked to the selected person.
-- **Update**: changes a task’s status (Open/In Progress/Done/Cancelled).
-        """,
-        expanded=False,
-    )
 
     filter_cols = st.columns([1, 1, 1, 1])
     with filter_cols[0]:
-        status_filter = st.selectbox("Status", ["(any)"] + TASK_STATUSES, index=0, key="tasks_status_filter")
+        status_filter = st.selectbox(
+            "Status",
+            ["(any)"] + TASK_STATUSES,
+            index=0,
+            key="tasks_status_filter",
+            help="Filter the task queue by status.",
+        )
     with filter_cols[1]:
-        group_filter = st.selectbox("Group", ["(any)", "Supporter", "Member"], index=0, key="tasks_group_filter")
+        group_filter = st.selectbox(
+            "Group",
+            ["(any)", "Supporter", "Member"],
+            index=0,
+            key="tasks_group_filter",
+            help="Filter tasks by the person’s group (Supporter/Member).",
+        )
     with filter_cols[2]:
-        limit = st.number_input("Limit", min_value=10, max_value=1000, value=300, step=10, key="tasks_limit")
+        limit = st.number_input(
+            "Limit",
+            min_value=10,
+            max_value=1000,
+            value=300,
+            step=10,
+            key="tasks_limit",
+            help="Max number of tasks to load.",
+        )
     with filter_cols[3]:
         refresh = st.button("Refresh", key="tasks_refresh", help="Reload the task queue with the selected filters.")
 
     st.markdown("#### Create task")
     create_cols = st.columns([2, 2, 2, 1])
     with create_cols[0]:
-        person_query = st.text_input("Find person (name/email)", key="tasks_person_query")
+        person_query = st.text_input(
+            "Find person (name/email)",
+            key="tasks_person_query",
+            help="Search people by name/email to attach the task to a person.",
+        )
         matches = search_people(person_query, limit=30) if person_query else pd.DataFrame()
         options = [""] + (matches["email"].tolist() if not matches.empty and "email" in matches.columns else [])
-        person_email = st.selectbox("Person", options=options, key="tasks_person_email")
+        person_email = st.selectbox(
+            "Person",
+            options=options,
+            key="tasks_person_email",
+            help="Pick the person who should receive this follow-up task.",
+        )
     with create_cols[1]:
-        title = st.text_input("Title", key="tasks_title")
-        due_date = st.text_input("Due date (YYYY-MM-DD, optional)", key="tasks_due_date")
+        title = st.text_input("Title", key="tasks_title", help="Short task title (required).")
+        due_date = st.text_input(
+            "Due date (YYYY-MM-DD, optional)",
+            key="tasks_due_date",
+            help="Optional due date. Stored as text (YYYY-MM-DD recommended).",
+        )
     with create_cols[2]:
         description = st.text_area("Notes (optional)", height=80, key="tasks_description")
     with create_cols[3]:
@@ -1337,17 +1348,6 @@ def render_tasks_tab():
 def render_profiles_tab():
     st.subheader("Profiles")
     st.caption("Search and open a person profile. New feature; existing Supporter/Member forms remain unchanged.")
-    ui_help(
-        "What this tab does",
-        """
-- Quickly find a person (by name/email) and view/edit key profile fields.
-- Add and view tasks for the selected person.
-
-**Privacy**
-- The “Reveal contact fields (PII)” toggle prevents accidental display of phone/email details during demos.
-        """,
-        expanded=False,
-    )
 
     query = st.text_input("Search by name or email", key="profiles_search")
     matches = search_people(query, limit=80) if query else pd.DataFrame()
@@ -1453,43 +1453,38 @@ def render_profiles_tab():
 
 def render_segments_tab():
     st.subheader("Segments")
-    st.caption("Save common filters as segments and re-run them. New feature; does not change existing filters in Map tab.")
-    ui_help(
-        "What this tab does (and how it differs from Deliberation)",
-        """
-- **Segments = “Who should we work with?”** (CRM list-building)
-  - Save a filter that returns a list of people (supporters/members) to contact, organize, invite, etc.
-
-- **Deliberation = “What do groups of people think?”**
-  - Collect reactions/votes on shared statements and cluster participants based on voting patterns.
-
-**Buttons**
-- **Save segment**: stores the filter in Neo4j as a `Segment`.
-- **Run segment**: re-executes the saved filter and shows matching people.
-- **Delete segment**: removes the segment definition (does not delete people).
-        """,
-        expanded=False,
+    st.caption(
+        "Save common filters as segments and re-run them. "
+        "Segments = “Who should we work with?” (CRM list-building)."
     )
 
     st.markdown("#### Create / update segment")
     seg_cols = st.columns([2, 2, 2])
     with seg_cols[0]:
-        seg_name = st.text_input("Segment name", key="segments_name")
-        seg_desc = st.text_input("Description (optional)", key="segments_desc")
+        seg_name = st.text_input("Segment name", key="segments_name", help="A short name for this reusable filter (required).")
+        seg_desc = st.text_input("Description (optional)", key="segments_desc", help="Optional note about what this segment is for.")
     with seg_cols[1]:
-        group = st.selectbox("Group", ["", "Supporter", "Member"], key="segments_group")
+        group = st.selectbox("Group", ["", "Supporter", "Member"], key="segments_group", help="Optional group restriction.")
         time_availability = st.multiselect(
             "Time availability",
             ["Weekends", "Evenings", "Full-time", "Ad-hoc"],
             default=[],
             key="segments_time",
+            help="Match people whose timeAvailability is one of these values.",
         )
-        min_effort = st.number_input("Min effort hours", min_value=0.0, value=0.0, step=1.0, key="segments_min_effort")
+        min_effort = st.number_input(
+            "Min effort hours",
+            min_value=0.0,
+            value=0.0,
+            step=1.0,
+            key="segments_min_effort",
+            help="Minimum effort hours threshold (uses the Person.effortHours property).",
+        )
     with seg_cols[2]:
-        tags = st.multiselect("Tags", get_distinct_values("Tag"), default=[], key="segments_tags")
-        skills = st.multiselect("Skills", get_distinct_values("Skill"), default=[], key="segments_skills")
-        name_contains = st.text_input("Name contains", key="segments_name_contains")
-        address_contains = st.text_input("Address contains", key="segments_address_contains")
+        tags = st.multiselect("Tags", get_distinct_values("Tag"), default=[], key="segments_tags", help="Match people who have any of these tags.")
+        skills = st.multiselect("Skills", get_distinct_values("Skill"), default=[], key="segments_skills", help="Match people who have any of these skills.")
+        name_contains = st.text_input("Name contains", key="segments_name_contains", help="Case-insensitive substring match on the person’s full name.")
+        address_contains = st.text_input("Address contains", key="segments_address_contains", help="Case-insensitive substring match on address text.")
 
     filter_spec = {
         "group": group or None,
@@ -1549,19 +1544,8 @@ def render_segments_tab():
 def render_deliberation(public_only: bool):
     st.subheader("Deliberation")
     st.caption("Anonymous comments + votes, consensus analysis, and clustering.")
-    ui_help(
-        "What this tab does",
-        """
-- Run a participation flow where people:
-  1) read/submit comments (optional),
-  2) vote Agree/Disagree/Pass on approved comments,
-  3) then you run analysis to see **opinion clusters** and **consensus/polarizing** topics.
-
-**Mental model**
-- **Segments = “Who should we work with?”** (CRM list-building)
-- **Deliberation = “What do groups of people think?”** (insight/clustering from votes)
-        """,
-        expanded=False,
+    st.caption(
+        "Deliberation = “What do groups of people think?” (insight/clustering from votes)."
     )
 
     if "delib_anon_id" not in st.session_state:
@@ -1574,6 +1558,7 @@ def render_deliberation(public_only: bool):
         "Select conversation",
         [""] + list(convo_options.keys()),
         key="delib_conversation_select",
+        help="Pick which deliberation conversation you want to participate in / analyze.",
     )
     if selected_title:
         st.session_state["delib_conversation_id"] = convo_options[selected_title]
@@ -2002,13 +1987,6 @@ This is implemented in `deliberation/api/app/analytics.py` (`build_vote_matrix`,
 
 st.title("Freedom Square CRM")
 
-st.sidebar.markdown("### Help")
-st.sidebar.checkbox(
-    "Show UI help (explanations)",
-    value=bool(st.session_state.get("show_ui_help", False)),
-    key="show_ui_help",
-)
-
 supporter_mode = not PUBLIC_ONLY
 if SUPPORTER_ACCESS_CODE:
     st.sidebar.markdown("### Access")
@@ -2034,14 +2012,6 @@ tab_intro, tab_supporters, tab_members, tab_map, tab_tasks, tab_profiles, tab_se
 with tab_intro:
     st.subheader("Dashboard")
     st.write("Short CRM view focused on supporters, members, activity, and map insights.")
-    ui_help(
-        "What this tab does",
-        """
-- High-level overview of your People database (Supporters vs Members) and engagement.
-- Charts summarize group counts, gender, rating, age, and key engagement indicators.
-        """,
-        expanded=False,
-    )
     df_summary = load_supporter_summary()
     if df_summary.empty:
         st.info("No supporters found.")
@@ -2394,20 +2364,6 @@ with tab_intro:
 
 with tab_supporters:
     st.subheader("Supporters")
-    ui_help(
-        "What this tab does",
-        """
-- Add or update supporters in Neo4j.
-- Browse and sort supporters by effort and engagement.
-- Import supporters from CSV (email is the required identifier).
-
-**Buttons**
-- **Find address**: uses OpenStreetMap Nominatim to pre-fill latitude/longitude.
-- **Save to Neo4j**: writes/upserts the person record + relationships (skills, tags, involvement).
-- **Import CSV**: bulk upsert people (requires an email column).
-        """,
-        expanded=False,
-    )
     form_col, list_col = st.columns([1, 2])
     with form_col:
         st.markdown("**Search address**")
@@ -2706,19 +2662,6 @@ with tab_supporters:
 
 with tab_members:
     st.subheader("Members")
-    ui_help(
-        "What this tab does",
-        """
-- Add or update members in Neo4j (same underlying Person graph, grouped as “Member”).
-- Browse and sort members by engagement.
-
-**Buttons**
-- **Find address**: uses OpenStreetMap Nominatim to pre-fill latitude/longitude.
-- **Save to Neo4j**: writes/upserts the person record + relationships (skills, tags, involvement).
-- **Import/Export**: bulk upsert or export member lists.
-        """,
-        expanded=False,
-    )
     form_col, list_col = st.columns([1, 2])
     with form_col:
         st.markdown("**Search address**")
@@ -3031,15 +2974,6 @@ with tab_members:
 
 with tab_map:
     st.subheader("Map")
-    ui_help(
-        "What this tab does",
-        """
-- Explore supporters/members on a map using their latitude/longitude.
-- Filter by availability, demographics, skills, and motivation text.
-- Hover points for quick context; use the table view to copy/export filtered lists.
-        """,
-        expanded=False,
-    )
     df_geo = load_map_data()
     if df_geo.empty:
         st.info("No supporters with latitude/longitude found.")
