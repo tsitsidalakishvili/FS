@@ -162,6 +162,14 @@ with chat_cols[2]:
 with chat_cols[3]:
     apply_to_repo = st.checkbox("Apply code changes to repo", value=False, disabled=not auto_implement)
 
+autopilot_cols = st.columns([1, 1, 2])
+with autopilot_cols[0]:
+    autopilot_rounds = st.number_input("Autopilot rounds", min_value=1, max_value=10, value=3, step=1)
+with autopilot_cols[1]:
+    write_artifacts_to_repo = st.checkbox("Write safe artifacts to repo", value=False)
+with autopilot_cols[2]:
+    st.caption("Artifacts are always written to the run folder; repo writes are optional and safety-checked.")
+
 status_cols = st.columns([1, 4])
 with status_cols[0]:
     if st.button("Run status"):
@@ -183,8 +191,8 @@ if prompt:
     if autopilot and active_agent == "Supervisor":
         try:
             opts = AutopilotOptions(
-                max_rounds=3,
-                write_artifacts_to_repo=False,
+                max_rounds=int(autopilot_rounds),
+                write_artifacts_to_repo=write_artifacts_to_repo,
                 auto_implement_code=auto_implement,
                 apply_code_to_repo=apply_to_repo,
             )
