@@ -6,35 +6,51 @@ This folder now contains the **combined** application:
 
 ## Folder structure
 ```
-TM/
-  app.py                  # CRM + Deliberation UI
-  .env                    # shared env config
+./
+  app.py                  # CRM + Deliberation UI (platform app)
+  console.py              # Agent Chain console UI
+  .env                    # local env config (not committed)
+  .env.example            # env template
   deliberation/
     api/                  # FastAPI service
     data/                 # seed CSVs
     scripts/              # import/generate helpers
+  agent_chain/            # in-repo multi-agent framework (runs are not committed)
 ```
 
 ## Run locally
 
 ### 1) Start deliberation API
 ```
-cd TM/deliberation/api
+cd deliberation/api
 python -m pip install -r requirements.txt
 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8010
 ```
 
 ### 2) Start CRM UI
 ```
-cd TM
 python -m streamlit run app.py --server.address 0.0.0.0 --server.port 8506
 ```
 
 Open: `http://localhost:8506`
 
+## Agent Chain Console (multi-agent dev console)
+The console orchestrates specialist agents over a shared run state (blackboard), keeps run history, and can optionally apply safe code changes and run git automation.
+
+### 1) Configure env
+- Copy `.env.example` to `.env` and set at least:
+  - `OPENAI_API_KEY`
+  - `OPENAI_MODEL` (optional)
+  - `SLACK_WEBHOOK_URL` (optional)
+
+### 2) Run the console
+```
+python -m streamlit run console.py --server.address 0.0.0.0 --server.port 8501
+```
+
 ## Seed data
 ```
-cd TM/deliberation/scripts
+cd deliberation/scripts
 python import_comments.py --csv ../data/georgian_politics_comments.csv
 ```
 
