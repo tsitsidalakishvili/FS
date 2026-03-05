@@ -29,6 +29,15 @@ st.set_page_config(page_title="Freedom Square CRM (Short)", layout="wide")
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
 
+def ui_help(title: str, markdown: str, expanded: bool = True) -> None:
+    """
+    UI help shown only when the user enables the sidebar toggle.
+    """
+    if st.session_state.get("show_ui_help"):
+        with st.expander(title, expanded=expanded):
+            st.markdown(markdown.strip())
+
+
 def _secrets_file_exists():
     app_secrets = os.path.join(os.path.dirname(__file__), ".streamlit", "secrets.toml")
     user_secrets = os.path.join(os.path.expanduser("~"), ".streamlit", "secrets.toml")
@@ -775,7 +784,7 @@ def render_import_export_section(section_id, default_type_value, export_group):
             st.caption("Preview")
             st.dataframe(df_upload.head(10), use_container_width=True)
 
-            if st.button("Import CSV", key=f"{section_id}_import_btn"):
+            if st.button("Import CSV", key=f"{section_id}_import_btn", help="Bulk upsert people from CSV. Requires an email column."):
                 rows = _build_import_rows(df_upload, default_type_value)
                 if not rows:
                     st.error("No valid rows found. Ensure the CSV has an email column.")
@@ -1227,6 +1236,18 @@ def _csv_cluster_by_columns(df: pd.DataFrame, columns: list[str], max_clusters: 
 def render_tasks_tab():
     st.subheader("Tasks / Follow-ups")
     st.caption("Track follow-ups as tasks linked to people. This is a new feature and does not change existing tabs.")
+    ui_help(
+        "What this tab does",
+        """
+- Create follow-up tasks linked to a person (stored in Neo4j).
+- Keep a simple queue so organizers always know the “next action”.
+
+**Buttons**
+- **Add task**: creates a `Task` node linked to the selected person.
+- **Update**: changes a task’s status (Open/In Progress/Done/Cancelled).
+        """,
+        expanded=False,
+    )
 
     filter_cols = st.columns([1, 1, 1, 1])
     with filter_cols[0]:
@@ -1236,7 +1257,7 @@ def render_tasks_tab():
     with filter_cols[2]:
         limit = st.number_input("Limit", min_value=10, max_value=1000, value=300, step=10, key="tasks_limit")
     with filter_cols[3]:
-        refresh = st.button("Refresh", key="tasks_refresh")
+        refresh = st.button("Refresh", key="tasks_refresh", help="Reload the task queue with the selected filters.")
 
     st.markdown("#### Create task")
     create_cols = st.columns([2, 2, 2, 1])
@@ -1252,7 +1273,7 @@ def render_tasks_tab():
         description = st.text_area("Notes (optional)", height=80, key="tasks_description")
     with create_cols[3]:
         status_new = st.selectbox("New status", TASK_STATUSES, index=0, key="tasks_new_status")
-        if st.button("Add task", key="tasks_add_btn"):
+        if st.button("Add task", key="tasks_add_btn", help="Create a task linked to the selected person."):
             ok = create_task(person_email, title, description=description, due_date=due_date, status=status_new)
             if ok:
                 st.success("Task created.")
@@ -1305,7 +1326,7 @@ def render_tasks_tab():
     with upd_cols[1]:
         new_status = st.selectbox("Set status", TASK_STATUSES, key="tasks_update_status")
     with upd_cols[2]:
-        if st.button("Update", key="tasks_update_btn"):
+        if st.button("Update", key="tasks_update_btn", help="Update the selected task’s status."):
             ok = update_task_status(selected_task, new_status)
             if ok:
                 st.success("Updated.")
@@ -1316,6 +1337,17 @@ def render_tasks_tab():
 def render_profiles_tab():
     st.subheader("Profiles")
     st.caption("Search and open a person profile. New feature; existing Supporter/Member forms remain unchanged.")
+    ui_help(
+        "What this tab does",
+        """
+- Quickly find a person (by name/email) and view/edit key profile fields.
+- Add and view tasks for the selected person.
+
+**Privacy**
+- The “Reveal contact fields (PII)” toggle prevents accidental display of phone/email details during demos.
+        """,
+        expanded=False,
+    )
 
     query = st.text_input("Search by name or email", key="profiles_search")
     matches = search_people(query, limit=80) if query else pd.DataFrame()
@@ -1338,7 +1370,12 @@ def render_profiles_tab():
         return
 
     row = prof.iloc[0].to_dict()
-    reveal = st.checkbox("Reveal contact fields (PII)", value=False, key="profiles_reveal")
+    reveal = st.checkbox(
+        "Reveal contact fields (PII)",
+        value=False,
+        key="profiles_reveal",
+        help="When off, sensitive contact fields are masked to reduce accidental exposure.",
+    )
 
     form_cols = st.columns(2)
     with form_cols[0]:
@@ -1360,7 +1397,7 @@ def render_profiles_tab():
         interested = st.checkbox("Interested in Party Membership", value=bool(row.get("interestedInMembership")), key="profiles_interested")
         fb = st.checkbox("Facebook Group Member", value=bool(row.get("facebookGroupMember")), key="profiles_fb")
 
-    if st.button("Save profile updates", key="profiles_save_btn"):
+    if st.button("Save profile updates", key="profiles_save_btn", help="Write profile field updates to Neo4j."):
         payload = {
             "firstName": first,
             "lastName": last,
@@ -1395,7 +1432,7 @@ def render_profiles_tab():
     with tcols[1]:
         t_due = st.text_input("Due date (YYYY-MM-DD, optional)", key="profiles_task_due")
     with tcols[2]:
-        if st.button("Add task", key="profiles_add_task"):
+        if st.button("Add task", key="profiles_add_task", help="Create a follow-up task for this person."):
             ok = create_task(email, t_title, due_date=t_due, status="Open")
             if ok:
                 st.success("Task added.")
@@ -1417,6 +1454,22 @@ def render_profiles_tab():
 def render_segments_tab():
     st.subheader("Segments")
     st.caption("Save common filters as segments and re-run them. New feature; does not change existing filters in Map tab.")
+    ui_help(
+        "What this tab does (and how it differs from Deliberation)",
+        """
+- **Segments = “Who should we work with?”** (CRM list-building)
+  - Save a filter that returns a list of people (supporters/members) to contact, organize, invite, etc.
+
+- **Deliberation = “What do groups of people think?”**
+  - Collect reactions/votes on shared statements and cluster participants based on voting patterns.
+
+**Buttons**
+- **Save segment**: stores the filter in Neo4j as a `Segment`.
+- **Run segment**: re-executes the saved filter and shows matching people.
+- **Delete segment**: removes the segment definition (does not delete people).
+        """,
+        expanded=False,
+    )
 
     st.markdown("#### Create / update segment")
     seg_cols = st.columns([2, 2, 2])
@@ -1447,7 +1500,7 @@ def render_segments_tab():
         "nameContains": name_contains or None,
         "addressContains": address_contains or None,
     }
-    if st.button("Save segment", key="segments_save_btn"):
+    if st.button("Save segment", key="segments_save_btn", help="Save this filter definition as a reusable segment."):
         ok = upsert_segment(seg_name, seg_desc, filter_spec)
         if ok:
             st.success("Segment saved.")
@@ -1474,10 +1527,10 @@ def render_segments_tab():
     with run_cols[0]:
         run_limit = st.number_input("Result limit", min_value=10, max_value=2000, value=500, step=50, key="segments_limit")
     with run_cols[1]:
-        if st.button("Run segment", key="segments_run_btn"):
+        if st.button("Run segment", key="segments_run_btn", help="Execute this saved segment and show matching people."):
             st.session_state["segments_last_run"] = str(seg_id)
     with run_cols[2]:
-        if st.button("Delete segment", key="segments_delete_btn"):
+        if st.button("Delete segment", key="segments_delete_btn", help="Delete this segment definition from Neo4j."):
             ok = delete_segment(seg_id)
             if ok:
                 st.success("Deleted.")
@@ -1496,6 +1549,20 @@ def render_segments_tab():
 def render_deliberation(public_only: bool):
     st.subheader("Deliberation")
     st.caption("Anonymous comments + votes, consensus analysis, and clustering.")
+    ui_help(
+        "What this tab does",
+        """
+- Run a participation flow where people:
+  1) read/submit comments (optional),
+  2) vote Agree/Disagree/Pass on approved comments,
+  3) then you run analysis to see **opinion clusters** and **consensus/polarizing** topics.
+
+**Mental model**
+- **Segments = “Who should we work with?”** (CRM list-building)
+- **Deliberation = “What do groups of people think?”** (insight/clustering from votes)
+        """,
+        expanded=False,
+    )
 
     if "delib_anon_id" not in st.session_state:
         st.session_state["delib_anon_id"] = str(uuid4())
@@ -1532,7 +1599,7 @@ def render_deliberation(public_only: bool):
             is_open = st.checkbox(
                 "Open for participation", value=True, key="delib_is_open"
             )
-            if st.button("Create conversation", key="delib_create_convo"):
+            if st.button("Create conversation", key="delib_create_convo", help="Create a new deliberation conversation (topic + settings)."):
                 if topic.strip():
                     result = delib_api_post(
                         "/conversations",
@@ -1583,7 +1650,7 @@ def render_deliberation(public_only: bool):
                         value=convo.get("is_open", True),
                         key="delib_is_open_edit",
                     )
-                    if st.button("Save settings", key="delib_save_settings"):
+                    if st.button("Save settings", key="delib_save_settings", help="Update conversation settings (open/closed, moderation, etc.)."):
                         result = delib_api_patch(
                             f"/conversations/{convo_id}",
                             {
@@ -1600,7 +1667,7 @@ def render_deliberation(public_only: bool):
 
                     st.markdown("### Seed comments (bulk)")
                     seed_text = st.text_area("One comment per line", key="delib_seed_text")
-                    if st.button("Add seed comments", key="delib_seed_submit"):
+                    if st.button("Add seed comments", key="delib_seed_submit", help="Bulk add seed comments (one per line)."):
                         lines = [line.strip() for line in seed_text.splitlines() if line.strip()]
                         if lines:
                             result = delib_api_post(
@@ -1636,7 +1703,7 @@ def render_deliberation(public_only: bool):
                                 step=50,
                                 key="delib_seed_csv_max_rows",
                             )
-                            if st.button("Seed from CSV", key="delib_seed_csv_btn"):
+                            if st.button("Seed from CSV", key="delib_seed_csv_btn", help="Create seed comments from the selected CSV column."):
                                 if not col:
                                     st.warning("Select a column.")
                                 else:
@@ -1683,7 +1750,7 @@ def render_deliberation(public_only: bool):
                     )
                     st.caption(counts)
                     cols = st.columns(3)
-                    if cols[0].button("Agree", key=f"delib-{comment['id']}-agree"):
+                    if cols[0].button("Agree", key=f"delib-{comment['id']}-agree", help="Vote Agree on this comment."):
                         delib_api_post(
                             "/vote",
                             {
@@ -1693,7 +1760,7 @@ def render_deliberation(public_only: bool):
                             },
                             headers=headers,
                         )
-                    if cols[1].button("Disagree", key=f"delib-{comment['id']}-disagree"):
+                    if cols[1].button("Disagree", key=f"delib-{comment['id']}-disagree", help="Vote Disagree on this comment."):
                         delib_api_post(
                             "/vote",
                             {
@@ -1703,7 +1770,7 @@ def render_deliberation(public_only: bool):
                             },
                             headers=headers,
                         )
-                    if cols[2].button("Pass", key=f"delib-{comment['id']}-pass"):
+                    if cols[2].button("Pass", key=f"delib-{comment['id']}-pass", help="Skip/Pass on this comment (neutral / no vote)."):
                         delib_api_post(
                             "/vote",
                             {
@@ -1718,7 +1785,7 @@ def render_deliberation(public_only: bool):
             if convo and convo.get("allow_comment_submission", True):
                 st.markdown("### Submit comment")
                 new_comment = st.text_area("Your comment", key="delib_submit_comment")
-                if st.button("Submit comment", key="delib_submit_comment_btn"):
+                if st.button("Submit comment", key="delib_submit_comment_btn", help="Submit a new comment into this conversation (may require moderation)."):
                     if new_comment.strip():
                         delib_api_post(
                             f"/conversations/{convo_id}/comments",
@@ -1745,11 +1812,11 @@ def render_deliberation(public_only: bool):
                     for comment in pending:
                         st.markdown(f"**{comment['text']}**")
                         cols = st.columns(2)
-                        if cols[0].button("Approve", key=f"delib-{comment['id']}-approve"):
+                        if cols[0].button("Approve", key=f"delib-{comment['id']}-approve", help="Approve this pending comment so it becomes voteable."):
                             delib_api_patch(
                                 f"/comments/{comment['id']}", {"status": "approved"}
                             )
-                        if cols[1].button("Reject", key=f"delib-{comment['id']}-reject"):
+                        if cols[1].button("Reject", key=f"delib-{comment['id']}-reject", help="Reject this pending comment."):
                             delib_api_patch(
                                 f"/comments/{comment['id']}", {"status": "rejected"}
                             )
@@ -1789,7 +1856,7 @@ This is implemented in `deliberation/api/app/analytics.py` (`build_vote_matrix`,
                 )
 
             with report_tab:
-                if st.button("Run analysis", key="delib_run_analysis"):
+                if st.button("Run analysis", key="delib_run_analysis", help="Compute clusters + consensus/polarizing topics from votes."):
                     report = delib_api_post(f"/conversations/{convo_id}/analyze", {})
                 else:
                     report = delib_api_get(f"/conversations/{convo_id}/report")
@@ -1912,7 +1979,7 @@ This is implemented in `deliberation/api/app/analytics.py` (`build_vote_matrix`,
                             step=1,
                             key="delib_csv_max_clusters",
                         )
-                        if st.button("Create clusters", key="delib_csv_cluster_btn"):
+                        if st.button("Create clusters", key="delib_csv_cluster_btn", help="Group rows by the selected column values and summarize cluster sizes."):
                             clustered, summary = _csv_cluster_by_columns(
                                 df_csv, selected_cols, max_clusters=int(max_clusters)
                             )
@@ -1934,6 +2001,13 @@ This is implemented in `deliberation/api/app/analytics.py` (`build_vote_matrix`,
 
 
 st.title("Freedom Square CRM")
+
+st.sidebar.markdown("### Help")
+st.sidebar.checkbox(
+    "Show UI help (explanations)",
+    value=bool(st.session_state.get("show_ui_help", False)),
+    key="show_ui_help",
+)
 
 supporter_mode = not PUBLIC_ONLY
 if SUPPORTER_ACCESS_CODE:
@@ -1960,6 +2034,14 @@ tab_intro, tab_supporters, tab_members, tab_map, tab_tasks, tab_profiles, tab_se
 with tab_intro:
     st.subheader("Dashboard")
     st.write("Short CRM view focused on supporters, members, activity, and map insights.")
+    ui_help(
+        "What this tab does",
+        """
+- High-level overview of your People database (Supporters vs Members) and engagement.
+- Charts summarize group counts, gender, rating, age, and key engagement indicators.
+        """,
+        expanded=False,
+    )
     df_summary = load_supporter_summary()
     if df_summary.empty:
         st.info("No supporters found.")
@@ -2312,11 +2394,25 @@ with tab_intro:
 
 with tab_supporters:
     st.subheader("Supporters")
+    ui_help(
+        "What this tab does",
+        """
+- Add or update supporters in Neo4j.
+- Browse and sort supporters by effort and engagement.
+- Import supporters from CSV (email is the required identifier).
+
+**Buttons**
+- **Find address**: uses OpenStreetMap Nominatim to pre-fill latitude/longitude.
+- **Save to Neo4j**: writes/upserts the person record + relationships (skills, tags, involvement).
+- **Import CSV**: bulk upsert people (requires an email column).
+        """,
+        expanded=False,
+    )
     form_col, list_col = st.columns([1, 2])
     with form_col:
         st.markdown("**Search address**")
         search_query = st.text_input("Search address", key="supporter_address_search")
-        if st.button("Find address", key="supporter_address_button"):
+        if st.button("Find address", key="supporter_address_button", help="Lookup address via OpenStreetMap and fill lat/lon."):
             results = nominatim_search(search_query)
             st.session_state["supporter_address_results"] = results
         if "supporter_address_results" not in st.session_state:
@@ -2610,11 +2706,24 @@ with tab_supporters:
 
 with tab_members:
     st.subheader("Members")
+    ui_help(
+        "What this tab does",
+        """
+- Add or update members in Neo4j (same underlying Person graph, grouped as “Member”).
+- Browse and sort members by engagement.
+
+**Buttons**
+- **Find address**: uses OpenStreetMap Nominatim to pre-fill latitude/longitude.
+- **Save to Neo4j**: writes/upserts the person record + relationships (skills, tags, involvement).
+- **Import/Export**: bulk upsert or export member lists.
+        """,
+        expanded=False,
+    )
     form_col, list_col = st.columns([1, 2])
     with form_col:
         st.markdown("**Search address**")
         search_query = st.text_input("Search address", key="member_address_search")
-        if st.button("Find address", key="member_address_button"):
+        if st.button("Find address", key="member_address_button", help="Lookup address via OpenStreetMap and fill lat/lon."):
             results = nominatim_search(search_query)
             st.session_state["member_address_results"] = results
         if "member_address_results" not in st.session_state:
@@ -2922,6 +3031,15 @@ with tab_members:
 
 with tab_map:
     st.subheader("Map")
+    ui_help(
+        "What this tab does",
+        """
+- Explore supporters/members on a map using their latitude/longitude.
+- Filter by availability, demographics, skills, and motivation text.
+- Hover points for quick context; use the table view to copy/export filtered lists.
+        """,
+        expanded=False,
+    )
     df_geo = load_map_data()
     if df_geo.empty:
         st.info("No supporters with latitude/longitude found.")
