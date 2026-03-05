@@ -1,6 +1,8 @@
 import os
 import json
+import smtplib
 from uuid import uuid4
+from email.message import EmailMessage
 
 import altair as alt
 import pandas as pd
@@ -73,6 +75,13 @@ DELIBERATION_API_URL = (
 )
 SUPPORTER_ACCESS_CODE = get_config("SUPPORTER_ACCESS_CODE")
 PUBLIC_ONLY = str(get_config("PUBLIC_ONLY", "false")).lower() in {"1", "true", "yes", "y"}
+FEEDBACK_EMAIL_TO = get_config("FEEDBACK_EMAIL_TO")
+FEEDBACK_EMAIL_FROM = get_config("FEEDBACK_EMAIL_FROM") or FEEDBACK_EMAIL_TO
+SMTP_HOST = get_config("SMTP_HOST")
+SMTP_PORT = get_config("SMTP_PORT", "587")
+SMTP_USER = get_config("SMTP_USER")
+SMTP_PASSWORD = get_config("SMTP_PASSWORD")
+SMTP_USE_TLS = str(get_config("SMTP_USE_TLS", "true")).lower() in {"1", "true", "yes", "y"}
 
 driver = None
 _auth_rate_limited = False
@@ -157,38 +166,159 @@ def run_write(query, params=None):
         return False
 
 
-def delib_api_get(path):
+def _delib_api_base_url():
+    base = (DELIBERATION_API_URL or "").strip()
+    return base.rstrip("/") if base else None
+
+
+def _delib_api_url(path: str):
+    base = _delib_api_base_url()
+    if not base:
+        return None
+    if not path.startswith("/"):
+        path = f"/{path}"
+    return f"{base}{path}"
+
+
+def render_delib_api_unavailable():
+    base = _delib_api_base_url()
+    if base:
+        st.warning("Deliberation backend is not reachable.")
+        st.caption(f"Expected at `{base}`.")
+        if "localhost" in base or "127.0.0.1" in base:
+            st.caption(
+                "Streamlit Cloud cannot reach your local machine. "
+                "Deploy the deliberation API separately and set `DELIBERATION_API_URL`."
+            )
+    else:
+        st.warning("Deliberation backend is not configured.")
+        st.caption("Set `DELIBERATION_API_URL` (or `API_URL`) in `.env`.")
+    st.caption("If running locally, start the service with:")
+    st.code(
+        "python -m uvicorn deliberation.api.app.main:app --host 0.0.0.0 --port 8010"
+    )
+
+
+def delib_api_get(path, show_error=True):
+    url = _delib_api_url(path)
+    if not url:
+        if show_error:
+            render_delib_api_unavailable()
+        return None
     try:
-        response = requests.get(f"{DELIBERATION_API_URL}{path}", timeout=15)
+        response = requests.get(url, timeout=15)
         response.raise_for_status()
         return response.json()
     except requests.RequestException as exc:
-        st.error(f"Deliberation API error: {exc}")
+        if show_error:
+            st.error(f"Deliberation API error: {exc}")
         return None
 
 
-def delib_api_post(path, payload, headers=None):
+def delib_api_post(path, payload, headers=None, show_error=True):
+    url = _delib_api_url(path)
+    if not url:
+        if show_error:
+            render_delib_api_unavailable()
+        return None
     try:
-        response = requests.post(
-            f"{DELIBERATION_API_URL}{path}", json=payload, headers=headers, timeout=20
-        )
+        response = requests.post(url, json=payload, headers=headers, timeout=20)
         response.raise_for_status()
         return response.json()
     except requests.RequestException as exc:
-        st.error(f"Deliberation API error: {exc}")
+        if show_error:
+            st.error(f"Deliberation API error: {exc}")
         return None
 
 
-def delib_api_patch(path, payload):
+def delib_api_patch(path, payload, show_error=True):
+    url = _delib_api_url(path)
+    if not url:
+        if show_error:
+            render_delib_api_unavailable()
+        return None
     try:
-        response = requests.patch(
-            f"{DELIBERATION_API_URL}{path}", json=payload, timeout=15
-        )
+        response = requests.patch(url, json=payload, timeout=15)
         response.raise_for_status()
         return response.json()
     except requests.RequestException as exc:
-        st.error(f"Deliberation API error: {exc}")
+        if show_error:
+            st.error(f"Deliberation API error: {exc}")
         return None
+
+
+def _parse_int(value, default):
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+
+def feedback_email_configured():
+    return bool(FEEDBACK_EMAIL_TO and SMTP_HOST)
+
+
+def send_feedback_email(name, email, message, page=None):
+    if not feedback_email_configured():
+        return False, "Email feedback is not configured."
+    from_email = FEEDBACK_EMAIL_FROM or FEEDBACK_EMAIL_TO
+    msg = EmailMessage()
+    msg["Subject"] = f"Feedback ({page or 'app'})"
+    msg["From"] = from_email
+    msg["To"] = FEEDBACK_EMAIL_TO
+    if email:
+        msg["Reply-To"] = email
+
+    body_lines = [
+        f"Name: {name or 'Anonymous'}",
+        f"Email: {email or 'Not provided'}",
+        f"Page: {page or 'Unknown'}",
+        "",
+        message,
+    ]
+    msg.set_content("\n".join(body_lines))
+
+    port = _parse_int(SMTP_PORT, 587)
+    try:
+        with smtplib.SMTP(SMTP_HOST, port, timeout=20) as server:
+            server.ehlo()
+            if SMTP_USE_TLS:
+                server.starttls()
+                server.ehlo()
+            if SMTP_USER:
+                server.login(SMTP_USER, SMTP_PASSWORD or "")
+            server.send_message(msg)
+        return True, None
+    except Exception as exc:
+        return False, str(exc)
+
+
+def render_feedback_widget(page_label="App"):
+    with st.sidebar.expander("Feedback", expanded=False):
+        st.caption("Send feedback directly to the team.")
+        if not feedback_email_configured():
+            st.info("Email feedback is not configured yet.")
+            st.caption("Set `FEEDBACK_EMAIL_TO` and SMTP settings in `.env` or Streamlit secrets.")
+            return
+        with st.form("feedback_form", clear_on_submit=True):
+            name = st.text_input("Name (optional)", key="feedback_name")
+            email = st.text_input("Email (optional)", key="feedback_email")
+            message = st.text_area("Your feedback", key="feedback_message")
+            submitted = st.form_submit_button("Send feedback")
+        if submitted:
+            if not message.strip():
+                st.warning("Please enter a message.")
+            else:
+                ok, error = send_feedback_email(
+                    name.strip(),
+                    email.strip(),
+                    message.strip(),
+                    page=page_label,
+                )
+                if ok:
+                    st.success("Thanks! Your feedback was sent.")
+                else:
+                    st.error(f"Could not send feedback: {error}")
 
 
 def upsert_person(payload):
@@ -1206,7 +1336,12 @@ def sort_people(df, sort_by):
     return df.sort_values("fullName")
 
 
-def _csv_cluster_by_columns(df: pd.DataFrame, columns: list[str], max_clusters: int = 12):
+def _csv_cluster_by_columns(
+    df: pd.DataFrame,
+    columns: list[str],
+    max_clusters: int = 12,
+    min_cluster_size: int = 1,
+):
     """
     Deterministic clustering for uploaded CSVs:
     cluster_id = unique combination of selected columns (stringified).
@@ -1232,8 +1367,14 @@ def _csv_cluster_by_columns(df: pd.DataFrame, columns: list[str], max_clusters: 
     except Exception:
         max_clusters = 12
     max_clusters = max(2, min(50, max_clusters))
+    try:
+        min_cluster_size = int(min_cluster_size)
+    except Exception:
+        min_cluster_size = 1
+    min_cluster_size = max(1, min(1000, min_cluster_size))
 
-    top_keys = set(counts.head(max_clusters)["cluster_key"].tolist())
+    eligible = counts[counts["count"] >= min_cluster_size]
+    top_keys = set(eligible.head(max_clusters)["cluster_key"].tolist())
     safe["cluster_id"] = safe["_cluster_key"].apply(lambda k: k if k in top_keys else "Other")
     summary = safe["cluster_id"].value_counts().reset_index()
     summary.columns = ["cluster_id", "count"]
@@ -1278,7 +1419,7 @@ def render_tasks_tab():
     create_cols = st.columns([2, 2, 2, 1])
     with create_cols[0]:
         person_query = st.text_input(
-            "Find person (name/email)",
+            "Find Person (Name/Email)",
             key="tasks_person_query",
             help="Search people by name/email to attach the task to a person.",
         )
@@ -1291,16 +1432,16 @@ def render_tasks_tab():
             help="Pick the person who should receive this follow-up task.",
         )
     with create_cols[1]:
-        title = st.text_input("Title", key="tasks_title", help="Short task title (required).")
+        title = st.text_input("Title *", key="tasks_title", help="Short task title (required).")
         due_date = st.text_input(
-            "Due date (YYYY-MM-DD, optional)",
+            "Due Date (YYYY-MM-DD, optional)",
             key="tasks_due_date",
             help="Optional due date. Stored as text (YYYY-MM-DD recommended).",
         )
     with create_cols[2]:
         description = st.text_area("Notes (optional)", height=80, key="tasks_description")
     with create_cols[3]:
-        status_new = st.selectbox("New status", TASK_STATUSES, index=0, key="tasks_new_status")
+        status_new = st.selectbox("New Status", TASK_STATUSES, index=0, key="tasks_new_status")
         if st.button("Add task", key="tasks_add_btn", help="Create a task linked to the selected person."):
             ok = create_task(person_email, title, description=description, due_date=due_date, status=status_new)
             if ok:
@@ -1319,32 +1460,37 @@ def render_tasks_tab():
         st.info("No tasks found (yet).")
         return
 
-    st.dataframe(
-        df[
-            [
-                "title",
-                "status",
-                "dueDate",
-                "firstName",
-                "lastName",
-                "email",
-                "group",
-                "updatedAt",
-            ]
-        ].rename(
-            columns={
-                "title": "Title",
-                "status": "Status",
-                "dueDate": "Due",
-                "firstName": "First",
-                "lastName": "Last",
-                "email": "Email",
-                "group": "Group",
-                "updatedAt": "Updated",
-            }
-        ),
-        use_container_width=True,
+    display_df = df[
+        [
+            "title",
+            "status",
+            "dueDate",
+            "firstName",
+            "lastName",
+            "email",
+            "group",
+            "updatedAt",
+        ]
+    ].rename(
+        columns={
+            "title": "Title",
+            "status": "Status",
+            "dueDate": "Due",
+            "firstName": "First",
+            "lastName": "Last",
+            "email": "Email",
+            "group": "Group",
+            "updatedAt": "Updated",
+        }
     )
+    st.caption(f"{len(display_df):,} tasks shown")
+    st.download_button(
+        "Download tasks CSV",
+        data=display_df.to_csv(index=False),
+        file_name="tasks.csv",
+        mime="text/csv",
+    )
+    st.dataframe(display_df, use_container_width=True)
 
     st.markdown("#### Update task status")
     task_ids = df["taskId"].tolist() if "taskId" in df.columns else []
@@ -1352,7 +1498,7 @@ def render_tasks_tab():
     with upd_cols[0]:
         selected_task = st.selectbox("Task", options=[""] + task_ids, key="tasks_update_task")
     with upd_cols[1]:
-        new_status = st.selectbox("Set status", TASK_STATUSES, key="tasks_update_status")
+        new_status = st.selectbox("Set Status", TASK_STATUSES, key="tasks_update_status")
     with upd_cols[2]:
         if st.button("Update", key="tasks_update_btn", help="Update the selected task’s status."):
             ok = update_task_status(selected_task, new_status)
@@ -1366,7 +1512,7 @@ def render_profiles_tab():
     st.subheader("Profiles")
     st.caption("Search and open a person profile. New feature; existing Supporter/Member forms remain unchanged.")
 
-    query = st.text_input("Search by name or email", key="profiles_search")
+    query = st.text_input("Search by Name or Email", key="profiles_search")
     matches = search_people(query, limit=80) if query else pd.DataFrame()
     if matches.empty:
         st.info("Search to find a person.")
@@ -1375,7 +1521,7 @@ def render_profiles_tab():
     label_rows = [
         f"{row.get('fullName','')} — {row.get('email','')}" for _, row in matches.iterrows()
     ]
-    selection = st.selectbox("Select person", options=[""] + label_rows, key="profiles_select")
+    selection = st.selectbox("Select Person", options=[""] + label_rows, key="profiles_select")
     if not selection:
         return
     idx = label_rows.index(selection)
@@ -1387,85 +1533,138 @@ def render_profiles_tab():
         return
 
     row = prof.iloc[0].to_dict()
-    reveal = st.checkbox(
-        "Reveal contact fields (PII)",
-        value=False,
-        key="profiles_reveal",
-        help="When off, sensitive contact fields are masked to reduce accidental exposure.",
-    )
+    summary_cols = st.columns(3)
+    summary_cols[0].markdown(f"**Email**: `{email}`")
+    summary_cols[1].markdown(f"**Tags**: {format_list_label(row.get('tags') or [])}")
+    summary_cols[2].markdown(f"**Skills**: {format_list_label(row.get('skills') or [])}")
 
-    form_cols = st.columns(2)
-    with form_cols[0]:
-        first = st.text_input("First name", value=row.get("firstName") or "", key="profiles_first")
-        last = st.text_input("Last name", value=row.get("lastName") or "", key="profiles_last")
-        phone = st.text_input("Phone", value=(row.get("phone") or "") if reveal else "••••••", key="profiles_phone", disabled=not reveal)
-        gender = st.selectbox("Gender", ["", "Male", "Female", "Other"], index=0, key="profiles_gender")
-        age_val = row.get("age")
-        age = st.number_input("Age", min_value=0, max_value=120, value=int(age_val) if isinstance(age_val, (int, float)) and not pd.isna(age_val) else 0, step=1, key="profiles_age")
-    with form_cols[1]:
-        time_availability = st.selectbox(
-            "Time availability",
-            ["", "Weekends", "Evenings", "Full-time", "Ad-hoc", "Unspecified"],
-            index=0,
-            key="profiles_time",
+    details_tab, tasks_tab = st.tabs(["Details", "Tasks"])
+    with details_tab:
+        reveal = st.checkbox(
+            "Reveal contact fields (PII)",
+            value=False,
+            key="profiles_reveal",
+            help="When off, sensitive contact fields are masked to reduce accidental exposure.",
         )
-        about = st.text_area("Motivation / notes", value=row.get("about") or "", height=120, key="profiles_about")
-        agrees = st.checkbox("Agrees with Manifesto", value=bool(row.get("agreesWithManifesto")), key="profiles_agrees")
-        interested = st.checkbox("Interested in Party Membership", value=bool(row.get("interestedInMembership")), key="profiles_interested")
-        fb = st.checkbox("Facebook Group Member", value=bool(row.get("facebookGroupMember")), key="profiles_fb")
 
-    if st.button("Save profile updates", key="profiles_save_btn", help="Write profile field updates to Neo4j."):
-        payload = {
-            "firstName": first,
-            "lastName": last,
-            "phone": phone if reveal else row.get("phone"),
-            "gender": gender,
-            "age": age if age else None,
-            "timeAvailability": time_availability if time_availability and time_availability != "Unspecified" else "Unspecified",
-            "about": about,
-            "agreesWithManifesto": agrees,
-            "interestedInMembership": interested,
-            "facebookGroupMember": fb,
-        }
-        ok = update_person_profile(email, payload)
-        if ok:
-            load_supporter_summary.clear()
-            load_map_data.clear()
-            st.success("Saved.")
-        else:
-            st.error("Save failed.")
+        form_cols = st.columns(2)
+        with form_cols[0]:
+            first = st.text_input(
+                "First Name", value=row.get("firstName") or "", key="profiles_first"
+            )
+            last = st.text_input(
+                "Last Name", value=row.get("lastName") or "", key="profiles_last"
+            )
+            phone = st.text_input(
+                "Phone",
+                value=(row.get("phone") or "") if reveal else "••••••",
+                key="profiles_phone",
+                disabled=not reveal,
+            )
+            gender = st.selectbox(
+                "Gender", ["", "Male", "Female", "Other"], index=0, key="profiles_gender"
+            )
+            age_val = row.get("age")
+            age = st.number_input(
+                "Age",
+                min_value=0,
+                max_value=120,
+                value=int(age_val)
+                if isinstance(age_val, (int, float)) and not pd.isna(age_val)
+                else 0,
+                step=1,
+                key="profiles_age",
+            )
+        with form_cols[1]:
+            time_availability = st.selectbox(
+                "Time Availability",
+                ["", "Weekends", "Evenings", "Full-time", "Ad-hoc", "Unspecified"],
+                index=0,
+                key="profiles_time",
+            )
+            about = st.text_area(
+                "Motivation / Notes",
+                value=row.get("about") or "",
+                height=120,
+                key="profiles_about",
+            )
+            agrees = st.checkbox(
+                "Agrees with Manifesto",
+                value=bool(row.get("agreesWithManifesto")),
+                key="profiles_agrees",
+            )
+            interested = st.checkbox(
+                "Interested in Party Membership",
+                value=bool(row.get("interestedInMembership")),
+                key="profiles_interested",
+            )
+            fb = st.checkbox(
+                "Facebook Group Member",
+                value=bool(row.get("facebookGroupMember")),
+                key="profiles_fb",
+            )
 
-    st.markdown("---")
-    st.markdown("#### Profile metadata")
-    meta_cols = st.columns(3)
-    meta_cols[0].markdown(f"**Email**: `{email}`")
-    meta_cols[1].markdown(f"**Tags**: {format_list_label(row.get('tags') or [])}")
-    meta_cols[2].markdown(f"**Skills**: {format_list_label(row.get('skills') or [])}")
-
-    st.markdown("#### Tasks for this person")
-    tcols = st.columns([2, 2, 1])
-    with tcols[0]:
-        t_title = st.text_input("Task title", key="profiles_task_title")
-    with tcols[1]:
-        t_due = st.text_input("Due date (YYYY-MM-DD, optional)", key="profiles_task_due")
-    with tcols[2]:
-        if st.button("Add task", key="profiles_add_task", help="Create a follow-up task for this person."):
-            ok = create_task(email, t_title, due_date=t_due, status="Open")
+        if st.button(
+            "Save profile updates",
+            key="profiles_save_btn",
+            help="Write profile field updates to Neo4j.",
+        ):
+            payload = {
+                "firstName": first,
+                "lastName": last,
+                "phone": phone if reveal else row.get("phone"),
+                "gender": gender,
+                "age": age if age else None,
+                "timeAvailability": time_availability
+                if time_availability and time_availability != "Unspecified"
+                else "Unspecified",
+                "about": about,
+                "agreesWithManifesto": agrees,
+                "interestedInMembership": interested,
+                "facebookGroupMember": fb,
+            }
+            ok = update_person_profile(email, payload)
             if ok:
-                st.success("Task added.")
+                load_supporter_summary.clear()
+                load_map_data.clear()
+                st.success("Saved.")
             else:
-                st.error("Could not add task.")
+                st.error("Save failed.")
 
-    tdf = list_tasks(person_email=email, limit=200)
-    if tdf.empty:
-        st.caption("No tasks yet.")
-    else:
-        st.dataframe(
-            tdf[["title", "status", "dueDate", "updatedAt"]].rename(
-                columns={"title": "Title", "status": "Status", "dueDate": "Due", "updatedAt": "Updated"}
-            ),
-            use_container_width=True,
-        )
+    with tasks_tab:
+        st.markdown("#### Tasks for this person")
+        tcols = st.columns([2, 2, 1])
+        with tcols[0]:
+            t_title = st.text_input("Task Title *", key="profiles_task_title")
+        with tcols[1]:
+            t_due = st.text_input("Due Date (YYYY-MM-DD, optional)", key="profiles_task_due")
+        with tcols[2]:
+            if st.button(
+                "Add task",
+                key="profiles_add_task",
+                help="Create a follow-up task for this person.",
+            ):
+                ok = create_task(email, t_title, due_date=t_due, status="Open")
+                if ok:
+                    st.success("Task added.")
+                else:
+                    st.error("Could not add task.")
+
+        tdf = list_tasks(person_email=email, limit=200)
+        if tdf.empty:
+            st.caption("No tasks yet.")
+        else:
+            st.dataframe(
+                tdf[["title", "status", "dueDate", "updatedAt"]].rename(
+                    columns={
+                        "title": "Title",
+                        "status": "Status",
+                        "dueDate": "Due",
+                        "updatedAt": "Updated",
+                    }
+                ),
+                use_container_width=True,
+            )
 
 
 def render_segments_tab():
@@ -1600,7 +1799,11 @@ def render_deliberation(public_only: bool):
         st.session_state["delib_anon_id"] = str(uuid4())
     headers = {"X-Participant-Id": st.session_state["delib_anon_id"]}
 
-    conversations = delib_api_get("/conversations") or []
+    conversations = delib_api_get("/conversations", show_error=False)
+    if conversations is None:
+        render_delib_api_unavailable()
+        return
+    conversations = conversations or []
     convo_options = {c["topic"]: c["id"] for c in conversations} if conversations else {}
     selected_title = st.selectbox(
         "Select conversation",
@@ -1618,7 +1821,7 @@ def render_deliberation(public_only: bool):
             ["Configure", "Participate", "Moderate", "Monitor / Reports"]
         )
 
-    with tab_config:
+        with tab_config:
             st.markdown("### Create conversation")
             topic = st.text_input(
                 "Topic",
@@ -1886,33 +2089,7 @@ def render_deliberation(public_only: bool):
         if not convo_id:
             st.info("Select a conversation first.")
         else:
-            report_tab, csv_tab, explain_tab = st.tabs(
-                ["Vote-based report", "CSV clustering", "How clustering works"]
-            )
-
-            with explain_tab:
-                st.markdown(
-                    """
-### How clustering works now (vote-based)
-The deliberation backend clusters **participants** based on their **Agree / Disagree / Pass** votes on approved comments.
-
-1) It builds a **vote matrix** of shape (participants × comments), with values:
-- `1` = Agree
-- `-1` = Disagree
-- `0` = Pass / no vote
-
-2) It runs **KMeans** clustering on that matrix (default `n_clusters=3`, bounded by number of participants).
-
-3) For visualization, it uses **PCA to 2D** (x/y coordinates) and plots points colored by cluster.
-
-4) It computes:
-- **Consensus** and **polarizing** statements using participation + agreement ratio + how different clusters are.
-- **Cluster summaries**: top “agree” and “disagree” comments within each cluster.
-- **Cluster similarity**: cosine similarity between each cluster’s average vote vector.
-
-This is implemented in `deliberation/api/app/analytics.py` (`build_vote_matrix`, `run_clustering`, `compute_metrics`, `compute_cluster_insights`).
-                    """.strip()
-                )
+            report_tab, csv_tab = st.tabs(["Vote-based report", "CSV clustering"])
 
             with report_tab:
                 if st.button("Run analysis", key="delib_run_analysis", help="Compute clusters + consensus/polarizing topics from votes."):
@@ -2005,58 +2182,7 @@ This is implemented in `deliberation/api/app/analytics.py` (`build_vote_matrix`,
                         st.altair_chart(chart, use_container_width=True)
 
             with csv_tab:
-                st.subheader("CSV clustering (no votes)")
-                st.caption(
-                    "Upload a CSV, pick the columns you want to cluster by, and the app will group rows by the selected column values."
-                )
-                upload = st.file_uploader("Upload CSV", type=["csv"], key="delib_csv_upload")
-                if upload is None:
-                    st.info("Upload a CSV to begin.")
-                else:
-                    try:
-                        df_csv = pd.read_csv(upload)
-                    except Exception as exc:
-                        st.error(f"Could not read CSV: {exc}")
-                        df_csv = pd.DataFrame()
-
-                    if not df_csv.empty:
-                        st.caption("Preview")
-                        st.dataframe(df_csv.head(15), use_container_width=True)
-
-                        columns = df_csv.columns.tolist()
-                        selected_cols = st.multiselect(
-                            "Columns to cluster by",
-                            options=columns,
-                            default=columns[:1] if columns else [],
-                            key="delib_csv_cols",
-                        )
-                        max_clusters = st.number_input(
-                            "Max clusters (top groups + Other)",
-                            min_value=2,
-                            max_value=50,
-                            value=12,
-                            step=1,
-                            key="delib_csv_max_clusters",
-                        )
-                        if st.button("Create clusters", key="delib_csv_cluster_btn", help="Group rows by the selected column values and summarize cluster sizes."):
-                            clustered, summary = _csv_cluster_by_columns(
-                                df_csv, selected_cols, max_clusters=int(max_clusters)
-                            )
-                            st.subheader("Cluster summary")
-                            st.dataframe(summary, use_container_width=True)
-
-                            st.subheader("Clustered rows")
-                            st.dataframe(clustered.head(200), use_container_width=True)
-
-                            if "cluster_id" in clustered.columns:
-                                counts = clustered["cluster_id"].value_counts().reset_index()
-                                counts.columns = ["cluster_id", "count"]
-                                chart = (
-                                    alt.Chart(counts)
-                                    .mark_bar()
-                                    .encode(x="cluster_id:N", y="count:Q", tooltip=["cluster_id:N", "count:Q"])
-                                )
-                                st.altair_chart(chart, use_container_width=True)
+                st.subheader("In progress")
 
 
 st.title("Freedom Square CRM")
@@ -2073,6 +2199,7 @@ if SUPPORTER_ACCESS_CODE:
 
 if not supporter_mode:
     st.info("Public view: deliberation participation only.")
+    render_feedback_widget("Deliberation (Public)")
     render_deliberation(public_only=True)
     st.stop()
 
@@ -2082,294 +2209,156 @@ if driver is None:
     st.error("Missing or invalid Neo4j credentials. Set NEO4J_URI and NEO4J_PASSWORD in .env.")
     st.stop()
 
-tab_intro, tab_people, tab_map, tab_tasks, tab_profiles, tab_segments, tab_deliberation = st.tabs(
-    ["Dashboard", "People", "Map", "Tasks", "Profiles", "Segments", "Deliberation"]
+nav_choice = st.sidebar.radio(
+    "Navigate",
+    ["Dashboard", "People", "Map", "Tasks", "Profiles", "Segments", "Deliberation"],
+    index=0,
+    key="main_nav",
 )
 
+render_feedback_widget(nav_choice)
 
-with tab_intro:
-    st.subheader("Dashboard")
-    st.write("Short CRM view focused on supporters, members, activity, and map insights.")
-    df_summary = load_supporter_summary()
-    if df_summary.empty:
-        st.info("No supporters found.")
-    else:
-        total_people = len(df_summary)
-        total_supporters = int((df_summary["group"] == "Supporter").sum())
-        total_members = int((df_summary["group"] == "Member").sum())
-        avg_effort = float(df_summary["effortScore"].mean()) if total_people else 0.0
-        metrics = st.columns(4)
-        metrics[0].metric("Total people", f"{total_people:,}")
-        metrics[1].metric("Supporters", f"{total_supporters:,}")
-        metrics[2].metric("Members", f"{total_members:,}")
-        metrics[3].metric("Avg effort score", f"{avg_effort:.1f}")
 
-        st.markdown("### Statistics")
-        group_counts = (
-            df_summary["group"]
-            .value_counts()
-            .rename_axis("group")
-            .reset_index(name="count")
-        )
-        group_chart = (
-            alt.Chart(group_counts)
-            .mark_bar()
-            .encode(x="group:N", y="count:Q", tooltip=["group:N", "count:Q"])
-        )
+if nav_choice == "Dashboard":
+    dash_overview, dash_chat = st.tabs(["Overview", "Chatbox"])
+    with dash_overview:
+        st.subheader("Dashboard")
+        st.write("Short CRM view focused on supporters, members, activity, and map insights.")
+        df_summary = load_supporter_summary()
+        if df_summary.empty:
+            st.info("No supporters found.")
+        else:
+            total_people = len(df_summary)
+            total_supporters = int((df_summary["group"] == "Supporter").sum())
+            total_members = int((df_summary["group"] == "Member").sum())
+            avg_effort = float(df_summary["effortScore"].mean()) if total_people else 0.0
+            metrics = st.columns(4)
+            metrics[0].metric("Total people", f"{total_people:,}")
+            metrics[1].metric("Supporters", f"{total_supporters:,}")
+            metrics[2].metric("Members", f"{total_members:,}")
+            metrics[3].metric("Avg effort score", f"{avg_effort:.1f}")
 
-        gender_counts = (
-            df_summary["gender"]
-            .fillna("Unspecified")
-            .value_counts()
-            .rename_axis("gender")
-            .reset_index(name="count")
-        )
-        gender_chart = (
-            alt.Chart(gender_counts)
-            .mark_bar()
-            .encode(x="gender:N", y="count:Q", tooltip=["gender:N", "count:Q"])
-        )
-
-        rating_counts = (
-            df_summary["rating"]
-            .value_counts()
-            .sort_index()
-            .rename_axis("rating")
-            .reset_index(name="count")
-        )
-        rating_chart = (
-            alt.Chart(rating_counts)
-            .mark_bar()
-            .encode(x="rating:O", y="count:Q", tooltip=["rating:O", "count:Q"])
-        )
-
-        stat_cols = st.columns(2)
-        with stat_cols[0]:
-            st.markdown("**Supporter vs Member**")
-            st.altair_chart(group_chart, use_container_width=True)
-        with stat_cols[1]:
-            st.markdown("**Gender distribution**")
-            st.altair_chart(gender_chart, use_container_width=True)
-
-        stat_cols = st.columns(2)
-        with stat_cols[0]:
-            st.markdown("**Rating distribution**")
-            st.altair_chart(rating_chart, use_container_width=True)
-        with stat_cols[1]:
-            st.markdown("**Age distribution**")
-            age_df = df_summary.dropna(subset=["age"])
-            if age_df.empty:
-                st.caption("No age data available.")
-            else:
-                age_chart = (
-                    alt.Chart(age_df)
-                    .mark_bar()
-                    .encode(
-                        alt.X("age:Q", bin=alt.Bin(maxbins=12)),
-                        y="count()",
-                        tooltip=["count()"],
-                    )
-                )
-                st.altair_chart(age_chart, use_container_width=True)
-
-        st.markdown("**Effort score summary**")
-        effort_stats = (
-            df_summary["effortScore"]
-            .describe()
-            .loc[["mean", "min", "max"]]
-            .round(2)
-            .to_frame("value")
-            .reset_index()
-            .rename(columns={"index": "metric"})
-        )
-        st.dataframe(effort_stats, use_container_width=True)
-
-        st.markdown("### Engagement analytics")
-        df_total = run_query(
-            """
-            MATCH (p:Person)
-            RETURN count(p) AS total
-            """,
-            silent=True,
-        )
-        total_people = int(df_total["total"].iloc[0]) if not df_total.empty else 0
-
-        df_manifesto = run_query(
-            """
-            MATCH (p:Person)
-            RETURN CASE
-                WHEN p.agreesWithManifesto IS NULL THEN 'Unspecified'
-                WHEN p.agreesWithManifesto THEN 'Yes'
-                ELSE 'No'
-            END AS agrees, count(p) AS count
-            """,
-            silent=True,
-        )
-        df_membership = run_query(
-            """
-            MATCH (p:Person)
-            RETURN CASE
-                WHEN p.interestedInMembership IS NULL THEN 'Unspecified'
-                WHEN p.interestedInMembership THEN 'Yes'
-                ELSE 'No'
-            END AS interested, count(p) AS count
-            """,
-            silent=True,
-        )
-        df_facebook = run_query(
-            """
-            MATCH (p:Person)
-            RETURN CASE
-                WHEN p.facebookGroupMember IS NULL THEN 'Unspecified'
-                WHEN p.facebookGroupMember THEN 'Yes'
-                ELSE 'No'
-            END AS facebook, count(p) AS count
-            """,
-            silent=True,
-        )
-
-        manifesto_yes = (
-            int(df_manifesto.loc[df_manifesto["agrees"] == "Yes", "count"].sum())
-            if not df_manifesto.empty
-            else 0
-        )
-        membership_yes = (
-            int(df_membership.loc[df_membership["interested"] == "Yes", "count"].sum())
-            if not df_membership.empty
-            else 0
-        )
-        facebook_yes = (
-            int(df_facebook.loc[df_facebook["facebook"] == "Yes", "count"].sum())
-            if not df_facebook.empty
-            else 0
-        )
-        manifesto_pct = (manifesto_yes / total_people * 100) if total_people else 0
-        membership_pct = (membership_yes / total_people * 100) if total_people else 0
-        facebook_pct = (facebook_yes / total_people * 100) if total_people else 0
-
-        indicator_metrics = st.columns(3)
-        indicator_metrics[0].metric("Manifesto Agree (%)", f"{manifesto_pct:.1f}%")
-        indicator_metrics[1].metric("Membership Interest (%)", f"{membership_pct:.1f}%")
-        indicator_metrics[2].metric("Facebook Group Member (%)", f"{facebook_pct:.1f}%")
-
-        df_types = run_query(
-            """
-            MATCH (p:Person)-[:CLASSIFIED_AS]->(st:SupporterType)
-            RETURN st.name AS type, count(p) AS count
-            """,
-            silent=True,
-        )
-        if not df_types.empty:
-            type_cols = st.columns(2)
-            with type_cols[0]:
-                st.markdown("**Supporters by Type (Share)**")
-                type_share = (
-                    alt.Chart(df_types)
-                    .mark_arc(innerRadius=55)
-                    .encode(
-                        theta=alt.Theta("count:Q"),
-                        color=alt.Color("type:N"),
-                        tooltip=["type:N", "count:Q"],
-                    )
-                )
-                st.altair_chart(type_share, use_container_width=True)
-            with type_cols[1]:
-                st.markdown("**Supporters by Type (Counts)**")
-                type_bar = (
-                    alt.Chart(df_types)
-                    .mark_bar()
-                    .encode(
-                        x=alt.X("type:N", sort="-y"),
-                        y=alt.Y("count:Q"),
-                        tooltip=["type:N", "count:Q"],
-                    )
-                )
-                st.altair_chart(type_bar, use_container_width=True)
-
-        df_type_gender = run_query(
-            """
-            MATCH (p:Person)-[:CLASSIFIED_AS]->(st:SupporterType)
-            RETURN st.name AS type, coalesce(p.gender,'Unspecified') AS gender, count(p) AS count
-            """,
-            silent=True,
-        )
-        if not df_type_gender.empty:
-            st.markdown("**Gender by Supporter Type**")
-            gender_stack = (
-                alt.Chart(df_type_gender)
-                .mark_bar()
-                .encode(
-                    x=alt.X("type:N", title="Supporter Type"),
-                    y=alt.Y("count:Q"),
-                    color=alt.Color("gender:N"),
-                    tooltip=["type:N", "gender:N", "count:Q"],
-                )
+            group_counts = (
+                df_summary["group"]
+                .value_counts()
+                .rename_axis("group")
+                .reset_index(name="count")
             )
-            st.altair_chart(gender_stack, use_container_width=True)
-
-        df_time = run_query(
-            """
-            MATCH (p:Person)
-            RETURN coalesce(p.timeAvailability,'Unspecified') AS availability, count(p) AS count
-            """,
-            silent=True,
-        )
-        if not df_time.empty:
-            st.markdown("**Time Availability**")
-            time_bar = (
-                alt.Chart(df_time)
+            group_chart = (
+                alt.Chart(group_counts)
                 .mark_bar()
-                .encode(
-                    y=alt.Y("availability:N", sort="-x"),
-                    x=alt.X("count:Q"),
-                    tooltip=["availability:N", "count:Q"],
-                )
+                .encode(x="group:N", y="count:Q", tooltip=["group:N", "count:Q"])
             )
-            st.altair_chart(time_bar, use_container_width=True)
 
-        indicator_cols = st.columns(3)
-        with indicator_cols[0]:
-            if not df_manifesto.empty:
-                st.markdown("**Agrees With Manifesto**")
-                manifesto_chart = (
-                    alt.Chart(df_manifesto)
-                    .mark_arc(innerRadius=40)
-                    .encode(
-                        theta=alt.Theta("count:Q"),
-                        color=alt.Color("agrees:N"),
-                        tooltip=["agrees:N", "count:Q"],
-                    )
-                )
-                st.altair_chart(manifesto_chart, use_container_width=True)
-        with indicator_cols[1]:
-            if not df_membership.empty:
-                st.markdown("**Interested in Party Membership**")
-                membership_chart = (
-                    alt.Chart(df_membership)
-                    .mark_arc(innerRadius=40)
-                    .encode(
-                        theta=alt.Theta("count:Q"),
-                        color=alt.Color("interested:N"),
-                        tooltip=["interested:N", "count:Q"],
-                    )
-                )
-                st.altair_chart(membership_chart, use_container_width=True)
-        with indicator_cols[2]:
-            if not df_facebook.empty:
-                st.markdown("**Facebook Group Member**")
-                facebook_chart = (
-                    alt.Chart(df_facebook)
-                    .mark_arc(innerRadius=40)
-                    .encode(
-                        theta=alt.Theta("count:Q"),
-                        color=alt.Color("facebook:N"),
-                        tooltip=["facebook:N", "count:Q"],
-                    )
-                )
-                st.altair_chart(facebook_chart, use_container_width=True)
+            gender_counts = (
+                df_summary["gender"]
+                .fillna("Unspecified")
+                .value_counts()
+                .rename_axis("gender")
+                .reset_index(name="count")
+            )
+            gender_chart = (
+                alt.Chart(gender_counts)
+                .mark_bar()
+                .encode(x="gender:N", y="count:Q", tooltip=["gender:N", "count:Q"])
+            )
 
-        top_cols = st.columns(2)
-        with top_cols[0]:
+            rating_counts = (
+                df_summary["rating"]
+                .value_counts()
+                .sort_index()
+                .rename_axis("rating")
+                .reset_index(name="count")
+            )
+            rating_chart = (
+                alt.Chart(rating_counts)
+                .mark_bar()
+                .encode(x="rating:O", y="count:Q", tooltip=["rating:O", "count:Q"])
+            )
+
+            df_total = run_query(
+                """
+                MATCH (p:Person)
+                RETURN count(p) AS total
+                """,
+                silent=True,
+            )
+            total_people = int(df_total["total"].iloc[0]) if not df_total.empty else 0
+
+            df_manifesto = run_query(
+                """
+                MATCH (p:Person)
+                RETURN CASE
+                    WHEN p.agreesWithManifesto IS NULL THEN 'Unspecified'
+                    WHEN p.agreesWithManifesto THEN 'Yes'
+                    ELSE 'No'
+                END AS agrees, count(p) AS count
+                """,
+                silent=True,
+            )
+            df_membership = run_query(
+                """
+                MATCH (p:Person)
+                RETURN CASE
+                    WHEN p.interestedInMembership IS NULL THEN 'Unspecified'
+                    WHEN p.interestedInMembership THEN 'Yes'
+                    ELSE 'No'
+                END AS interested, count(p) AS count
+                """,
+                silent=True,
+            )
+            df_facebook = run_query(
+                """
+                MATCH (p:Person)
+                RETURN CASE
+                    WHEN p.facebookGroupMember IS NULL THEN 'Unspecified'
+                    WHEN p.facebookGroupMember THEN 'Yes'
+                    ELSE 'No'
+                END AS facebook, count(p) AS count
+                """,
+                silent=True,
+            )
+
+            manifesto_yes = (
+                int(df_manifesto.loc[df_manifesto["agrees"] == "Yes", "count"].sum())
+                if not df_manifesto.empty
+                else 0
+            )
+            membership_yes = (
+                int(df_membership.loc[df_membership["interested"] == "Yes", "count"].sum())
+                if not df_membership.empty
+                else 0
+            )
+            facebook_yes = (
+                int(df_facebook.loc[df_facebook["facebook"] == "Yes", "count"].sum())
+                if not df_facebook.empty
+                else 0
+            )
+            manifesto_pct = (manifesto_yes / total_people * 100) if total_people else 0
+            membership_pct = (membership_yes / total_people * 100) if total_people else 0
+            facebook_pct = (facebook_yes / total_people * 100) if total_people else 0
+
+            df_types = run_query(
+                """
+                MATCH (p:Person)-[:CLASSIFIED_AS]->(st:SupporterType)
+                RETURN st.name AS type, count(p) AS count
+                """,
+                silent=True,
+            )
+            df_type_gender = run_query(
+                """
+                MATCH (p:Person)-[:CLASSIFIED_AS]->(st:SupporterType)
+                RETURN st.name AS type, coalesce(p.gender,'Unspecified') AS gender, count(p) AS count
+                """,
+                silent=True,
+            )
+            df_time = run_query(
+                """
+                MATCH (p:Person)
+                RETURN coalesce(p.timeAvailability,'Unspecified') AS availability, count(p) AS count
+                """,
+                silent=True,
+            )
             df_involve = run_query(
                 """
                 MATCH (p:Person)-[:INTERESTED_IN]->(ia:InvolvementArea)
@@ -2379,19 +2368,6 @@ with tab_intro:
                 """,
                 silent=True,
             )
-            if not df_involve.empty:
-                st.markdown("**Top Involvement Areas**")
-                involve_bar = (
-                    alt.Chart(df_involve)
-                    .mark_bar()
-                    .encode(
-                        y=alt.Y("area:N", sort="-x"),
-                        x=alt.X("count:Q"),
-                        tooltip=["area:N", "count:Q"],
-                    )
-                )
-                st.altair_chart(involve_bar, use_container_width=True)
-        with top_cols[1]:
             df_skills = run_query(
                 """
                 MATCH (p:Person)-[:CAN_CONTRIBUTE_WITH]->(s:Skill)
@@ -2401,46 +2377,206 @@ with tab_intro:
                 """,
                 silent=True,
             )
-            if not df_skills.empty:
-                st.markdown("**Top Skills**")
-                skill_bar = (
-                    alt.Chart(df_skills)
-                    .mark_bar()
-                    .encode(
-                        y=alt.Y("skill:N", sort="-x"),
-                        x=alt.X("count:Q"),
-                        tooltip=["skill:N", "count:Q"],
-                    )
+
+            with st.expander("Statistics", expanded=True):
+                stat_cols = st.columns(2)
+                with stat_cols[0]:
+                    st.markdown("**Supporter vs Member**")
+                    st.altair_chart(group_chart, use_container_width=True)
+                with stat_cols[1]:
+                    st.markdown("**Gender distribution**")
+                    st.altair_chart(gender_chart, use_container_width=True)
+
+                stat_cols = st.columns(2)
+                with stat_cols[0]:
+                    st.markdown("**Rating distribution**")
+                    st.altair_chart(rating_chart, use_container_width=True)
+                with stat_cols[1]:
+                    st.markdown("**Age distribution**")
+                    age_df = df_summary.dropna(subset=["age"])
+                    if age_df.empty:
+                        st.caption("No age data available.")
+                    else:
+                        age_chart = (
+                            alt.Chart(age_df)
+                            .mark_bar()
+                            .encode(
+                                alt.X("age:Q", bin=alt.Bin(maxbins=12)),
+                                y="count()",
+                                tooltip=["count()"],
+                            )
+                        )
+                        st.altair_chart(age_chart, use_container_width=True)
+
+                st.markdown("**Effort score summary**")
+                effort_stats = (
+                    df_summary["effortScore"]
+                    .describe()
+                    .loc[["mean", "min", "max"]]
+                    .round(2)
+                    .to_frame("value")
+                    .reset_index()
+                    .rename(columns={"index": "metric"})
                 )
-                st.altair_chart(skill_bar, use_container_width=True)
+                st.dataframe(effort_stats, use_container_width=True)
 
-    st.markdown("---")
-    st.subheader("Chatbox")
-    st.caption("Ask about supporters, members, gender, age, or top joiners.")
-    if "chat_history" not in st.session_state:
-        st.session_state["chat_history"] = []
+            with st.expander("Engagement analytics", expanded=False):
+                indicator_metrics = st.columns(3)
+                indicator_metrics[0].metric("Manifesto Agree (%)", f"{manifesto_pct:.1f}%")
+                indicator_metrics[1].metric("Membership Interest (%)", f"{membership_pct:.1f}%")
+                indicator_metrics[2].metric("Facebook Group Member (%)", f"{facebook_pct:.1f}%")
 
-    for message in st.session_state["chat_history"]:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-            if message.get("table") is not None:
-                st.dataframe(message["table"], use_container_width=True)
+            with st.expander("People breakdown", expanded=False):
+                if not df_types.empty:
+                    type_cols = st.columns(2)
+                    with type_cols[0]:
+                        st.markdown("**Supporters by Type (Share)**")
+                        type_share = (
+                            alt.Chart(df_types)
+                            .mark_arc(innerRadius=55)
+                            .encode(
+                                theta=alt.Theta("count:Q"),
+                                color=alt.Color("type:N"),
+                                tooltip=["type:N", "count:Q"],
+                            )
+                        )
+                        st.altair_chart(type_share, use_container_width=True)
+                    with type_cols[1]:
+                        st.markdown("**Supporters by Type (Counts)**")
+                        type_bar = (
+                            alt.Chart(df_types)
+                            .mark_bar()
+                            .encode(
+                                x=alt.X("type:N", sort="-y"),
+                                y=alt.Y("count:Q"),
+                                tooltip=["type:N", "count:Q"],
+                            )
+                        )
+                        st.altair_chart(type_bar, use_container_width=True)
 
-    prompt = st.chat_input("Type your question")
-    if prompt:
-        st.session_state["chat_history"].append({"role": "user", "content": prompt})
-        df_summary = load_supporter_summary()
-        response, table = answer_chat(prompt, df_summary)
-        st.session_state["chat_history"].append(
-            {"role": "assistant", "content": response, "table": table}
-        )
-        with st.chat_message("assistant"):
-            st.markdown(response)
-            if table is not None:
-                st.dataframe(table, use_container_width=True)
+                if not df_type_gender.empty:
+                    st.markdown("**Gender by Supporter Type**")
+                    gender_stack = (
+                        alt.Chart(df_type_gender)
+                        .mark_bar()
+                        .encode(
+                            x=alt.X("type:N", title="Supporter Type"),
+                            y=alt.Y("count:Q"),
+                            color=alt.Color("gender:N"),
+                            tooltip=["type:N", "gender:N", "count:Q"],
+                        )
+                    )
+                    st.altair_chart(gender_stack, use_container_width=True)
+
+                if not df_time.empty:
+                    st.markdown("**Time Availability**")
+                    time_bar = (
+                        alt.Chart(df_time)
+                        .mark_bar()
+                        .encode(
+                            y=alt.Y("availability:N", sort="-x"),
+                            x=alt.X("count:Q"),
+                            tooltip=["availability:N", "count:Q"],
+                        )
+                    )
+                    st.altair_chart(time_bar, use_container_width=True)
+
+                indicator_cols = st.columns(3)
+                with indicator_cols[0]:
+                    if not df_manifesto.empty:
+                        st.markdown("**Agrees With Manifesto**")
+                        manifesto_chart = (
+                            alt.Chart(df_manifesto)
+                            .mark_arc(innerRadius=40)
+                            .encode(
+                                theta=alt.Theta("count:Q"),
+                                color=alt.Color("agrees:N"),
+                                tooltip=["agrees:N", "count:Q"],
+                            )
+                        )
+                        st.altair_chart(manifesto_chart, use_container_width=True)
+                with indicator_cols[1]:
+                    if not df_membership.empty:
+                        st.markdown("**Interested in Party Membership**")
+                        membership_chart = (
+                            alt.Chart(df_membership)
+                            .mark_arc(innerRadius=40)
+                            .encode(
+                                theta=alt.Theta("count:Q"),
+                                color=alt.Color("interested:N"),
+                                tooltip=["interested:N", "count:Q"],
+                            )
+                        )
+                        st.altair_chart(membership_chart, use_container_width=True)
+                with indicator_cols[2]:
+                    if not df_facebook.empty:
+                        st.markdown("**Facebook Group Member**")
+                        facebook_chart = (
+                            alt.Chart(df_facebook)
+                            .mark_arc(innerRadius=40)
+                            .encode(
+                                theta=alt.Theta("count:Q"),
+                                color=alt.Color("facebook:N"),
+                                tooltip=["facebook:N", "count:Q"],
+                            )
+                        )
+                        st.altair_chart(facebook_chart, use_container_width=True)
+
+                top_cols = st.columns(2)
+                with top_cols[0]:
+                    if not df_involve.empty:
+                        st.markdown("**Top Involvement Areas**")
+                        involve_bar = (
+                            alt.Chart(df_involve)
+                            .mark_bar()
+                            .encode(
+                                y=alt.Y("area:N", sort="-x"),
+                                x=alt.X("count:Q"),
+                                tooltip=["area:N", "count:Q"],
+                            )
+                        )
+                        st.altair_chart(involve_bar, use_container_width=True)
+                with top_cols[1]:
+                    if not df_skills.empty:
+                        st.markdown("**Top Skills**")
+                        skill_bar = (
+                            alt.Chart(df_skills)
+                            .mark_bar()
+                            .encode(
+                                y=alt.Y("skill:N", sort="-x"),
+                                x=alt.X("count:Q"),
+                                tooltip=["skill:N", "count:Q"],
+                            )
+                        )
+                        st.altair_chart(skill_bar, use_container_width=True)
+
+    with dash_chat:
+        st.subheader("Chatbox")
+        st.caption("Ask about supporters, members, gender, age, or top joiners.")
+        if "chat_history" not in st.session_state:
+            st.session_state["chat_history"] = []
+
+        for message in st.session_state["chat_history"]:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+                if message.get("table") is not None:
+                    st.dataframe(message["table"], use_container_width=True)
+
+        prompt = st.chat_input("Type your question")
+        if prompt:
+            st.session_state["chat_history"].append({"role": "user", "content": prompt})
+            df_summary = load_supporter_summary()
+            response, table = answer_chat(prompt, df_summary)
+            st.session_state["chat_history"].append(
+                {"role": "assistant", "content": response, "table": table}
+            )
+            with st.chat_message("assistant"):
+                st.markdown(response)
+                if table is not None:
+                    st.dataframe(table, use_container_width=True)
 
 
-with tab_people:
+if nav_choice == "People":
     st.subheader("People")
     group_view = st.radio(
         "View",
@@ -2509,65 +2645,82 @@ with tab_people:
             existing_tags = get_distinct_values("Tag")
 
             with st.form("supporter_form"):
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    first_name = st.text_input("First Name")
-                    email = st.text_input("Email")
-                    phone = st.text_input("Phone", value="")
-                    effort_hours = st.number_input(
-                        "Effort hours", min_value=0.0, value=0.0, step=1.0
-                    )
-                    gender = st.selectbox("Gender", ["", "Male", "Female", "Other"])
-                    age = st.number_input("Age", min_value=0, max_value=120, value=0, step=1)
-                    supporter_type = st.selectbox(
-                        "Supporter Type", supporter_types, index=0
-                    )
-                    time_availability = st.selectbox(
-                        "Time Availability",
-                        ["", "Weekends", "Evenings", "Full-time", "Ad-hoc"],
-                    )
-                    agrees = st.checkbox("Agrees with Manifesto", value=False)
-                    interested_membership = st.checkbox(
-                        "Interested in Party Membership", value=False
-                    )
-                    facebook_member = st.checkbox("Facebook Group Member", value=False)
-                    referrer_email = st.text_input("Referred By (email)", value="")
-                with col_b:
-                    last_name = st.text_input("Last Name")
-                    address = st.text_input(
-                        "Address",
-                        value=st.session_state.get("supporter_address_value", ""),
-                        key="supporter_address",
-                    )
-                    latitude = st.number_input(
-                        "Latitude",
-                        value=float(st.session_state.get("supporter_lat_value", 0.0) or 0.0),
-                        format="%.6f",
-                        key="supporter_lat",
-                    )
-                    longitude = st.number_input(
-                        "Longitude",
-                        value=float(st.session_state.get("supporter_lon_value", 0.0) or 0.0),
-                        format="%.6f",
-                        key="supporter_lon",
-                    )
+                with st.expander("Contact", expanded=True):
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        first_name = st.text_input("First Name")
+                        email = st.text_input("Email *")
+                        phone = st.text_input("Phone", value="")
+                    with col_b:
+                        last_name = st.text_input("Last Name")
+                        address = st.text_input(
+                            "Address",
+                            value=st.session_state.get("supporter_address_value", ""),
+                            key="supporter_address",
+                        )
+                        lat_col, lon_col = st.columns(2)
+                        with lat_col:
+                            latitude = st.number_input(
+                                "Latitude",
+                                value=float(
+                                    st.session_state.get("supporter_lat_value", 0.0) or 0.0
+                                ),
+                                format="%.6f",
+                                key="supporter_lat",
+                            )
+                        with lon_col:
+                            longitude = st.number_input(
+                                "Longitude",
+                                value=float(
+                                    st.session_state.get("supporter_lon_value", 0.0) or 0.0
+                                ),
+                                format="%.6f",
+                                key="supporter_lon",
+                            )
+
+                with st.expander("Engagement", expanded=False):
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        effort_hours = st.number_input(
+                            "Effort Hours", min_value=0.0, value=0.0, step=1.0
+                        )
+                        time_availability = st.selectbox(
+                            "Time Availability",
+                            ["", "Weekends", "Evenings", "Full-time", "Ad-hoc"],
+                        )
+                        supporter_type = st.selectbox(
+                            "Supporter Type", supporter_types, index=0
+                        )
+                        donation_total = st.number_input(
+                            "Donation Total (optional)",
+                            min_value=0.0,
+                            value=0.0,
+                            step=10.0,
+                        )
+                    with col_b:
+                        gender = st.selectbox("Gender", ["", "Male", "Female", "Other"])
+                        age = st.number_input(
+                            "Age", min_value=0, max_value=120, value=0, step=1
+                        )
+                        agrees = st.checkbox("Agrees with Manifesto", value=False)
+                        interested_membership = st.checkbox(
+                            "Interested in Party Membership", value=False
+                        )
+                        facebook_member = st.checkbox("Facebook Group Member", value=False)
+                        referrer_email = st.text_input("Referred By (email)", value="")
+                    about = st.text_area("About / Motivation", value="")
+
+                with st.expander("Skills & tags", expanded=False):
                     involvement = st.multiselect(
                         "Preferred Areas of Involvement", default_areas, default=[]
                     )
                     skills_sel = st.multiselect("Skills", default_skills, default=[])
-                    donation_total = st.number_input(
-                        "Donation Total (optional)",
-                        min_value=0.0,
-                        value=0.0,
-                        step=10.0,
-                    )
                     tags_selected = st.multiselect(
                         "Tags (existing)", existing_tags, default=[]
                     )
                     tags_custom = st.text_input("Add tags (comma separated)")
-                tags_combined = normalize_str_list(tags_selected + split_list(tags_custom))
-                about = st.text_area("About / Motivation", value="")
 
+                tags_combined = normalize_str_list(tags_selected + split_list(tags_custom))
                 save = st.form_submit_button(
                     "💾 Save to Neo4j and preview",
                     help="Upsert this supporter into Neo4j (email is required).",
@@ -2757,6 +2910,7 @@ with tab_people:
                         "age": "Age",
                     }
                 )
+                st.caption(f"{len(display_df):,} people shown")
                 st.dataframe(display_df, use_container_width=True)
 
         render_import_export_section("supporters", "Supporter", "Supporter")
@@ -2810,57 +2964,93 @@ with tab_people:
             existing_tags = get_distinct_values("Tag")
 
             with st.form("member_form"):
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    first_name = st.text_input("First Name", key="member_first_name")
-                    email = st.text_input("Email", key="member_email")
-                    phone = st.text_input("Phone", value="", key="member_phone")
-                    effort_hours = st.number_input(
-                        "Effort hours", min_value=0.0, value=0.0, step=1.0, key="member_effort"
-                    )
-                    gender = st.selectbox(
-                        "Gender", ["", "Male", "Female", "Other"], key="member_gender"
-                    )
-                    age = st.number_input(
-                        "Age", min_value=0, max_value=120, value=0, step=1, key="member_age"
-                    )
-                    member_type = st.selectbox(
-                        "Member Type", member_types, index=0, key="member_type"
-                    )
-                    time_availability = st.selectbox(
-                        "Time Availability",
-                        ["", "Weekends", "Evenings", "Full-time", "Ad-hoc"],
-                        key="member_time_availability",
-                    )
-                    agrees = st.checkbox("Agrees with Manifesto", value=False, key="member_agrees")
-                    interested_membership = st.checkbox(
-                        "Interested in Party Membership", value=False, key="member_interested"
-                    )
-                    facebook_member = st.checkbox(
-                        "Facebook Group Member", value=False, key="member_fb"
-                    )
-                    referrer_email = st.text_input(
-                        "Referred By (email)", value="", key="member_referrer"
-                    )
-                with col_b:
-                    last_name = st.text_input("Last Name", key="member_last_name")
-                    address = st.text_input(
-                        "Address",
-                        value=st.session_state.get("member_address_value", ""),
-                        key="member_address",
-                    )
-                    latitude = st.number_input(
-                        "Latitude",
-                        value=float(st.session_state.get("member_lat_value", 0.0) or 0.0),
-                        format="%.6f",
-                        key="member_lat",
-                    )
-                    longitude = st.number_input(
-                        "Longitude",
-                        value=float(st.session_state.get("member_lon_value", 0.0) or 0.0),
-                        format="%.6f",
-                        key="member_lon",
-                    )
+                with st.expander("Contact", expanded=True):
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        first_name = st.text_input("First Name", key="member_first_name")
+                        email = st.text_input("Email *", key="member_email")
+                        phone = st.text_input("Phone", value="", key="member_phone")
+                    with col_b:
+                        last_name = st.text_input("Last Name", key="member_last_name")
+                        address = st.text_input(
+                            "Address",
+                            value=st.session_state.get("member_address_value", ""),
+                            key="member_address",
+                        )
+                        lat_col, lon_col = st.columns(2)
+                        with lat_col:
+                            latitude = st.number_input(
+                                "Latitude",
+                                value=float(
+                                    st.session_state.get("member_lat_value", 0.0) or 0.0
+                                ),
+                                format="%.6f",
+                                key="member_lat",
+                            )
+                        with lon_col:
+                            longitude = st.number_input(
+                                "Longitude",
+                                value=float(
+                                    st.session_state.get("member_lon_value", 0.0) or 0.0
+                                ),
+                                format="%.6f",
+                                key="member_lon",
+                            )
+
+                with st.expander("Engagement", expanded=False):
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        effort_hours = st.number_input(
+                            "Effort Hours",
+                            min_value=0.0,
+                            value=0.0,
+                            step=1.0,
+                            key="member_effort",
+                        )
+                        time_availability = st.selectbox(
+                            "Time Availability",
+                            ["", "Weekends", "Evenings", "Full-time", "Ad-hoc"],
+                            key="member_time_availability",
+                        )
+                        member_type = st.selectbox(
+                            "Member Type", member_types, index=0, key="member_type"
+                        )
+                        donation_total = st.number_input(
+                            "Donation Total (optional)",
+                            min_value=0.0,
+                            value=0.0,
+                            step=10.0,
+                            key="member_donation",
+                        )
+                    with col_b:
+                        gender = st.selectbox(
+                            "Gender", ["", "Male", "Female", "Other"], key="member_gender"
+                        )
+                        age = st.number_input(
+                            "Age",
+                            min_value=0,
+                            max_value=120,
+                            value=0,
+                            step=1,
+                            key="member_age",
+                        )
+                        agrees = st.checkbox(
+                            "Agrees with Manifesto", value=False, key="member_agrees"
+                        )
+                        interested_membership = st.checkbox(
+                            "Interested in Party Membership",
+                            value=False,
+                            key="member_interested",
+                        )
+                        facebook_member = st.checkbox(
+                            "Facebook Group Member", value=False, key="member_fb"
+                        )
+                        referrer_email = st.text_input(
+                            "Referred By (email)", value="", key="member_referrer"
+                        )
+                    about = st.text_area("About / Motivation", value="", key="member_about")
+
+                with st.expander("Skills & tags", expanded=False):
                     involvement = st.multiselect(
                         "Preferred Areas of Involvement",
                         default_areas,
@@ -2870,22 +3060,14 @@ with tab_people:
                     skills_sel = st.multiselect(
                         "Skills", default_skills, default=[], key="member_skills"
                     )
-                    donation_total = st.number_input(
-                        "Donation Total (optional)",
-                        min_value=0.0,
-                        value=0.0,
-                        step=10.0,
-                        key="member_donation",
-                    )
                     tags_selected = st.multiselect(
                         "Tags (existing)", existing_tags, default=[], key="member_tags"
                     )
                     tags_custom = st.text_input(
                         "Add tags (comma separated)", key="member_tags_custom"
                     )
-                tags_combined = normalize_str_list(tags_selected + split_list(tags_custom))
-                about = st.text_area("About / Motivation", value="", key="member_about")
 
+                tags_combined = normalize_str_list(tags_selected + split_list(tags_custom))
                 save = st.form_submit_button(
                     "💾 Save to Neo4j and preview",
                     help="Upsert this member into Neo4j (email is required).",
@@ -3075,12 +3257,13 @@ with tab_people:
                         "age": "Age",
                     }
                 )
+                st.caption(f"{len(display_df):,} people shown")
                 st.dataframe(display_df, use_container_width=True)
 
         render_import_export_section("members", "Member", "Member")
 
 
-with tab_map:
+if nav_choice == "Map":
     st.subheader("Map")
     df_geo = load_map_data()
     if df_geo.empty:
@@ -3089,29 +3272,12 @@ with tab_map:
         sidebar_col, map_col = st.columns([1, 4])
         with sidebar_col:
             st.markdown("**Filters**")
-            show_supporters = st.checkbox(
-                "Show supporters",
-                value=True,
-                help="Include supporters on the map and in the filtered table.",
-            )
-            show_members = st.checkbox(
-                "Show members",
-                value=True,
-                help="Include members on the map and in the filtered table.",
-            )
-
             time_options = sorted(
                 [
                     value
                     for value in df_geo["timeAvailability"].dropna().unique().tolist()
                     if str(value).strip() and str(value).lower() != "unspecified"
                 ]
-            )
-            selected_time = st.multiselect(
-                "Time availability",
-                time_options,
-                default=[],
-                help="Filter by people’s time availability field.",
             )
             age_group_order = [
                 "Under 18",
@@ -3128,9 +3294,6 @@ with tab_map:
                 for value in age_group_order
                 if value in df_geo["ageGroup"].dropna().unique().tolist()
             ]
-            selected_age_groups = st.multiselect(
-                "Age group", age_group_options, default=[]
-            )
             skill_options = sorted(
                 {
                     str(skill).strip()
@@ -3139,7 +3302,6 @@ with tab_map:
                     if str(skill).strip()
                 }
             )
-            selected_skills = st.multiselect("Skills", skill_options, default=[])
             gender_options = sorted(
                 [
                     value
@@ -3147,18 +3309,94 @@ with tab_map:
                     if str(value).strip() and str(value).lower() != "unspecified"
                 ]
             )
-            selected_gender = st.multiselect("Gender", gender_options, default=[])
-            address_query = st.text_input("Address / location contains", value="")
-            motivation_query = st.text_input("Motivation contains", value="")
-            min_effort = st.number_input(
-                "Minimum effort hours", min_value=0.0, value=0.0, step=1.0
-            )
-            min_events = st.number_input(
-                "Minimum events attended", min_value=0, value=0, step=1
-            )
-            min_referrals = st.number_input(
-                "Minimum referrals", min_value=0, value=0, step=1
-            )
+
+            with st.form("map_filters_form"):
+                with st.expander("People", expanded=True):
+                    show_supporters = st.checkbox(
+                        "Show Supporters",
+                        value=True,
+                        key="map_show_supporters",
+                        help="Include supporters on the map and in the filtered table.",
+                    )
+                    show_members = st.checkbox(
+                        "Show Members",
+                        value=True,
+                        key="map_show_members",
+                        help="Include members on the map and in the filtered table.",
+                    )
+                    selected_gender = st.multiselect(
+                        "Gender", gender_options, default=[], key="map_gender"
+                    )
+                    selected_age_groups = st.multiselect(
+                        "Age Group", age_group_options, default=[], key="map_age_groups"
+                    )
+
+                with st.expander("Availability & skills", expanded=False):
+                    selected_time = st.multiselect(
+                        "Time Availability",
+                        time_options,
+                        default=[],
+                        key="map_time",
+                        help="Filter by people’s time availability field.",
+                    )
+                    selected_skills = st.multiselect(
+                        "Skills", skill_options, default=[], key="map_skills"
+                    )
+
+                with st.expander("Engagement", expanded=False):
+                    min_effort = st.number_input(
+                        "Minimum Effort Hours",
+                        min_value=0.0,
+                        value=0.0,
+                        step=1.0,
+                        key="map_min_effort",
+                    )
+                    min_events = st.number_input(
+                        "Minimum Events Attended",
+                        min_value=0,
+                        value=0,
+                        step=1,
+                        key="map_min_events",
+                    )
+                    min_referrals = st.number_input(
+                        "Minimum Referrals",
+                        min_value=0,
+                        value=0,
+                        step=1,
+                        key="map_min_referrals",
+                    )
+
+                with st.expander("Text search", expanded=False):
+                    address_query = st.text_input(
+                        "Address / Location Contains", value="", key="map_address_query"
+                    )
+                    motivation_query = st.text_input(
+                        "Motivation Contains", value="", key="map_motivation_query"
+                    )
+
+                action_cols = st.columns(2)
+                with action_cols[0]:
+                    apply_filters = st.form_submit_button("Apply Filters")
+                with action_cols[1]:
+                    reset_filters = st.form_submit_button("Reset Filters")
+
+            if reset_filters:
+                reset_values = {
+                    "map_show_supporters": True,
+                    "map_show_members": True,
+                    "map_gender": [],
+                    "map_age_groups": [],
+                    "map_time": [],
+                    "map_skills": [],
+                    "map_min_effort": 0.0,
+                    "map_min_events": 0,
+                    "map_min_referrals": 0,
+                    "map_address_query": "",
+                    "map_motivation_query": "",
+                }
+                for key, value in reset_values.items():
+                    st.session_state[key] = value
+                st.rerun()
 
         df_filtered = df_geo.copy()
         if not show_supporters:
@@ -3196,6 +3434,7 @@ with tab_map:
             if df_filtered.empty:
                 st.info("No map points for the selected filter.")
             else:
+                st.caption(f"{len(df_filtered):,} people shown")
                 st.caption("Hover points for details. Use the console to open a small profile.")
                 legend_cols = st.columns(2)
                 legend_cols[0].markdown(
@@ -3274,21 +3513,27 @@ with tab_map:
                     }
                 )
 
+                st.download_button(
+                    "Download filtered CSV",
+                    data=table_df.to_csv(index=False),
+                    file_name="filtered_people.csv",
+                    mime="text/csv",
+                )
                 st.dataframe(table_df, use_container_width=True)
 
 
-with tab_tasks:
+if nav_choice == "Tasks":
     render_tasks_tab()
 
 
-with tab_profiles:
+if nav_choice == "Profiles":
     render_profiles_tab()
 
 
-with tab_segments:
+if nav_choice == "Segments":
     render_segments_tab()
 
 
-with tab_deliberation:
+if nav_choice == "Deliberation":
     render_deliberation(public_only=False)
 

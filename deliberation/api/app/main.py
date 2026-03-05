@@ -3,15 +3,15 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
 
-from .db import close_driver, init_constraints
-from .routes import router
-
 load_dotenv(
     dotenv_path=os.path.abspath(
         os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env")
     ),
     override=True,
 )
+
+from .db import close_driver, init_constraints
+from .routes import router
 
 app = FastAPI(title="Polis-style Deliberation API")
 app.include_router(router)
