@@ -6,9 +6,13 @@ This folder now contains the **combined** application:
 
 ## Folder structure
 ```
-TM/
-  app.py                  # CRM + Deliberation UI
-  .env                    # shared env config
+./
+  app.py                  # CRM + Deliberation UI (platform app)
+  AIteam/
+    console.py            # Agent Chain console UI
+    agent_chain/          # in-repo multi-agent framework (runs are not committed)
+  .env                    # local env config (not committed)
+  .env.example            # env template
   deliberation/
     api/                  # FastAPI service
     data/                 # seed CSVs
@@ -19,22 +23,43 @@ TM/
 
 ### 1) Start deliberation API
 ```
-cd TM/deliberation/api
+cd deliberation/api
 python -m pip install -r requirements.txt
 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8010
 ```
 
 ### 2) Start CRM UI
 ```
-cd TM
 python -m streamlit run app.py --server.address 0.0.0.0 --server.port 8506
 ```
 
 Open: `http://localhost:8506`
 
+## Agent Chain Console (multi-agent dev console)
+The console orchestrates specialist agents over a shared run state (blackboard), keeps run history, and can optionally apply safe code changes and run git automation.
+
+### 1) Configure env
+- Copy `.env.example` to `.env` and set at least:
+  - `OPENAI_API_KEY`
+  - `OPENAI_MODEL` (optional)
+  - `SLACK_WEBHOOK_URL` (optional)
+
+### 2) Run the console
+```
+python -m streamlit run AIteam/console.py --server.address 0.0.0.0 --server.port 8501
+```
+
+### (Optional) Use from Cursor Terminal (CLI)
+If you want to stay mostly inside Cursor (without the Streamlit console UI), you can drive the chain via:
+```
+python -m AIteam.chain_cli create-run "Add a new volunteer follow-up workflow in app.py"
+python -m AIteam.chain_cli autopilot --run-id <RUN_ID> --text "Plan the change and produce a bounded code_change_plan.json"
+python -m AIteam.chain_cli message --run-id <RUN_ID> --agent Supervisor --text "Give me next steps"
+```
+
 ## Seed data
 ```
-cd TM/deliberation/scripts
+cd deliberation/scripts
 python import_comments.py --csv ../data/georgian_politics_comments.csv
 ```
 

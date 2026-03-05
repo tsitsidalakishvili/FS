@@ -1,4 +1,5 @@
 import os
+import json
 from uuid import uuid4
 
 import altair as alt
@@ -201,6 +202,349 @@ def upsert_person(payload):
     )
     """
     return run_write(query, payload)
+
+
+TASK_STATUSES = ["Open", "In Progress", "Done", "Cancelled"]
+
+
+def create_task(person_email, title, description=None, due_date=None, status="Open"):
+    person_email = clean_text(person_email)
+    title = clean_text(title)
+    if not person_email or not title:
+        return False
+    due_date = clean_text(due_date)
+    status = status if status in TASK_STATUSES else "Open"
+    return run_write(
+        """
+        MATCH (p:Person {email: $email})
+        CREATE (t:Task {
+          taskId: randomUUID(),
+          title: $title,
+          description: $description,
+          status: $status,
+          dueDate: $dueDate,
+          createdAt: datetime(),
+          updatedAt: datetime()
+        })
+        MERGE (p)-[:HAS_TASK]->(t)
+        """,
+        {
+            "email": person_email,
+            "title": title,
+            "description": clean_text(description),
+            "status": status,
+            "dueDate": due_date,
+        },
+    )
+
+
+def update_task_status(task_id, status):
+    task_id = clean_text(task_id)
+    status = status if status in TASK_STATUSES else None
+    if not task_id or not status:
+        return False
+    return run_write(
+        """
+        MATCH (t:Task {taskId: $taskId})
+        SET t.status = $status,
+            t.updatedAt = datetime()
+        """,
+        {"taskId": task_id, "status": status},
+    )
+
+
+def list_tasks(status=None, person_email=None, group=None, limit=300):
+    status = clean_text(status)
+    person_email = clean_text(person_email)
+    group = clean_text(group)
+    group = group if group in {"Supporter", "Member"} else None
+    try:
+        limit = int(limit)
+    except Exception:
+        limit = 300
+    limit = max(10, min(1000, limit))
+
+    query = """
+    MATCH (p:Person)-[:HAS_TASK]->(t:Task)
+    OPTIONAL MATCH (p)-[:CLASSIFIED_AS]->(st:SupporterType)
+    WITH p, t, collect(DISTINCT st.name) AS types
+    WITH p, t,
+      CASE WHEN any(x IN types WHERE toLower(x) CONTAINS 'member') THEN 'Member' ELSE 'Supporter' END AS group
+    WHERE ($status IS NULL OR t.status = $status)
+      AND ($email IS NULL OR p.email = $email)
+      AND ($group IS NULL OR group = $group)
+    RETURN
+      t.taskId AS taskId,
+      t.title AS title,
+      coalesce(t.description, '') AS description,
+      coalesce(t.status, 'Open') AS status,
+      coalesce(t.dueDate, '') AS dueDate,
+      coalesce(p.firstName, '') AS firstName,
+      coalesce(p.lastName, '') AS lastName,
+      p.email AS email,
+      group AS group,
+      toString(t.createdAt) AS createdAt,
+      toString(t.updatedAt) AS updatedAt
+    ORDER BY
+      CASE WHEN t.status = 'Done' THEN 1 WHEN t.status = 'Cancelled' THEN 2 ELSE 0 END,
+      coalesce(t.dueDate, '9999-12-31') ASC,
+      t.createdAt DESC
+    LIMIT $limit
+    """
+    return run_query(
+        query,
+        {"status": status, "email": person_email, "group": group, "limit": limit},
+        silent=True,
+    )
+
+
+def search_people(query, limit=50):
+    query = clean_text(query)
+    try:
+        limit = int(limit)
+    except Exception:
+        limit = 50
+    limit = max(5, min(200, limit))
+    if not query:
+        return pd.DataFrame()
+    return run_query(
+        """
+        MATCH (p:Person)
+        OPTIONAL MATCH (p)-[:CLASSIFIED_AS]->(st:SupporterType)
+        WITH p, collect(DISTINCT st.name) AS types
+        WITH p,
+          (trim(coalesce(p.firstName,'') + ' ' + coalesce(p.lastName,''))) AS fullName,
+          CASE WHEN any(x IN types WHERE toLower(x) CONTAINS 'member') THEN 'Member' ELSE 'Supporter' END AS group
+        WHERE toLower(p.email) CONTAINS toLower($q)
+           OR toLower(fullName) CONTAINS toLower($q)
+        RETURN
+          CASE WHEN fullName = '' THEN p.email ELSE fullName END AS fullName,
+          p.email AS email,
+          group AS group,
+          coalesce(p.timeAvailability, 'Unspecified') AS timeAvailability
+        ORDER BY fullName
+        LIMIT $limit
+        """,
+        {"q": query, "limit": limit},
+        silent=True,
+    )
+
+
+def load_person_profile(email):
+    email = clean_text(email)
+    if not email:
+        return pd.DataFrame()
+    return run_query(
+        """
+        MATCH (p:Person {email: $email})
+        OPTIONAL MATCH (p)-[:CLASSIFIED_AS]->(st:SupporterType)
+        OPTIONAL MATCH (p)-[:HAS_TAG]->(tag:Tag)
+        OPTIONAL MATCH (p)-[:CAN_CONTRIBUTE_WITH]->(sk:Skill)
+        OPTIONAL MATCH (p)-[:INTERESTED_IN]->(ia:InvolvementArea)
+        WITH p,
+          collect(DISTINCT st.name) AS supporterTypes,
+          collect(DISTINCT tag.name) AS tags,
+          collect(DISTINCT sk.name) AS skills,
+          collect(DISTINCT ia.name) AS involvementAreas
+        RETURN
+          p.email AS email,
+          p.firstName AS firstName,
+          p.lastName AS lastName,
+          p.phone AS phone,
+          p.gender AS gender,
+          p.age AS age,
+          coalesce(p.timeAvailability, 'Unspecified') AS timeAvailability,
+          coalesce(p.about, '') AS about,
+          coalesce(p.agreesWithManifesto, false) AS agreesWithManifesto,
+          coalesce(p.interestedInMembership, false) AS interestedInMembership,
+          coalesce(p.facebookGroupMember, false) AS facebookGroupMember,
+          supporterTypes,
+          tags,
+          skills,
+          involvementAreas
+        """,
+        {"email": email},
+        silent=True,
+    )
+
+
+def update_person_profile(email, payload):
+    email = clean_text(email)
+    if not email:
+        return False
+    # Only updates core fields; tags/skills/involvement are left as-is for now.
+    return run_write(
+        """
+        MATCH (p:Person {email: $email})
+        SET p.firstName = $firstName,
+            p.lastName = $lastName,
+            p.phone = $phone,
+            p.gender = $gender,
+            p.age = $age,
+            p.timeAvailability = $timeAvailability,
+            p.about = $about,
+            p.agreesWithManifesto = $agreesWithManifesto,
+            p.interestedInMembership = $interestedInMembership,
+            p.facebookGroupMember = $facebookGroupMember
+        """,
+        {
+            "email": email,
+            "firstName": clean_text(payload.get("firstName")),
+            "lastName": clean_text(payload.get("lastName")),
+            "phone": clean_text(payload.get("phone")),
+            "gender": clean_text(payload.get("gender")),
+            "age": payload.get("age"),
+            "timeAvailability": clean_text(payload.get("timeAvailability")),
+            "about": clean_text(payload.get("about")),
+            "agreesWithManifesto": bool(payload.get("agreesWithManifesto", False)),
+            "interestedInMembership": bool(payload.get("interestedInMembership", False)),
+            "facebookGroupMember": bool(payload.get("facebookGroupMember", False)),
+        },
+    )
+
+
+def upsert_segment(name, description, filter_spec):
+    name = clean_text(name)
+    if not name:
+        return False
+    description = clean_text(description) or ""
+    filter_json = json.dumps(filter_spec or {}, ensure_ascii=False)
+    return run_write(
+        """
+        MERGE (s:Segment {name: $name})
+        ON CREATE SET s.segmentId = randomUUID(), s.createdAt = datetime()
+        SET s.description = $description,
+            s.filterJson = $filterJson,
+            s.updatedAt = datetime()
+        """,
+        {"name": name, "description": description, "filterJson": filter_json},
+    )
+
+
+def list_segments():
+    return run_query(
+        """
+        MATCH (s:Segment)
+        RETURN
+          s.segmentId AS segmentId,
+          s.name AS name,
+          coalesce(s.description,'') AS description,
+          toString(s.updatedAt) AS updatedAt
+        ORDER BY s.updatedAt DESC
+        """,
+        silent=True,
+    )
+
+
+def delete_segment(segment_id):
+    segment_id = clean_text(segment_id)
+    if not segment_id:
+        return False
+    return run_write(
+        """
+        MATCH (s:Segment {segmentId: $id})
+        DETACH DELETE s
+        """,
+        {"id": segment_id},
+    )
+
+
+def load_segment_filter(segment_id):
+    segment_id = clean_text(segment_id)
+    if not segment_id:
+        return {}
+    df = run_query(
+        """
+        MATCH (s:Segment {segmentId: $id})
+        RETURN coalesce(s.filterJson, '{}') AS filterJson
+        """,
+        {"id": segment_id},
+        silent=True,
+    )
+    if df.empty or "filterJson" not in df.columns:
+        return {}
+    try:
+        return json.loads(df["filterJson"].iloc[0] or "{}")
+    except Exception:
+        return {}
+
+
+def run_segment(filter_spec, limit=500):
+    filter_spec = filter_spec or {}
+    clauses = []
+    params = {"limit": max(10, min(2000, int(limit) if str(limit).isdigit() else 500))}
+
+    group = clean_text(filter_spec.get("group"))
+    if group in {"Supporter", "Member"}:
+        clauses.append("group = $group")
+        params["group"] = group
+
+    time_availability = filter_spec.get("timeAvailability") or []
+    if isinstance(time_availability, list) and time_availability:
+        vals = [str(x) for x in time_availability if str(x).strip()]
+        if vals:
+            clauses.append("p.timeAvailability IN $timeAvailability")
+            params["timeAvailability"] = vals
+
+    tags = filter_spec.get("tags") or []
+    if isinstance(tags, list) and tags:
+        vals = [str(x) for x in tags if str(x).strip()]
+        if vals:
+            clauses.append("any(t IN $tags WHERE t IN tags)")
+            params["tags"] = vals
+
+    skills = filter_spec.get("skills") or []
+    if isinstance(skills, list) and skills:
+        vals = [str(x) for x in skills if str(x).strip()]
+        if vals:
+            clauses.append("any(s IN $skills WHERE s IN skills)")
+            params["skills"] = vals
+
+    name_contains = clean_text(filter_spec.get("nameContains"))
+    if name_contains:
+        clauses.append("toLower(fullName) CONTAINS toLower($nameContains)")
+        params["nameContains"] = name_contains
+
+    address_contains = clean_text(filter_spec.get("addressContains"))
+    if address_contains:
+        clauses.append("toLower(coalesce(p.address,'')) CONTAINS toLower($addressContains)")
+        params["addressContains"] = address_contains
+
+    min_effort = filter_spec.get("minEffortHours")
+    try:
+        min_effort_val = float(min_effort) if min_effort is not None and min_effort != "" else None
+    except Exception:
+        min_effort_val = None
+    if min_effort_val is not None and min_effort_val > 0:
+        clauses.append("effortHours >= $minEffortHours")
+        params["minEffortHours"] = float(min_effort_val)
+
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+
+    query = f"""
+    MATCH (p:Person)
+    OPTIONAL MATCH (p)-[:CLASSIFIED_AS]->(st:SupporterType)
+    WITH p, collect(DISTINCT st.name) AS types
+    WITH p,
+      (trim(coalesce(p.firstName,'') + ' ' + coalesce(p.lastName,''))) AS fullName,
+      CASE WHEN any(x IN types WHERE toLower(x) CONTAINS 'member') THEN 'Member' ELSE 'Supporter' END AS group
+    OPTIONAL MATCH (p)-[:HAS_TAG]->(tag:Tag)
+    WITH p, fullName, group, collect(DISTINCT tag.name) AS tags
+    OPTIONAL MATCH (p)-[:CAN_CONTRIBUTE_WITH]->(sk:Skill)
+    WITH p, fullName, group, tags, collect(DISTINCT sk.name) AS skills, coalesce(p.effortHours, 0.0) AS effortHours
+    {where}
+    RETURN
+      CASE WHEN fullName = '' THEN p.email ELSE fullName END AS fullName,
+      p.email AS email,
+      group AS group,
+      coalesce(p.timeAvailability, 'Unspecified') AS timeAvailability,
+      effortHours AS effortHours,
+      tags,
+      skills
+    ORDER BY effortHours DESC
+    LIMIT $limit
+    """
+    return run_query(query, params=params, silent=True)
 
 
 def clean_text(value):
@@ -846,6 +1190,309 @@ def sort_people(df, sort_by):
     return df.sort_values("fullName")
 
 
+def _csv_cluster_by_columns(df: pd.DataFrame, columns: list[str], max_clusters: int = 12):
+    """
+    Deterministic clustering for uploaded CSVs:
+    cluster_id = unique combination of selected columns (stringified).
+    """
+    if df is None or df.empty or not columns:
+        return df, pd.DataFrame()
+
+    cols = [c for c in columns if c in df.columns]
+    if not cols:
+        return df, pd.DataFrame()
+
+    safe = df.copy()
+    for c in cols:
+        safe[c] = safe[c].astype(str).fillna("").str.strip()
+        safe[c] = safe[c].replace({"nan": "", "None": ""})
+
+    safe["_cluster_key"] = safe[cols].apply(lambda row: " | ".join([f"{c}={row[c]}" for c in cols]), axis=1)
+    counts = safe["_cluster_key"].value_counts().reset_index()
+    counts.columns = ["cluster_key", "count"]
+
+    try:
+        max_clusters = int(max_clusters)
+    except Exception:
+        max_clusters = 12
+    max_clusters = max(2, min(50, max_clusters))
+
+    top_keys = set(counts.head(max_clusters)["cluster_key"].tolist())
+    safe["cluster_id"] = safe["_cluster_key"].apply(lambda k: k if k in top_keys else "Other")
+    summary = safe["cluster_id"].value_counts().reset_index()
+    summary.columns = ["cluster_id", "count"]
+    return safe.drop(columns=["_cluster_key"]), summary
+
+
+def render_tasks_tab():
+    st.subheader("Tasks / Follow-ups")
+    st.caption("Track follow-ups as tasks linked to people. This is a new feature and does not change existing tabs.")
+
+    filter_cols = st.columns([1, 1, 1, 1])
+    with filter_cols[0]:
+        status_filter = st.selectbox("Status", ["(any)"] + TASK_STATUSES, index=0, key="tasks_status_filter")
+    with filter_cols[1]:
+        group_filter = st.selectbox("Group", ["(any)", "Supporter", "Member"], index=0, key="tasks_group_filter")
+    with filter_cols[2]:
+        limit = st.number_input("Limit", min_value=10, max_value=1000, value=300, step=10, key="tasks_limit")
+    with filter_cols[3]:
+        refresh = st.button("Refresh", key="tasks_refresh")
+
+    st.markdown("#### Create task")
+    create_cols = st.columns([2, 2, 2, 1])
+    with create_cols[0]:
+        person_query = st.text_input("Find person (name/email)", key="tasks_person_query")
+        matches = search_people(person_query, limit=30) if person_query else pd.DataFrame()
+        options = [""] + (matches["email"].tolist() if not matches.empty and "email" in matches.columns else [])
+        person_email = st.selectbox("Person", options=options, key="tasks_person_email")
+    with create_cols[1]:
+        title = st.text_input("Title", key="tasks_title")
+        due_date = st.text_input("Due date (YYYY-MM-DD, optional)", key="tasks_due_date")
+    with create_cols[2]:
+        description = st.text_area("Notes (optional)", height=80, key="tasks_description")
+    with create_cols[3]:
+        status_new = st.selectbox("New status", TASK_STATUSES, index=0, key="tasks_new_status")
+        if st.button("Add task", key="tasks_add_btn"):
+            ok = create_task(person_email, title, description=description, due_date=due_date, status=status_new)
+            if ok:
+                st.success("Task created.")
+            else:
+                st.error("Could not create task (check person + title).")
+
+    st.markdown("---")
+    st.markdown("#### Task queue")
+    status_val = None if status_filter == "(any)" else status_filter
+    group_val = None if group_filter == "(any)" else group_filter
+    if refresh:
+        pass
+    df = list_tasks(status=status_val, group=group_val, limit=limit)
+    if df.empty:
+        st.info("No tasks found (yet).")
+        return
+
+    st.dataframe(
+        df[
+            [
+                "title",
+                "status",
+                "dueDate",
+                "firstName",
+                "lastName",
+                "email",
+                "group",
+                "updatedAt",
+            ]
+        ].rename(
+            columns={
+                "title": "Title",
+                "status": "Status",
+                "dueDate": "Due",
+                "firstName": "First",
+                "lastName": "Last",
+                "email": "Email",
+                "group": "Group",
+                "updatedAt": "Updated",
+            }
+        ),
+        use_container_width=True,
+    )
+
+    st.markdown("#### Update task status")
+    task_ids = df["taskId"].tolist() if "taskId" in df.columns else []
+    upd_cols = st.columns([2, 1, 1])
+    with upd_cols[0]:
+        selected_task = st.selectbox("Task", options=[""] + task_ids, key="tasks_update_task")
+    with upd_cols[1]:
+        new_status = st.selectbox("Set status", TASK_STATUSES, key="tasks_update_status")
+    with upd_cols[2]:
+        if st.button("Update", key="tasks_update_btn"):
+            ok = update_task_status(selected_task, new_status)
+            if ok:
+                st.success("Updated.")
+            else:
+                st.error("Update failed.")
+
+
+def render_profiles_tab():
+    st.subheader("Profiles")
+    st.caption("Search and open a person profile. New feature; existing Supporter/Member forms remain unchanged.")
+
+    query = st.text_input("Search by name or email", key="profiles_search")
+    matches = search_people(query, limit=80) if query else pd.DataFrame()
+    if matches.empty:
+        st.info("Search to find a person.")
+        return
+
+    label_rows = [
+        f"{row.get('fullName','')} — {row.get('email','')}" for _, row in matches.iterrows()
+    ]
+    selection = st.selectbox("Select person", options=[""] + label_rows, key="profiles_select")
+    if not selection:
+        return
+    idx = label_rows.index(selection)
+    email = matches.iloc[idx]["email"]
+
+    prof = load_person_profile(email)
+    if prof.empty:
+        st.error("Could not load profile.")
+        return
+
+    row = prof.iloc[0].to_dict()
+    reveal = st.checkbox("Reveal contact fields (PII)", value=False, key="profiles_reveal")
+
+    form_cols = st.columns(2)
+    with form_cols[0]:
+        first = st.text_input("First name", value=row.get("firstName") or "", key="profiles_first")
+        last = st.text_input("Last name", value=row.get("lastName") or "", key="profiles_last")
+        phone = st.text_input("Phone", value=(row.get("phone") or "") if reveal else "••••••", key="profiles_phone", disabled=not reveal)
+        gender = st.selectbox("Gender", ["", "Male", "Female", "Other"], index=0, key="profiles_gender")
+        age_val = row.get("age")
+        age = st.number_input("Age", min_value=0, max_value=120, value=int(age_val) if isinstance(age_val, (int, float)) and not pd.isna(age_val) else 0, step=1, key="profiles_age")
+    with form_cols[1]:
+        time_availability = st.selectbox(
+            "Time availability",
+            ["", "Weekends", "Evenings", "Full-time", "Ad-hoc", "Unspecified"],
+            index=0,
+            key="profiles_time",
+        )
+        about = st.text_area("Motivation / notes", value=row.get("about") or "", height=120, key="profiles_about")
+        agrees = st.checkbox("Agrees with Manifesto", value=bool(row.get("agreesWithManifesto")), key="profiles_agrees")
+        interested = st.checkbox("Interested in Party Membership", value=bool(row.get("interestedInMembership")), key="profiles_interested")
+        fb = st.checkbox("Facebook Group Member", value=bool(row.get("facebookGroupMember")), key="profiles_fb")
+
+    if st.button("Save profile updates", key="profiles_save_btn"):
+        payload = {
+            "firstName": first,
+            "lastName": last,
+            "phone": phone if reveal else row.get("phone"),
+            "gender": gender,
+            "age": age if age else None,
+            "timeAvailability": time_availability if time_availability and time_availability != "Unspecified" else "Unspecified",
+            "about": about,
+            "agreesWithManifesto": agrees,
+            "interestedInMembership": interested,
+            "facebookGroupMember": fb,
+        }
+        ok = update_person_profile(email, payload)
+        if ok:
+            load_supporter_summary.clear()
+            load_map_data.clear()
+            st.success("Saved.")
+        else:
+            st.error("Save failed.")
+
+    st.markdown("---")
+    st.markdown("#### Profile metadata")
+    meta_cols = st.columns(3)
+    meta_cols[0].markdown(f"**Email**: `{email}`")
+    meta_cols[1].markdown(f"**Tags**: {format_list_label(row.get('tags') or [])}")
+    meta_cols[2].markdown(f"**Skills**: {format_list_label(row.get('skills') or [])}")
+
+    st.markdown("#### Tasks for this person")
+    tcols = st.columns([2, 2, 1])
+    with tcols[0]:
+        t_title = st.text_input("Task title", key="profiles_task_title")
+    with tcols[1]:
+        t_due = st.text_input("Due date (YYYY-MM-DD, optional)", key="profiles_task_due")
+    with tcols[2]:
+        if st.button("Add task", key="profiles_add_task"):
+            ok = create_task(email, t_title, due_date=t_due, status="Open")
+            if ok:
+                st.success("Task added.")
+            else:
+                st.error("Could not add task.")
+
+    tdf = list_tasks(person_email=email, limit=200)
+    if tdf.empty:
+        st.caption("No tasks yet.")
+    else:
+        st.dataframe(
+            tdf[["title", "status", "dueDate", "updatedAt"]].rename(
+                columns={"title": "Title", "status": "Status", "dueDate": "Due", "updatedAt": "Updated"}
+            ),
+            use_container_width=True,
+        )
+
+
+def render_segments_tab():
+    st.subheader("Segments")
+    st.caption("Save common filters as segments and re-run them. New feature; does not change existing filters in Map tab.")
+
+    st.markdown("#### Create / update segment")
+    seg_cols = st.columns([2, 2, 2])
+    with seg_cols[0]:
+        seg_name = st.text_input("Segment name", key="segments_name")
+        seg_desc = st.text_input("Description (optional)", key="segments_desc")
+    with seg_cols[1]:
+        group = st.selectbox("Group", ["", "Supporter", "Member"], key="segments_group")
+        time_availability = st.multiselect(
+            "Time availability",
+            ["Weekends", "Evenings", "Full-time", "Ad-hoc"],
+            default=[],
+            key="segments_time",
+        )
+        min_effort = st.number_input("Min effort hours", min_value=0.0, value=0.0, step=1.0, key="segments_min_effort")
+    with seg_cols[2]:
+        tags = st.multiselect("Tags", get_distinct_values("Tag"), default=[], key="segments_tags")
+        skills = st.multiselect("Skills", get_distinct_values("Skill"), default=[], key="segments_skills")
+        name_contains = st.text_input("Name contains", key="segments_name_contains")
+        address_contains = st.text_input("Address contains", key="segments_address_contains")
+
+    filter_spec = {
+        "group": group or None,
+        "timeAvailability": time_availability,
+        "minEffortHours": min_effort,
+        "tags": tags,
+        "skills": skills,
+        "nameContains": name_contains or None,
+        "addressContains": address_contains or None,
+    }
+    if st.button("Save segment", key="segments_save_btn"):
+        ok = upsert_segment(seg_name, seg_desc, filter_spec)
+        if ok:
+            st.success("Segment saved.")
+        else:
+            st.error("Could not save segment (name required).")
+
+    st.markdown("---")
+    st.markdown("#### Saved segments")
+    sdf = list_segments()
+    if sdf.empty:
+        st.info("No segments yet.")
+        return
+
+    labels = [f"{row['name']} — {row.get('updatedAt','')}" for _, row in sdf.iterrows()]
+    sel = st.selectbox("Select segment", options=[""] + labels, key="segments_select")
+    if not sel:
+        st.caption("Select a segment to run it.")
+        return
+
+    idx = labels.index(sel)
+    seg_id = sdf.iloc[idx]["segmentId"]
+
+    run_cols = st.columns([1, 1, 2])
+    with run_cols[0]:
+        run_limit = st.number_input("Result limit", min_value=10, max_value=2000, value=500, step=50, key="segments_limit")
+    with run_cols[1]:
+        if st.button("Run segment", key="segments_run_btn"):
+            st.session_state["segments_last_run"] = str(seg_id)
+    with run_cols[2]:
+        if st.button("Delete segment", key="segments_delete_btn"):
+            ok = delete_segment(seg_id)
+            if ok:
+                st.success("Deleted.")
+            else:
+                st.error("Delete failed.")
+
+    if st.session_state.get("segments_last_run") == str(seg_id):
+        spec = load_segment_filter(seg_id)
+        rdf = run_segment(spec, limit=run_limit)
+        if rdf.empty:
+            st.info("No matches for this segment.")
+        else:
+            st.dataframe(rdf, use_container_width=True)
+
+
 def render_deliberation(public_only: bool):
     st.subheader("Deliberation")
     st.caption("Anonymous comments + votes, consensus analysis, and clustering.")
@@ -871,7 +1518,7 @@ def render_deliberation(public_only: bool):
             ["Configure", "Participate", "Moderate", "Monitor / Reports"]
         )
 
-        with tab_config:
+    with tab_config:
             st.markdown("### Create conversation")
             topic = st.text_input("Topic", key="delib_topic")
             description = st.text_area("Description", key="delib_description")
@@ -964,6 +1611,50 @@ def render_deliberation(public_only: bool):
                                 st.success(f"Added {result.get('created', 0)} comments.")
                         else:
                             st.warning("Add at least one comment.")
+
+                    st.markdown("### Seed comments from CSV column")
+                    st.caption("Upload a CSV and pick a column to turn each row into a comment.")
+                    csv_upload = st.file_uploader("CSV", type=["csv"], key="delib_seed_csv_upload")
+                    if csv_upload is not None:
+                        try:
+                            df_seed = pd.read_csv(csv_upload)
+                        except Exception as exc:
+                            st.error(f"Could not read CSV: {exc}")
+                            df_seed = pd.DataFrame()
+                        if not df_seed.empty:
+                            st.dataframe(df_seed.head(10), use_container_width=True)
+                            col = st.selectbox(
+                                "Column to use as comment text",
+                                options=[""] + df_seed.columns.tolist(),
+                                key="delib_seed_csv_col",
+                            )
+                            max_rows = st.number_input(
+                                "Max rows to seed",
+                                min_value=1,
+                                max_value=5000,
+                                value=200,
+                                step=50,
+                                key="delib_seed_csv_max_rows",
+                            )
+                            if st.button("Seed from CSV", key="delib_seed_csv_btn"):
+                                if not col:
+                                    st.warning("Select a column.")
+                                else:
+                                    values = [
+                                        str(v).strip()
+                                        for v in df_seed[col].head(int(max_rows)).tolist()
+                                        if str(v).strip() and str(v).strip().lower() not in {"nan", "none"}
+                                    ]
+                                    values = list(dict.fromkeys(values))  # preserve order, remove dupes
+                                    if not values:
+                                        st.warning("No valid values found in that column.")
+                                    else:
+                                        result = delib_api_post(
+                                            f"/conversations/{convo_id}/seed-comments:bulk",
+                                            {"comments": values},
+                                        )
+                                        if result:
+                                            st.success(f"Seeded {result.get('created', 0)} comments from CSV.")
             else:
                 st.info("Select a conversation to edit settings or seed comments.")
 
@@ -1069,94 +1760,177 @@ def render_deliberation(public_only: bool):
         if not convo_id:
             st.info("Select a conversation first.")
         else:
-            if st.button("Run analysis", key="delib_run_analysis"):
-                report = delib_api_post(f"/conversations/{convo_id}/analyze", {})
-            else:
-                report = delib_api_get(f"/conversations/{convo_id}/report")
+            report_tab, csv_tab, explain_tab = st.tabs(
+                ["Vote-based report", "CSV clustering", "How clustering works"]
+            )
 
-            if report:
-                metrics = report["metrics"]
-                st.metric("Comments", metrics["total_comments"])
-                st.metric("Participants", metrics["total_participants"])
-                st.metric("Votes", metrics["total_votes"])
+            with explain_tab:
+                st.markdown(
+                    """
+### How clustering works now (vote-based)
+The deliberation backend clusters **participants** based on their **Agree / Disagree / Pass** votes on approved comments.
 
-                st.subheader("Potential agreement topics")
-                potential_agreements = report.get("potential_agreements", [])
-                if potential_agreements:
-                    for topic in potential_agreements:
-                        st.markdown(f"- {topic}")
+1) It builds a **vote matrix** of shape (participants × comments), with values:
+- `1` = Agree
+- `-1` = Disagree
+- `0` = Pass / no vote
+
+2) It runs **KMeans** clustering on that matrix (default `n_clusters=3`, bounded by number of participants).
+
+3) For visualization, it uses **PCA to 2D** (x/y coordinates) and plots points colored by cluster.
+
+4) It computes:
+- **Consensus** and **polarizing** statements using participation + agreement ratio + how different clusters are.
+- **Cluster summaries**: top “agree” and “disagree” comments within each cluster.
+- **Cluster similarity**: cosine similarity between each cluster’s average vote vector.
+
+This is implemented in `deliberation/api/app/analytics.py` (`build_vote_matrix`, `run_clustering`, `compute_metrics`, `compute_cluster_insights`).
+                    """.strip()
+                )
+
+            with report_tab:
+                if st.button("Run analysis", key="delib_run_analysis"):
+                    report = delib_api_post(f"/conversations/{convo_id}/analyze", {})
                 else:
-                    st.caption("No strong agreement topics yet.")
+                    report = delib_api_get(f"/conversations/{convo_id}/report")
 
-                st.subheader("Consensus statements")
-                consensus_df = pd.DataFrame(metrics["consensus"])
-                if consensus_df.empty:
-                    st.caption("No consensus statements yet.")
-                else:
-                    st.dataframe(consensus_df, use_container_width=True)
+                if report:
+                    metrics = report["metrics"]
+                    st.metric("Comments", metrics["total_comments"])
+                    st.metric("Participants", metrics["total_participants"])
+                    st.metric("Votes", metrics["total_votes"])
 
-                st.subheader("Polarizing statements")
-                polarizing_df = pd.DataFrame(metrics["polarizing"])
-                if polarizing_df.empty:
-                    st.caption("No polarizing statements yet.")
-                else:
-                    st.dataframe(polarizing_df, use_container_width=True)
-
-                st.subheader("Cluster summaries")
-                summaries_df = pd.DataFrame(report.get("cluster_summaries", []))
-                if summaries_df.empty:
-                    st.caption("No cluster summaries available yet.")
-                else:
-                    st.dataframe(summaries_df, use_container_width=True)
-
-                st.subheader("Cluster similarity")
-                similarity_df = pd.DataFrame(report.get("cluster_similarity", []))
-                if similarity_df.empty:
-                    st.caption("No similarity data available yet.")
-                else:
-                    similarity_df["similarity"] = similarity_df["similarity"].round(3)
-                    st.dataframe(similarity_df, use_container_width=True)
-
-                st.subheader("Venn diagram: shared agreement topics")
-                summaries = report.get("cluster_summaries", [])
-                if not summaries or len(summaries) < 2:
-                    st.caption("Need at least two clusters with agreement topics.")
-                elif plt is None or (venn2 is None and venn3 is None):
-                    st.caption("matplotlib-venn is required for Venn diagrams.")
-                else:
-                    summaries = sorted(
-                        summaries, key=lambda s: s.get("size", 0), reverse=True
-                    )
-                    selected = summaries[:3]
-                    sets = [set(item.get("top_agree", [])) for item in selected]
-                    if not any(sets):
-                        st.caption("No overlapping agreement topics yet.")
+                    st.subheader("Potential agreement topics")
+                    potential_agreements = report.get("potential_agreements", [])
+                    if potential_agreements:
+                        for topic in potential_agreements:
+                            st.markdown(f"- {topic}")
                     else:
-                        labels = [
-                            f"{item.get('cluster_id')} ({item.get('size', 0)})"
-                            for item in selected
-                        ]
-                        fig, ax = plt.subplots()
-                        if len(selected) == 2 and venn2:
-                            venn2(sets, set_labels=labels, ax=ax)
-                        elif len(selected) >= 3 and venn3:
-                            venn3(sets[:3], set_labels=labels[:3], ax=ax)
-                        st.pyplot(fig, clear_figure=True)
+                        st.caption("No strong agreement topics yet.")
 
-                points_df = pd.DataFrame(report.get("points", []))
-                if not points_df.empty:
-                    st.subheader("Opinion clusters")
-                    chart = (
-                        alt.Chart(points_df)
-                        .mark_circle(size=60, opacity=0.7)
-                        .encode(
-                            x="x:Q",
-                            y="y:Q",
-                            color="cluster_id:N",
-                            tooltip=["cluster_id", "participant_id"],
+                    st.subheader("Consensus statements")
+                    consensus_df = pd.DataFrame(metrics["consensus"])
+                    if consensus_df.empty:
+                        st.caption("No consensus statements yet.")
+                    else:
+                        st.dataframe(consensus_df, use_container_width=True)
+
+                    st.subheader("Polarizing statements")
+                    polarizing_df = pd.DataFrame(metrics["polarizing"])
+                    if polarizing_df.empty:
+                        st.caption("No polarizing statements yet.")
+                    else:
+                        st.dataframe(polarizing_df, use_container_width=True)
+
+                    st.subheader("Cluster summaries")
+                    summaries_df = pd.DataFrame(report.get("cluster_summaries", []))
+                    if summaries_df.empty:
+                        st.caption("No cluster summaries available yet.")
+                    else:
+                        st.dataframe(summaries_df, use_container_width=True)
+
+                    st.subheader("Cluster similarity")
+                    similarity_df = pd.DataFrame(report.get("cluster_similarity", []))
+                    if similarity_df.empty:
+                        st.caption("No similarity data available yet.")
+                    else:
+                        similarity_df["similarity"] = similarity_df["similarity"].round(3)
+                        st.dataframe(similarity_df, use_container_width=True)
+
+                    st.subheader("Venn diagram: shared agreement topics")
+                    summaries = report.get("cluster_summaries", [])
+                    if not summaries or len(summaries) < 2:
+                        st.caption("Need at least two clusters with agreement topics.")
+                    elif plt is None or (venn2 is None and venn3 is None):
+                        st.caption("matplotlib-venn is required for Venn diagrams.")
+                    else:
+                        summaries = sorted(
+                            summaries, key=lambda s: s.get("size", 0), reverse=True
                         )
-                    )
-                    st.altair_chart(chart, use_container_width=True)
+                        selected = summaries[:3]
+                        sets = [set(item.get("top_agree", [])) for item in selected]
+                        if not any(sets):
+                            st.caption("No overlapping agreement topics yet.")
+                        else:
+                            labels = [
+                                f"{item.get('cluster_id')} ({item.get('size', 0)})"
+                                for item in selected
+                            ]
+                            fig, ax = plt.subplots()
+                            if len(selected) == 2 and venn2:
+                                venn2(sets, set_labels=labels, ax=ax)
+                            elif len(selected) >= 3 and venn3:
+                                venn3(sets[:3], set_labels=labels[:3], ax=ax)
+                            st.pyplot(fig, clear_figure=True)
+
+                    points_df = pd.DataFrame(report.get("points", []))
+                    if not points_df.empty:
+                        st.subheader("Opinion clusters")
+                        chart = (
+                            alt.Chart(points_df)
+                            .mark_circle(size=60, opacity=0.7)
+                            .encode(
+                                x="x:Q",
+                                y="y:Q",
+                                color="cluster_id:N",
+                                tooltip=["cluster_id", "participant_id"],
+                            )
+                        )
+                        st.altair_chart(chart, use_container_width=True)
+
+            with csv_tab:
+                st.subheader("CSV clustering (no votes)")
+                st.caption(
+                    "Upload a CSV, pick the columns you want to cluster by, and the app will group rows by the selected column values."
+                )
+                upload = st.file_uploader("Upload CSV", type=["csv"], key="delib_csv_upload")
+                if upload is None:
+                    st.info("Upload a CSV to begin.")
+                else:
+                    try:
+                        df_csv = pd.read_csv(upload)
+                    except Exception as exc:
+                        st.error(f"Could not read CSV: {exc}")
+                        df_csv = pd.DataFrame()
+
+                    if not df_csv.empty:
+                        st.caption("Preview")
+                        st.dataframe(df_csv.head(15), use_container_width=True)
+
+                        columns = df_csv.columns.tolist()
+                        selected_cols = st.multiselect(
+                            "Columns to cluster by",
+                            options=columns,
+                            default=columns[:1] if columns else [],
+                            key="delib_csv_cols",
+                        )
+                        max_clusters = st.number_input(
+                            "Max clusters (top groups + Other)",
+                            min_value=2,
+                            max_value=50,
+                            value=12,
+                            step=1,
+                            key="delib_csv_max_clusters",
+                        )
+                        if st.button("Create clusters", key="delib_csv_cluster_btn"):
+                            clustered, summary = _csv_cluster_by_columns(
+                                df_csv, selected_cols, max_clusters=int(max_clusters)
+                            )
+                            st.subheader("Cluster summary")
+                            st.dataframe(summary, use_container_width=True)
+
+                            st.subheader("Clustered rows")
+                            st.dataframe(clustered.head(200), use_container_width=True)
+
+                            if "cluster_id" in clustered.columns:
+                                counts = clustered["cluster_id"].value_counts().reset_index()
+                                counts.columns = ["cluster_id", "count"]
+                                chart = (
+                                    alt.Chart(counts)
+                                    .mark_bar()
+                                    .encode(x="cluster_id:N", y="count:Q", tooltip=["cluster_id:N", "count:Q"])
+                                )
+                                st.altair_chart(chart, use_container_width=True)
 
 
 st.title("Freedom Square CRM")
@@ -1178,8 +1952,8 @@ if driver is None:
     st.error("Missing or invalid Neo4j credentials. Set NEO4J_URI and NEO4J_PASSWORD in .env.")
     st.stop()
 
-tab_intro, tab_supporters, tab_members, tab_map, tab_deliberation = st.tabs(
-    ["Dashboard", "Supporters", "Members", "Map", "Deliberation"]
+tab_intro, tab_supporters, tab_members, tab_map, tab_tasks, tab_profiles, tab_segments, tab_deliberation = st.tabs(
+    ["Dashboard", "Supporters", "Members", "Map", "Tasks", "Profiles", "Segments", "Deliberation"]
 )
 
 
@@ -2330,6 +3104,18 @@ with tab_map:
                 )
 
                 st.dataframe(table_df, use_container_width=True)
+
+
+with tab_tasks:
+    render_tasks_tab()
+
+
+with tab_profiles:
+    render_profiles_tab()
+
+
+with tab_segments:
+    render_segments_tab()
 
 
 with tab_deliberation:

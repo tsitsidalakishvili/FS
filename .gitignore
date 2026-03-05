@@ -2,3 +2,5 @@
 .streamlit/secrets.toml
 __pycache__/
 *.pyc
+agent_chain/runs/
+AIteam/agent_chain/runs/
