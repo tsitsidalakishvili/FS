@@ -49,6 +49,14 @@ The console orchestrates specialist agents over a shared run state (blackboard),
 python -m streamlit run AIteam/console.py --server.address 0.0.0.0 --server.port 8501
 ```
 
+### (Optional) Use from Cursor Terminal (CLI)
+If you want to stay mostly inside Cursor (without the Streamlit console UI), you can drive the chain via:
+```
+python -m AIteam.chain_cli create-run "Add a new volunteer follow-up workflow in app.py"
+python -m AIteam.chain_cli autopilot --run-id <RUN_ID> --text "Plan the change and produce a bounded code_change_plan.json"
+python -m AIteam.chain_cli message --run-id <RUN_ID> --agent Supervisor --text "Give me next steps"
+```
+
 ## Seed data
 ```
 cd deliberation/scripts
