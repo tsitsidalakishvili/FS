@@ -28,6 +28,23 @@ st.set_page_config(page_title="Freedom Square CRM (Short)", layout="wide")
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
+st.markdown(
+    """
+<style>
+/* Make Streamlit tooltip icons more visible */
+[data-testid="stTooltipIcon"] {
+  opacity: 1 !important;
+  color: #6b7280 !important;
+}
+[data-testid="stTooltipIcon"] svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
 def _secrets_file_exists():
     app_secrets = os.path.join(os.path.dirname(__file__), ".streamlit", "secrets.toml")
     user_secrets = os.path.join(os.path.expanduser("~"), ".streamlit", "secrets.toml")
@@ -1603,17 +1620,39 @@ def render_deliberation(public_only: bool):
 
     with tab_config:
             st.markdown("### Create conversation")
-            topic = st.text_input("Topic", key="delib_topic")
-            description = st.text_area("Description", key="delib_description")
-            allow_comment_submission = st.checkbox(
-                "Allow participant comments", value=True, key="delib_allow_comment"
+            topic = st.text_input(
+                "Topic",
+                key="delib_topic",
+                help="Conversation title participants will see.",
             )
-            allow_viz = st.checkbox("Allow visualization", value=True, key="delib_allow_viz")
+            description = st.text_area(
+                "Description",
+                key="delib_description",
+                help="Context shown above the conversation during participation.",
+            )
+            allow_comment_submission = st.checkbox(
+                "Allow participant comments",
+                value=True,
+                key="delib_allow_comment",
+                help="If enabled, participants can submit new comments (may be moderated).",
+            )
+            allow_viz = st.checkbox(
+                "Allow visualization",
+                value=True,
+                key="delib_allow_viz",
+                help="If enabled, show cluster charts/visualizations in reports.",
+            )
             moderation_required = st.checkbox(
-                "Moderation required", value=False, key="delib_moderation"
+                "Moderation required",
+                value=False,
+                key="delib_moderation",
+                help="If enabled, submitted comments require approval before becoming voteable.",
             )
             is_open = st.checkbox(
-                "Open for participation", value=True, key="delib_is_open"
+                "Open for participation",
+                value=True,
+                key="delib_is_open",
+                help="If disabled, participation is closed (read-only).",
             )
             if st.button("Create conversation", key="delib_create_convo", help="Create a new deliberation conversation (topic + settings)."):
                 if topic.strip():
@@ -1682,7 +1721,11 @@ def render_deliberation(public_only: bool):
                             st.success("Conversation updated.")
 
                     st.markdown("### Seed comments (bulk)")
-                    seed_text = st.text_area("One comment per line", key="delib_seed_text")
+                    seed_text = st.text_area(
+                        "One comment per line",
+                        key="delib_seed_text",
+                        help="Seed statements/questions as separate comments so participants can vote on a shared set.",
+                    )
                     if st.button("Add seed comments", key="delib_seed_submit", help="Bulk add seed comments (one per line)."):
                         lines = [line.strip() for line in seed_text.splitlines() if line.strip()]
                         if lines:
