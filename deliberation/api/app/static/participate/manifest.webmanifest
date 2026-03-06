@@ -1,0 +1,17 @@
+{
+  "name": "Deliberation Participate",
+  "short_name": "Deliberate",
+  "start_url": "/participate",
+  "scope": "/participate/",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/participate/assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

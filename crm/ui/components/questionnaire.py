@@ -1,9 +1,11 @@
 import json
 import os
+from urllib.parse import urlencode
 
 import streamlit as st
 
 from crm.clients.deliberation import delib_api_get, render_delib_api_unavailable
+from crm.config import DELIBERATION_API_URL, STREAMLIT_APP_URL
 
 FORMS_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "forms")
@@ -54,6 +56,38 @@ def _build_message(template, link):
         return message
 
 
+def _normalize_base_url(value):
+    text = (value or "").strip()
+    return text.rstrip("/") if text else ""
+
+
+def _streamlit_base_url():
+    configured = _normalize_base_url(STREAMLIT_APP_URL)
+    if configured:
+        return configured
+
+    try:
+        headers = dict(st.context.headers)
+    except Exception:
+        headers = {}
+    host = headers.get("x-forwarded-host") or headers.get("host")
+    proto = headers.get("x-forwarded-proto") or "https"
+    if host:
+        return f"{proto}://{host}".rstrip("/")
+    return "http://localhost:8506"
+
+
+def _streamlit_link(params):
+    return f"{_streamlit_base_url()}?{urlencode(params)}"
+
+
+def _participation_pwa_link(conversation_id):
+    base = _normalize_base_url(DELIBERATION_API_URL)
+    if not base:
+        return ""
+    return f"{base}/participate?{urlencode({'conversation_id': conversation_id})}"
+
+
 def _render_field(field, key_prefix):
     field_id = field.get("id") or "field"
     label = field.get("label") or field_id
@@ -91,12 +125,12 @@ def render_survey_block(kind):
     if not selected:
         return
     template = options[selected]
-    link = f"<APP_URL>?survey={template['_id']}"
+    link = _streamlit_link({"survey": template["_id"]})
     st.text_input(
         "Shareable link",
         value=link,
         key=f"survey_link_{kind}",
-        help="Replace <APP_URL> with your Streamlit app URL.",
+        help="Ready-to-share link to this survey page.",
     )
     st.text_area(
         "Message to send",
@@ -169,18 +203,19 @@ def render_questionnaire_block(kind, show_expander=True):
                 return
 
             convo_id = convo_options[selected_topic]
-            public_link = (
-                f"<APP_URL>?questionnaire=deliberation&conversation_id={convo_id}"
+            public_link = _streamlit_link(
+                {"questionnaire": "deliberation", "conversation_id": convo_id}
             )
-            admin_link = (
-                f"<APP_URL>?questionnaire=deliberation_admin&conversation_id={convo_id}"
+            admin_link = _streamlit_link(
+                {"questionnaire": "deliberation_admin", "conversation_id": convo_id}
             )
+            mobile_link = _participation_pwa_link(convo_id)
 
             st.text_input(
                 "Participant link",
                 value=public_link,
                 key=f"questionnaire_link_public_{kind}",
-                help="Replace <APP_URL> with your Streamlit app URL.",
+                help="Ready Streamlit link with public-only deliberation questionnaire.",
             )
             st.text_input(
                 "Admin preview link",
@@ -188,10 +223,20 @@ def render_questionnaire_block(kind, show_expander=True):
                 key=f"questionnaire_link_admin_{kind}",
                 help="Internal link with Configure/Moderate/Reports tabs.",
             )
+            st.text_input(
+                "Mobile swipe link (PWA)",
+                value=mobile_link,
+                key=f"questionnaire_link_mobile_{kind}",
+                help="Direct mobile participation link served by deliberation API.",
+            )
+            if mobile_link and ("localhost" in mobile_link or "127.0.0.1" in mobile_link):
+                st.caption(
+                    "Mobile PWA link points to localhost. Set DELIBERATION_API_URL to a public HTTPS domain to share externally."
+                )
             message = (
                 f"Freedom Square questionnaire ({label})\n\n"
                 "Please vote and comment using this link:\n"
-                + public_link
+                + mobile_link
             )
             st.text_area(
                 "Message to send",

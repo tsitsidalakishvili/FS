@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f172a" />
+    <title>Deliberation Participate</title>
+    <link rel="manifest" href="/participate/manifest.webmanifest" />
+    <link rel="stylesheet" href="/participate/assets/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="header">
+        <h1>Deliberation</h1>
+        <p class="muted">Swipe right = Agree, left = Disagree, up or tap = Pass.</p>
+      </header>
+
+      <section id="setup-panel" class="panel">
+        <label for="conversation-select">Choose conversation</label>
+        <select id="conversation-select">
+          <option value="">Loading conversations...</option>
+        </select>
+        <button id="start-button" class="primary" disabled>Start swiping</button>
+      </section>
+
+      <section id="conversation-panel" class="panel hidden">
+        <h2 id="conversation-title"></h2>
+        <p id="conversation-description" class="muted"></p>
+      </section>
+
+      <section id="deck-panel" class="deck-panel hidden">
+        <div id="deck-status" class="muted"></div>
+        <div id="deck" class="deck">
+          <article id="card" class="card hidden" aria-live="polite">
+            <div class="badge-row">
+              <span id="badge-left" class="badge disagree">Disagree</span>
+              <span id="badge-right" class="badge agree">Agree</span>
+            </div>
+            <p id="card-text"></p>
+            <div class="counts">
+              <span id="count-agree">👍 0</span>
+              <span id="count-disagree">👎 0</span>
+              <span id="count-pass">➖ 0</span>
+            </div>
+          </article>
+          <div id="empty-state" class="empty hidden">
+            <p>No more comments in this deck.</p>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="vote-disagree" class="danger">Disagree</button>
+          <button id="vote-pass" class="neutral">Pass</button>
+          <button id="vote-agree" class="success">Agree</button>
+        </div>
+      </section>
+
+      <section id="comment-panel" class="panel hidden">
+        <h3>Add a comment</h3>
+        <p class="muted">Optional. Your identity remains anonymous.</p>
+        <textarea id="comment-input" rows="4" maxlength="1000" placeholder="Share your perspective..."></textarea>
+        <button id="comment-submit" class="primary">Submit comment</button>
+      </section>
+
+      <section id="network-panel" class="panel">
+        <p id="network-status" class="muted">Online</p>
+      </section>
+    </main>
+
+    <script src="/participate/assets/app.js" defer></script>
+  </body>
+</html>

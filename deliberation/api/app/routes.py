@@ -1,5 +1,10 @@
+import base64
 import hashlib
+import json
 import os
+import threading
+import time
+from collections import defaultdict
 from typing import List, Optional
 from uuid import uuid4
 
@@ -15,6 +20,7 @@ from .schemas import (
     ConversationOut,
     ConversationUpdate,
     MetricsOut,
+    ParticipationDeckOut,
     ReportOut,
     SeedCommentsRequest,
     VoteCreate,
@@ -23,11 +29,62 @@ from .schemas import (
 router = APIRouter()
 
 ANON_SALT = os.getenv("ANON_SALT", "dev-salt")
+INVITE_TOKENS = {
+    token.strip()
+    for token in os.getenv("PARTICIPATION_INVITE_TOKENS", "").split(",")
+    if token.strip()
+}
+_RATE_LIMIT_WINDOW_SECONDS = 60
+try:
+    VOTE_RATE_LIMIT_PER_MINUTE = max(0, int(os.getenv("VOTE_RATE_LIMIT_PER_MINUTE", "0")))
+except ValueError:
+    VOTE_RATE_LIMIT_PER_MINUTE = 0
+_vote_rate_limit_state = defaultdict(list)
+_vote_rate_limit_lock = threading.Lock()
 
 
 def _hash_participant(raw_id: str) -> str:
     digest = hashlib.sha256(f"{ANON_SALT}:{raw_id}".encode("utf-8")).hexdigest()
     return digest
+
+
+def _enforce_invite_token(x_invite_token: Optional[str]) -> None:
+    if INVITE_TOKENS and x_invite_token not in INVITE_TOKENS:
+        raise HTTPException(status_code=401, detail="Valid invite token required")
+
+
+def _enforce_vote_rate_limit(participant_id: str) -> None:
+    if VOTE_RATE_LIMIT_PER_MINUTE <= 0:
+        return
+    now = time.time()
+    threshold = now - _RATE_LIMIT_WINDOW_SECONDS
+    with _vote_rate_limit_lock:
+        recent = _vote_rate_limit_state[participant_id]
+        while recent and recent[0] < threshold:
+            recent.pop(0)
+        if len(recent) >= VOTE_RATE_LIMIT_PER_MINUTE:
+            raise HTTPException(status_code=429, detail="Vote rate limit exceeded")
+        recent.append(now)
+
+
+def _encode_cursor(created_at: str, comment_id: str) -> str:
+    payload = json.dumps({"created_at": created_at, "comment_id": comment_id}, separators=(",", ":"))
+    return base64.urlsafe_b64encode(payload.encode("utf-8")).decode("ascii")
+
+
+def _decode_cursor(cursor: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    if not cursor:
+        return None, None
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8")
+        payload = json.loads(raw)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid pagination cursor") from exc
+    created_at = payload.get("created_at")
+    comment_id = payload.get("comment_id")
+    if not created_at or not comment_id:
+        raise HTTPException(status_code=400, detail="Invalid pagination cursor")
+    return created_at, comment_id
 
 
 def _node_to_dict(node):
@@ -164,6 +221,25 @@ def list_conversations():
     return conversations
 
 
+@router.get("/participation/conversations", response_model=List[ConversationOut])
+def list_participation_conversations(x_invite_token: Optional[str] = Header(None)):
+    _enforce_invite_token(x_invite_token)
+    driver = get_driver()
+    query = """
+    MATCH (c:Conversation)
+    WHERE coalesce(c.isOpen, true) = true
+    RETURN c
+    ORDER BY c.createdAt DESC
+    """
+    with driver.session(database=NEO4J_DATABASE) as session:
+        records = _execute_read(session, query)
+    conversations = []
+    for record in records:
+        convo = _node_to_dict(record["c"])
+        conversations.append(_conversation_out(convo))
+    return conversations
+
+
 @router.get("/conversations/{conversation_id}", response_model=ConversationOut)
 def get_conversation(conversation_id: str):
     driver = get_driver()
@@ -221,7 +297,9 @@ def create_comment(
     conversation_id: str,
     payload: CommentCreate,
     x_participant_id: Optional[str] = Header(None),
+    x_invite_token: Optional[str] = Header(None),
 ):
+    _enforce_invite_token(x_invite_token)
     convo = _get_conversation(conversation_id)
     if not bool(convo.get("isOpen", True)):
         raise HTTPException(status_code=400, detail="Conversation is closed")
@@ -273,11 +351,23 @@ def create_comment(
 def list_comments(
     conversation_id: str,
     status: Optional[str] = Query(None, pattern="^(pending|approved|rejected)$"),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    only_unvoted_for_participant: bool = Query(False),
+    x_participant_id: Optional[str] = Header(None),
 ):
+    participant_hash = _hash_participant(x_participant_id) if x_participant_id else None
     driver = get_driver()
     query = """
     MATCH (c:Conversation {id: $cid})-[:HAS_COMMENT]->(cm:Comment)
-    WHERE $status IS NULL OR cm.status = $status
+    WHERE ($status IS NULL OR cm.status = $status)
+      AND (
+        $only_unvoted_for_participant = false
+        OR $participant_hash IS NULL
+        OR NOT EXISTS {
+            MATCH (:Participant {id: $participant_hash})-[:VOTED]->(cm)
+        }
+      )
     OPTIONAL MATCH (p:Participant)-[v:VOTED]->(cm)
     WITH cm,
         sum(CASE WHEN v.choice = 1 THEN 1 ELSE 0 END) AS agree_count,
@@ -285,9 +375,22 @@ def list_comments(
         sum(CASE WHEN v.choice = 0 THEN 1 ELSE 0 END) AS pass_count
     RETURN cm, agree_count, disagree_count, pass_count
     ORDER BY cm.createdAt
+    SKIP $offset
+    LIMIT $limit
     """
     with driver.session(database=NEO4J_DATABASE) as session:
-        records = _execute_read(session, query, {"cid": conversation_id, "status": status})
+        records = _execute_read(
+            session,
+            query,
+            {
+                "cid": conversation_id,
+                "status": status,
+                "offset": offset,
+                "limit": limit,
+                "only_unvoted_for_participant": only_unvoted_for_participant,
+                "participant_hash": participant_hash,
+            },
+        )
     comments = []
     for record in records:
         comment = _node_to_dict(record["cm"])
@@ -305,6 +408,88 @@ def list_comments(
             }
         )
     return comments
+
+
+@router.get(
+    "/participation/conversations/{conversation_id}/deck",
+    response_model=ParticipationDeckOut,
+)
+def get_participation_deck(
+    conversation_id: str,
+    cursor: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    x_participant_id: Optional[str] = Header(None),
+    x_invite_token: Optional[str] = Header(None),
+):
+    _enforce_invite_token(x_invite_token)
+    conversation = _get_conversation(conversation_id)
+    participant_hash = _hash_participant(x_participant_id) if x_participant_id else None
+    cursor_created_at, cursor_comment_id = _decode_cursor(cursor)
+
+    driver = get_driver()
+    query = """
+    MATCH (c:Conversation {id: $cid})-[:HAS_COMMENT]->(cm:Comment)
+    WHERE cm.status = "approved"
+      AND (
+        $participant_hash IS NULL
+        OR NOT EXISTS {
+            MATCH (:Participant {id: $participant_hash})-[:VOTED]->(cm)
+        }
+      )
+      AND (
+        $cursor_created_at IS NULL
+        OR cm.createdAt > datetime($cursor_created_at)
+        OR (cm.createdAt = datetime($cursor_created_at) AND cm.id > $cursor_comment_id)
+      )
+    OPTIONAL MATCH (p:Participant)-[v:VOTED]->(cm)
+    WITH cm,
+        sum(CASE WHEN v.choice = 1 THEN 1 ELSE 0 END) AS agree_count,
+        sum(CASE WHEN v.choice = -1 THEN 1 ELSE 0 END) AS disagree_count,
+        sum(CASE WHEN v.choice = 0 THEN 1 ELSE 0 END) AS pass_count
+    RETURN cm, agree_count, disagree_count, pass_count
+    ORDER BY cm.createdAt, cm.id
+    LIMIT $limit_plus_one
+    """
+    with driver.session(database=NEO4J_DATABASE) as session:
+        records = _execute_read(
+            session,
+            query,
+            {
+                "cid": conversation_id,
+                "participant_hash": participant_hash,
+                "cursor_created_at": cursor_created_at,
+                "cursor_comment_id": cursor_comment_id,
+                "limit_plus_one": limit + 1,
+            },
+        )
+
+    has_more = len(records) > limit
+    records = records[:limit]
+    comments = []
+    next_cursor = None
+    for record in records:
+        comment = _node_to_dict(record["cm"])
+        comments.append(
+            {
+                "id": comment["id"],
+                "text": comment["text"],
+                "status": comment.get("status", "approved"),
+                "is_seed": bool(comment.get("isSeed", False)),
+                "created_at": str(comment.get("createdAt")),
+                "author_hash": comment.get("authorHash"),
+                "agree_count": int(record["agree_count"] or 0),
+                "disagree_count": int(record["disagree_count"] or 0),
+                "pass_count": int(record["pass_count"] or 0),
+            }
+        )
+        next_cursor = _encode_cursor(str(comment.get("createdAt")), comment["id"])
+    return {
+        "conversation_id": conversation["id"],
+        "limit": limit,
+        "has_more": has_more,
+        "next_cursor": next_cursor if has_more else None,
+        "comments": comments,
+    }
 
 
 @router.patch("/comments/{comment_id}", response_model=CommentOut)
@@ -335,7 +520,12 @@ def update_comment_status(comment_id: str, payload: CommentStatusUpdate):
 
 
 @router.post("/vote")
-def cast_vote(payload: VoteCreate, x_participant_id: Optional[str] = Header(None)):
+def cast_vote(
+    payload: VoteCreate,
+    x_participant_id: Optional[str] = Header(None),
+    x_invite_token: Optional[str] = Header(None),
+):
+    _enforce_invite_token(x_invite_token)
     if payload.choice not in (-1, 0, 1):
         raise HTTPException(status_code=400, detail="Vote choice must be -1, 0, or 1")
     convo = _get_conversation(payload.conversation_id)
@@ -344,6 +534,7 @@ def cast_vote(payload: VoteCreate, x_participant_id: Optional[str] = Header(None
 
     raw_id = payload.participant_id or x_participant_id or str(uuid4())
     participant_id = _hash_participant(raw_id)
+    _enforce_vote_rate_limit(participant_id)
     driver = get_driver()
     query = """
     MATCH (c:Conversation {id: $cid})-[:HAS_COMMENT]->(cm:Comment {id: $comment_id})

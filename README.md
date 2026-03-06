@@ -18,6 +18,7 @@ This folder now contains the **combined** application:
   .env.example            # env template
   deliberation/
     api/                  # FastAPI service
+    mobile/               # Expo React Native participant app (Android/iOS)
     data/                 # seed CSVs
     scripts/              # import/generate helpers
 ```
