@@ -1,4 +1,5 @@
 import altair as alt
+import html
 import pandas as pd
 import streamlit as st
 from uuid import uuid4
@@ -18,6 +19,30 @@ from crm.clients.deliberation import (
     render_delib_api_unavailable,
 )
 from crm.ui.components.questionnaire import render_questionnaire_block
+
+
+def _is_questionnaire_participation_mode():
+    try:
+        value = st.query_params.get("questionnaire")
+    except Exception:
+        params = st.experimental_get_query_params()
+        value = params.get("questionnaire")
+    if isinstance(value, list):
+        value = value[0] if value else ""
+    return str(value or "").strip().lower() == "deliberation"
+
+
+def _cast_swipe_vote(convo_id, comment_id, choice, headers):
+    result = delib_api_post(
+        "/vote",
+        {
+            "conversation_id": convo_id,
+            "comment_id": comment_id,
+            "choice": choice,
+        },
+        headers=headers,
+    )
+    return result is not None
 
 
 def render_deliberation(public_only: bool):
@@ -312,58 +337,166 @@ def render_deliberation(public_only: bool):
             if not comments:
                 st.info("No approved comments yet.")
             else:
-                for comment in comments:
-                    st.markdown(f"**{comment['text']}**")
-                    counts = (
-                        f"👍 {comment['agree_count']}  "
-                        f"👎 {comment['disagree_count']}  "
-                        f"➖ {comment['pass_count']}"
+                default_swipe_mode = public_only and _is_questionnaire_participation_mode()
+                swipe_mode = st.toggle(
+                    "Swipe mode (mobile-friendly)",
+                    value=default_swipe_mode,
+                    key=f"delib_swipe_mode_{convo_id}",
+                    help="Shows one statement card at a time with quick left/right/pass actions.",
+                )
+                if swipe_mode:
+                    approved_ids = [comment.get("id") for comment in comments if comment.get("id")]
+                    comment_by_id = {comment.get("id"): comment for comment in comments}
+                    voted_key = f"delib_swipe_voted_{convo_id}"
+                    deck_key = f"delib_swipe_deck_{convo_id}"
+                    voted_ids = {
+                        cid for cid in st.session_state.get(voted_key, []) if cid in approved_ids
+                    }
+                    deck = st.session_state.get(deck_key) or []
+                    deck = [cid for cid in deck if cid in approved_ids and cid not in voted_ids]
+                    for cid in approved_ids:
+                        if cid not in deck and cid not in voted_ids:
+                            deck.append(cid)
+                    st.session_state[voted_key] = list(voted_ids)
+                    st.session_state[deck_key] = deck
+
+                    total_cards = len(approved_ids)
+                    done_cards = len(voted_ids)
+                    progress = (done_cards / total_cards) if total_cards else 0.0
+                    st.progress(progress)
+                    st.caption(f"{done_cards}/{total_cards} statements voted")
+
+                    st.markdown(
+                        """
+                        <style>
+                        .delib-swipe-card {
+                            border: 1px solid #D6EDF8;
+                            border-radius: 16px;
+                            padding: 22px 18px;
+                            background: #FFFFFF;
+                            box-shadow: 0 6px 20px rgba(17, 141, 193, 0.10);
+                            margin-top: 10px;
+                            margin-bottom: 12px;
+                        }
+                        .delib-swipe-text {
+                            font-size: 1.08rem;
+                            line-height: 1.5;
+                            color: #0B3A52;
+                            font-weight: 600;
+                        }
+                        </style>
+                        """,
+                        unsafe_allow_html=True,
                     )
-                    st.caption(counts)
-                    cols = st.columns(3)
-                    if cols[0].button(
-                        "Agree",
-                        key=f"delib-{comment['id']}-agree",
-                        help="Vote Agree on this comment.",
-                    ):
-                        delib_api_post(
-                            "/vote",
-                            {
-                                "conversation_id": convo_id,
-                                "comment_id": comment["id"],
-                                "choice": 1,
-                            },
-                            headers=headers,
+
+                    if not deck:
+                        st.success("You have voted on all available statements.")
+                        if st.button(
+                            "Start over",
+                            key=f"delib_swipe_restart_{convo_id}",
+                            help="Clear local swipe progress and review all statements again.",
+                        ):
+                            st.session_state[voted_key] = []
+                            st.session_state[deck_key] = approved_ids
+                            st.rerun()
+                    else:
+                        current_id = deck[0]
+                        current_comment = comment_by_id.get(current_id, {})
+                        current_text = html.escape(str(current_comment.get("text", "")))
+                        counts = (
+                            f"👍 {current_comment.get('agree_count', 0)}  "
+                            f"👎 {current_comment.get('disagree_count', 0)}  "
+                            f"➖ {current_comment.get('pass_count', 0)}"
                         )
-                    if cols[1].button(
-                        "Disagree",
-                        key=f"delib-{comment['id']}-disagree",
-                        help="Vote Disagree on this comment.",
-                    ):
-                        delib_api_post(
-                            "/vote",
-                            {
-                                "conversation_id": convo_id,
-                                "comment_id": comment["id"],
-                                "choice": -1,
-                            },
-                            headers=headers,
+                        st.markdown(
+                            (
+                                "<div class='delib-swipe-card'>"
+                                f"<div class='delib-swipe-text'>{current_text}</div>"
+                                "</div>"
+                            ),
+                            unsafe_allow_html=True,
                         )
-                    if cols[2].button(
-                        "Pass",
-                        key=f"delib-{comment['id']}-pass",
-                        help="Skip/Pass on this comment (neutral / no vote).",
-                    ):
-                        delib_api_post(
-                            "/vote",
-                            {
-                                "conversation_id": convo_id,
-                                "comment_id": comment["id"],
-                                "choice": 0,
-                            },
-                            headers=headers,
+                        st.caption(counts)
+                        swipe_cols = st.columns(3)
+                        disagree_clicked = swipe_cols[0].button(
+                            "👈 Disagree",
+                            key=f"delib-swipe-{current_id}-disagree",
+                            help="Swipe left style action.",
+                            use_container_width=True,
                         )
-                    st.divider()
+                        pass_clicked = swipe_cols[1].button(
+                            "⏭ Pass",
+                            key=f"delib-swipe-{current_id}-pass",
+                            help="Skip this statement for now.",
+                            use_container_width=True,
+                        )
+                        agree_clicked = swipe_cols[2].button(
+                            "👉 Agree",
+                            key=f"delib-swipe-{current_id}-agree",
+                            help="Swipe right style action.",
+                            use_container_width=True,
+                        )
+                        choice = -1 if disagree_clicked else 0 if pass_clicked else 1 if agree_clicked else None
+                        if choice is not None:
+                            ok = _cast_swipe_vote(convo_id, current_id, choice, headers)
+                            if ok:
+                                voted_ids.add(current_id)
+                                st.session_state[voted_key] = list(voted_ids)
+                                st.session_state[deck_key] = [cid for cid in deck if cid != current_id]
+                                st.rerun()
+                else:
+                    for comment in comments:
+                        st.markdown(f"**{comment['text']}**")
+                        counts = (
+                            f"👍 {comment['agree_count']}  "
+                            f"👎 {comment['disagree_count']}  "
+                            f"➖ {comment['pass_count']}"
+                        )
+                        st.caption(counts)
+                        cols = st.columns(3)
+                        if cols[0].button(
+                            "Agree",
+                            key=f"delib-{comment['id']}-agree",
+                            help="Vote Agree on this comment.",
+                        ):
+                            delib_api_post(
+                                "/vote",
+                                {
+                                    "conversation_id": convo_id,
+                                    "comment_id": comment["id"],
+                                    "choice": 1,
+                                },
+                                headers=headers,
+                            )
+                        if cols[1].button(
+                            "Disagree",
+                            key=f"delib-{comment['id']}-disagree",
+                            help="Vote Disagree on this comment.",
+                        ):
+                            delib_api_post(
+                                "/vote",
+                                {
+                                    "conversation_id": convo_id,
+                                    "comment_id": comment["id"],
+                                    "choice": -1,
+                                },
+                                headers=headers,
+                            )
+                        if cols[2].button(
+                            "Pass",
+                            key=f"delib-{comment['id']}-pass",
+                            help="Skip/Pass on this comment (neutral / no vote).",
+                        ):
+                            delib_api_post(
+                                "/vote",
+                                {
+                                    "conversation_id": convo_id,
+                                    "comment_id": comment["id"],
+                                    "choice": 0,
+                                },
+                                headers=headers,
+                            )
+                        st.divider()
 
             if convo and convo.get("allow_comment_submission", True):
                 st.markdown("### Submit comment")
