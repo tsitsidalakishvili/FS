@@ -33,7 +33,7 @@ from crm.ui.components.questionnaire import (
     render_survey_page,
 )
 from crm.ui.pages.admin import render_admin_page
-from crm.ui.pages.dashboard import render_dashboard_page, render_dashboard_trends_page
+from crm.ui.pages import dashboard as dashboard_page
 from crm.ui.pages.deliberation import render_deliberation as render_deliberation_page
 from crm.ui.pages.events import render_events_page
 from crm.ui.pages.map import render_map_page
@@ -42,6 +42,13 @@ from crm.ui.pages.profiles import render_profiles_tab as render_profiles_tab_pag
 from crm.ui.pages.tasks import render_tasks_tab as render_tasks_tab_page
 from crm.ui.pages.volunteers import render_volunteers_page
 from crm.ui.pages.data import render_data_page
+
+render_dashboard_page = dashboard_page.render_dashboard_page
+render_dashboard_trends_page = getattr(
+    dashboard_page,
+    "render_dashboard_trends_page",
+    dashboard_page.render_dashboard_page,
+)
 
 try:
     import matplotlib.pyplot as plt
@@ -1658,10 +1665,13 @@ if not supporter_mode:
     st.stop()
 
 st.sidebar.markdown("### Database")
+default_db_idx = (
+    1 if (NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD) else 0
+)
 db_choice = st.sidebar.radio(
     "Connection",
     ["Local (Desktop)", "Sandbox (Web)"],
-    index=0,
+    index=default_db_idx,
     key="db_connection_choice",
     help="Switch between your local Neo4j Desktop DB and the Neo4j Sandbox.",
 )
