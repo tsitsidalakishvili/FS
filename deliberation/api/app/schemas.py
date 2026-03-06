@@ -34,7 +34,7 @@ class ConversationOut(BaseModel):
 
 
 class CommentCreate(BaseModel):
-    text: str = Field(..., min_length=3)
+    text: str = Field(..., min_length=2)
     author_id: Optional[str] = None
 
 

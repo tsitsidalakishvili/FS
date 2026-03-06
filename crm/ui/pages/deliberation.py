@@ -492,6 +492,8 @@ def _render_questionnaire_comment_form(convo_id, headers):
         text = (new_comment or "").strip()
         if not text:
             st.warning("Comment cannot be empty.")
+        elif len(text) < 2:
+            st.warning("Comment should be at least 2 characters.")
         else:
             result = delib_api_post(
                 f"/conversations/{convo_id}/comments",
@@ -499,7 +501,10 @@ def _render_questionnaire_comment_form(convo_id, headers):
                 headers=headers,
             )
             if result:
-                st.success("Comment submitted.")
+                if str(result.get("status", "")).lower() == "pending":
+                    st.success("Comment submitted and is awaiting moderation.")
+                else:
+                    st.success("Comment submitted.")
 
 
 def _render_questionnaire_like_dislike_buttons(comments, convo_id, headers, focus_comment_id=None):
@@ -1142,14 +1147,17 @@ def render_deliberation(public_only: bool):
                     key="delib_submit_comment_btn",
                     help="Submit a new comment into this conversation (may require moderation).",
                 ):
-                    if new_comment.strip():
+                    text = new_comment.strip()
+                    if not text:
+                        st.warning("Comment cannot be empty.")
+                    elif len(text) < 2:
+                        st.warning("Comment should be at least 2 characters.")
+                    else:
                         delib_api_post(
                             f"/conversations/{convo_id}/comments",
-                            {"text": new_comment},
+                            {"text": text},
                             headers=headers,
                         )
-                    else:
-                        st.warning("Comment cannot be empty.")
             else:
                 st.caption("Comment submission is disabled for this conversation.")
 
