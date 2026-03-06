@@ -15,7 +15,8 @@ except Exception:
     venn3 = None
 
 try:
-    from streamlit_swipecards import streamlit_swipecards
+    from crm.ui.components.swipecards_loader import load_streamlit_swipecards
+    streamlit_swipecards = load_streamlit_swipecards()
 except Exception:
     streamlit_swipecards = None
 
@@ -71,7 +72,7 @@ def _build_swipe_card_image(comment, idx, total, compact=False):
     line_height = typography["line_height"]
 
     title = html.escape(f"Question {idx + 1} / {total}")
-    subtitle = html.escape("Swipe right = agree   •   Swipe left = disagree")
+    subtitle = html.escape("Swipe right = agree   •   Swipe left = disagree   •   Swipe down = pass")
     footer = (
         "Reactions: "
         f"👍 {_safe_int(comment.get('agree_count', 0))}   "
@@ -250,7 +251,7 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
     total_swiped = len(swiped_cards)
     if not compact:
         st.progress((total_swiped / len(comments)) if comments else 0.0)
-        st.caption("Swipe right = Agree, swipe left = Disagree.")
+        st.caption("Swipe right = Agree, swipe left = Disagree, swipe down = Pass.")
         st.caption("Each card shows one question/comment only.")
         st.caption(f"{total_swiped}/{len(comments)} reactions recorded")
 
@@ -265,6 +266,8 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
                 choice = 1
             elif action == "left":
                 choice = -1
+            elif action == "down":
+                choice = 0
             else:
                 continue
             comment_id = comments[idx].get("id")
