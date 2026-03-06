@@ -4,6 +4,9 @@ This folder now contains the **combined** application:
 - **CRM UI** (Streamlit): supporters, members, maps, analytics
 - **Deliberation API** (FastAPI): conversations, comments, votes, analysis
 
+## Product docs
+- Campaign ops product definition: `docs/product/campaign-ops-product-definition.md`
+
 ## Folder structure
 ```
 ./
