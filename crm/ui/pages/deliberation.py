@@ -501,10 +501,13 @@ def _render_questionnaire_comment_form(convo_id, headers):
                 headers=headers,
             )
             if result:
-                if str(result.get("status", "")).lower() == "pending":
-                    st.success("Comment submitted and is awaiting moderation.")
+                status = str(result.get("status", "")).lower()
+                notice_key = f"delib_questionnaire_comment_notice_{convo_id}"
+                if status == "pending":
+                    st.session_state[notice_key] = "pending"
                 else:
-                    st.success("Comment submitted.")
+                    st.session_state[notice_key] = "approved"
+                st.rerun()
 
 
 def _render_questionnaire_like_dislike_buttons(comments, convo_id, headers, focus_comment_id=None):
@@ -572,6 +575,12 @@ def render_deliberation(public_only: bool):
         if not convo:
             st.error("Conversation not found.")
             return
+        q_notice_key = f"delib_questionnaire_comment_notice_{convo_id}"
+        q_notice = st.session_state.pop(q_notice_key, None)
+        if q_notice == "pending":
+            st.info("Comment submitted. It is awaiting moderation before it appears in the feed.")
+        elif q_notice == "approved":
+            st.success("Comment submitted and added to the feed.")
         comments = delib_api_get(f"/conversations/{convo_id}/comments?status=approved") or []
         if not comments:
             st.info("No approved comments yet.")
@@ -1122,6 +1131,12 @@ def render_deliberation(public_only: bool):
                 st.caption(convo.get("description") or "")
                 if not convo.get("is_open", True):
                     st.warning("This conversation is closed.")
+            p_notice_key = f"delib_participate_comment_notice_{convo_id}"
+            p_notice = st.session_state.pop(p_notice_key, None)
+            if p_notice == "pending":
+                st.info("Comment submitted. It is awaiting moderation before it appears in the feed.")
+            elif p_notice == "approved":
+                st.success("Comment submitted and added to the feed.")
 
             comments = delib_api_get(f"/conversations/{convo_id}/comments?status=approved") or []
             if not comments:
@@ -1153,11 +1168,19 @@ def render_deliberation(public_only: bool):
                     elif len(text) < 2:
                         st.warning("Comment should be at least 2 characters.")
                     else:
-                        delib_api_post(
+                        result = delib_api_post(
                             f"/conversations/{convo_id}/comments",
                             {"text": text},
                             headers=headers,
                         )
+                        if result:
+                            status = str(result.get("status", "")).lower()
+                            notice_key = f"delib_participate_comment_notice_{convo_id}"
+                            if status == "pending":
+                                st.session_state[notice_key] = "pending"
+                            else:
+                                st.session_state[notice_key] = "approved"
+                            st.rerun()
             else:
                 st.caption("Comment submission is disabled for this conversation.")
 
