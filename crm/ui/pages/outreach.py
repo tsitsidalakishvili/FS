@@ -3,6 +3,7 @@ import streamlit as st
 from crm.data.people import search_people
 from crm.data.segments import list_segments, load_segment_filter, run_segment
 from crm.data.tasks import TASK_STATUSES, bulk_create_tasks
+from crm.ui.pages.segments import render_segments_tab
 
 
 def _render_template(template, context):
@@ -87,52 +88,64 @@ def _render_task_builder(target_df, prefix):
 
 def _render_segment_outreach():
     st.markdown("### Segment outreach")
-    st.caption("Choose a saved segment and create outreach tasks in bulk.")
-    segments_df = list_segments()
-    if segments_df.empty:
-        st.info("No saved segments yet.")
-        return
-
-    names = segments_df["name"].dropna().tolist() if "name" in segments_df.columns else []
-    sel = st.selectbox(
-        "Select segment",
-        options=[""] + names,
-        key="outreach_segment_select",
-        help="Choose a segment to build an outreach list.",
+    manager_tab, campaign_tab = st.tabs(
+        ["Create / manage segments", "Use segment for outreach"]
     )
-    if not sel:
-        st.caption("Pick a segment to preview and create tasks.")
-        return
 
-    seg_rows = segments_df[segments_df["name"] == sel]
-    seg_id = (
-        seg_rows["segmentId"].iloc[0]
-        if not seg_rows.empty and "segmentId" in seg_rows.columns
-        else None
-    )
-    if not seg_id:
-        st.error("Could not resolve segment.")
-        return
+    with manager_tab:
+        render_segments_tab()
 
-    spec = load_segment_filter(seg_id)
-    limit = st.number_input(
-        "Preview limit",
-        min_value=10,
-        max_value=2000,
-        value=200,
-        step=50,
-        key="outreach_preview_limit",
-        help="Max number of people to preview + target for tasks.",
-    )
-    rdf = run_segment(spec, limit=limit)
-    if rdf.empty:
-        st.info("No matches for this segment.")
-        return
+    with campaign_tab:
+        st.caption("Choose a saved segment and create outreach tasks in bulk.")
+        segments_df = list_segments()
+        if segments_df.empty:
+            st.info("No saved segments yet. Create one in the first tab.")
+            return
 
-    st.markdown("### Segment preview")
-    st.caption(f"{len(rdf):,} people in this preview.")
-    st.dataframe(rdf, use_container_width=True)
-    _render_task_builder(rdf, prefix="outreach_segment")
+        names = (
+            segments_df["name"].dropna().tolist()
+            if "name" in segments_df.columns
+            else []
+        )
+        sel = st.selectbox(
+            "Select segment",
+            options=[""] + names,
+            key="outreach_segment_select",
+            help="Choose a segment to build an outreach list.",
+        )
+        if not sel:
+            st.caption("Pick a segment to preview and create tasks.")
+            return
+
+        seg_rows = segments_df[segments_df["name"] == sel]
+        seg_id = (
+            seg_rows["segmentId"].iloc[0]
+            if not seg_rows.empty and "segmentId" in seg_rows.columns
+            else None
+        )
+        if not seg_id:
+            st.error("Could not resolve segment.")
+            return
+
+        spec = load_segment_filter(seg_id)
+        limit = st.number_input(
+            "Preview limit",
+            min_value=10,
+            max_value=2000,
+            value=200,
+            step=50,
+            key="outreach_preview_limit",
+            help="Max number of people to preview + target for tasks.",
+        )
+        rdf = run_segment(spec, limit=limit)
+        if rdf.empty:
+            st.info("No matches for this segment.")
+            return
+
+        st.markdown("### Segment preview")
+        st.caption(f"{len(rdf):,} people in this preview.")
+        st.dataframe(rdf, use_container_width=True)
+        _render_task_builder(rdf, prefix="outreach_segment")
 
 
 def _render_individual_outreach():
