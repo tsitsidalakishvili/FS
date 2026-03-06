@@ -1658,39 +1658,25 @@ if not supporter_mode:
     st.stop()
 
 st.sidebar.markdown("### Database")
-db_choice = st.sidebar.radio(
-    "Connection",
-    ["Local (Desktop)", "Sandbox (Web)"],
-    index=0,
-    key="db_connection_choice",
-    help="Switch between your local Neo4j Desktop DB and the Neo4j Sandbox.",
-)
-if db_choice == "Sandbox (Web)":
-    if not NEO4J_SANDBOX_URI or not NEO4J_SANDBOX_PASSWORD:
-        st.sidebar.warning(
-            "Sandbox credentials missing. Set NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD in .env or Streamlit secrets."
-        )
-        db_ok = False
-    else:
-        db_ok = init_driver(
-            uri=NEO4J_SANDBOX_URI,
-            user=NEO4J_SANDBOX_USER,
-            password=NEO4J_SANDBOX_PASSWORD,
-            database=NEO4J_SANDBOX_DATABASE,
-        )
+db_choice = "Sandbox (Web)"
+st.sidebar.caption("Connection: Sandbox (Web)")
+if not NEO4J_SANDBOX_URI or not NEO4J_SANDBOX_PASSWORD:
+    st.sidebar.warning(
+        "Sandbox credentials missing. Set NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD in .env or Streamlit secrets."
+    )
+    db_ok = False
 else:
-    db_ok = init_driver()
+    db_ok = init_driver(
+        uri=NEO4J_SANDBOX_URI,
+        user=NEO4J_SANDBOX_USER,
+        password=NEO4J_SANDBOX_PASSWORD,
+        database=NEO4J_SANDBOX_DATABASE,
+    )
 
 if not db_ok or neo4j_db.driver is None:
-    if db_choice == "Sandbox (Web)":
-        st.error(
-            "Missing or invalid Sandbox Neo4j credentials. Set NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD."
-        )
-    else:
-        st.info(
-            "Local DBMS not reachable. Start your Neo4j Desktop database and ensure Bolt is running on port 7687."
-        )
-        st.error("Missing or invalid Neo4j credentials. Set NEO4J_URI and NEO4J_PASSWORD in .env.")
+    st.error(
+        "Missing or invalid Sandbox Neo4j credentials. Set NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD."
+    )
     st.stop()
 
 if st.session_state.get("main_nav") in {"Segments", "Segments & Outreach"}:
