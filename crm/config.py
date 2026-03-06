@@ -52,6 +52,7 @@ DELIBERATION_API_URL = (
     or get_config("API_URL")
     or "http://localhost:8010"
 )
+STREAMLIT_APP_URL = get_config("STREAMLIT_APP_URL") or get_config("APP_URL")
 DELIBERATION_API_FALLBACK_URL = get_config(
     "DELIBERATION_API_FALLBACK_URL", "https://fs-stns.onrender.com"
 )
