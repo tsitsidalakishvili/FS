@@ -135,9 +135,9 @@ def render_survey_page(survey_id):
         st.json(responses)
 
 
-def render_questionnaire_block(kind):
+def render_questionnaire_block(kind, show_expander=True):
     label = "Supporter" if kind == "supporter" else "Member"
-    with st.expander("Questionnaire templates (shareable)", expanded=False):
+    def _render_content():
         survey_tab, delib_tab = st.tabs(["Survey form", "Deliberation"])
 
         with survey_tab:
@@ -212,3 +212,9 @@ def render_questionnaire_block(kind):
                 st.caption(
                     "No approved comments yet — the link will show an empty vote list."
                 )
+
+    if show_expander:
+        with st.expander("Questionnaire templates (shareable)", expanded=False):
+            _render_content()
+    else:
+        _render_content()

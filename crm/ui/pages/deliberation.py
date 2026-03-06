@@ -17,6 +17,7 @@ from crm.clients.deliberation import (
     delib_api_post,
     render_delib_api_unavailable,
 )
+from crm.ui.components.questionnaire import render_questionnaire_block
 
 
 def render_deliberation(public_only: bool):
@@ -53,6 +54,14 @@ def render_deliberation(public_only: bool):
         )
 
         with tab_config:
+            st.markdown("### Questionnaire templates (shareable)")
+            q_supporter_tab, q_member_tab = st.tabs(["Supporters", "Members"])
+            with q_supporter_tab:
+                render_questionnaire_block("supporter", show_expander=False)
+            with q_member_tab:
+                render_questionnaire_block("member", show_expander=False)
+
+            st.markdown("---")
             st.markdown("### Create conversation")
             topic = st.text_input(
                 "Topic",

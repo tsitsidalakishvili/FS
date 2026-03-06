@@ -29,7 +29,6 @@ from crm.ui.components.import_export import (
     render_import_export_section as render_import_export_section_ui,
 )
 from crm.ui.components.questionnaire import (
-    render_questionnaire_block,
     render_survey_page,
 )
 from crm.ui.pages.admin import render_admin_page
@@ -2197,7 +2196,6 @@ if nav_choice == "People":
                 st.session_state["supporter_lon"] = float(selected.get("lon"))
 
             st.markdown("**New supporter**")
-            render_questionnaire_block("supporter")
             default_areas = [
                 "Field Organizing",
                 "Events",
@@ -2517,7 +2515,6 @@ if nav_choice == "People":
                 st.session_state["member_lon_value"] = selected.get("lon")
 
             st.markdown("**New member**")
-            render_questionnaire_block("member")
             default_areas = [
                 "Field Organizing",
                 "Events",
