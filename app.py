@@ -34,7 +34,7 @@ from crm.ui.components.questionnaire import (
 from crm.ui.pages.admin import render_admin_page
 from crm.ui.pages import dashboard as dashboard_page
 from crm.ui.pages.deliberation import render_deliberation as render_deliberation_page
-from crm.ui.pages.events import render_events_page
+from crm.ui.pages.events import render_event_registration_page, render_events_page
 from crm.ui.pages.map import render_map_page
 from crm.ui.pages.outreach import render_outreach_page
 from crm.ui.pages.profiles import render_profiles_tab as render_profiles_tab_page
@@ -99,6 +99,24 @@ if questionnaire_kind:
                 st.session_state["delib_conversation_id"] = convo_id
                 st.session_state["delib_conversation_select"] = convo_topic
         render_deliberation_page(public_only=(kind == "deliberation"))
+        st.stop()
+    if kind in {"event_registration", "event"}:
+        event_id = _get_query_param("event_id") or _get_query_param("event")
+        event_key = _get_query_param("event_key") or _get_query_param("eventKey")
+        db_ok = False
+        if neo4j_db.driver is not None:
+            db_ok = True
+        elif NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD:
+            db_ok = init_driver(
+                uri=NEO4J_SANDBOX_URI,
+                user=NEO4J_SANDBOX_USER,
+                password=NEO4J_SANDBOX_PASSWORD,
+                database=NEO4J_SANDBOX_DATABASE,
+            )
+        if not db_ok:
+            st.error("Database connection unavailable for event registration.")
+            st.stop()
+        render_event_registration_page(event_id=event_id, event_key=event_key)
         st.stop()
     st.error("Unknown questionnaire type.")
     st.stop()

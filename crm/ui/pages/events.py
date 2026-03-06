@@ -1,11 +1,14 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
+from urllib.parse import urlencode
+import os
 
 from crm.data.events import (
     EVENT_REGISTRATION_STATUSES,
     EVENT_STATUSES,
     create_event,
+    get_event,
     list_event_registrations,
     list_events,
     register_person_to_event,
@@ -20,6 +23,124 @@ def _split_full_name(full_name):
     if len(parts) == 1:
         return parts[0], ""
     return parts[0], " ".join(parts[1:])
+
+
+def _normalize_base_url(value):
+    text = (value or "").strip()
+    if not text:
+        return ""
+    return text.rstrip("/")
+
+
+def _detect_base_url():
+    configured = _normalize_base_url(
+        os.getenv("APP_URL") or os.getenv("PUBLIC_APP_URL") or os.getenv("STREAMLIT_APP_URL")
+    )
+    if configured:
+        return configured
+
+    try:
+        headers = getattr(getattr(st, "context", None), "headers", None)
+        if headers:
+            host = headers.get("x-forwarded-host") or headers.get("host")
+            if host:
+                proto = headers.get("x-forwarded-proto") or "https"
+                prefix = headers.get("x-forwarded-prefix") or ""
+                return _normalize_base_url(f"{proto}://{host}{prefix}")
+    except Exception:
+        pass
+
+    try:
+        from streamlit.web.server.websocket_headers import _get_websocket_headers
+
+        headers = _get_websocket_headers() or {}
+        host = headers.get("x-forwarded-host") or headers.get("host")
+        if host:
+            proto = headers.get("x-forwarded-proto") or "https"
+            prefix = headers.get("x-forwarded-prefix") or ""
+            return _normalize_base_url(f"{proto}://{host}{prefix}")
+    except Exception:
+        pass
+    return "<APP_URL>"
+
+
+def _build_app_link(params):
+    base = _detect_base_url()
+    return f"{base}?{urlencode(params)}"
+
+
+def _show_link_hint_if_needed(link):
+    if link.startswith("<APP_URL>"):
+        st.caption(
+            "Could not auto-detect your app URL in this environment. "
+            "Set APP_URL in Streamlit secrets for fully qualified links."
+        )
+
+
+def _render_participant_registration_form(*, event_id, event_title, key_prefix):
+    with st.form(f"{key_prefix}_registration_form", clear_on_submit=True):
+        full_name = st.text_input("Full name *", key=f"{key_prefix}_full_name")
+        email = st.text_input("Email *", key=f"{key_prefix}_email")
+        phone = st.text_input("Phone (optional)", key=f"{key_prefix}_phone")
+        group = st.selectbox(
+            "Group",
+            ["Supporter", "Member"],
+            key=f"{key_prefix}_group",
+        )
+        registration_notes = st.text_area(
+            "Notes (optional)",
+            key=f"{key_prefix}_notes",
+            height=80,
+        )
+        register_clicked = st.form_submit_button("Register")
+
+    if register_clicked:
+        first_name, last_name = _split_full_name(full_name)
+        person_payload = {
+            "email": email,
+            "firstName": first_name,
+            "lastName": last_name,
+            "phone": phone,
+            "group": group,
+        }
+        if not str(email or "").strip():
+            st.error("Email is required.")
+        elif not str(full_name or "").strip():
+            st.error("Full name is required.")
+        elif register_person_to_event(
+            event_id,
+            person_payload,
+            status="Registered",
+            notes=registration_notes,
+        ):
+            st.success(f"Thanks! You are registered for {event_title}.")
+        else:
+            st.error("Could not register right now. Please try again.")
+
+
+def render_event_registration_page(event_id=None, event_key=None):
+    event = get_event(event_id=event_id, event_key=event_key)
+    if not event:
+        st.error("Event not found.")
+        return
+
+    st.subheader(event.get("name") or "Event registration")
+    meta_bits = []
+    if event.get("startDate"):
+        meta_bits.append(f"Date: {event.get('startDate')}")
+    if event.get("location"):
+        meta_bits.append(f"Location: {event.get('location')}")
+    if meta_bits:
+        st.caption(" | ".join(meta_bits))
+    if event.get("notes"):
+        st.caption(event.get("notes"))
+
+    st.markdown("### Registration form")
+    _render_participant_registration_form(
+        event_id=event.get("eventId"),
+        event_title=event.get("name") or "the event",
+        key_prefix=f"public_event_{event.get('eventId')}",
+    )
 
 
 def render_events_page():
@@ -94,6 +215,35 @@ def render_events_page():
             event_lookup[label] = row.get("eventId")
             event_labels.append(label)
 
+        with st.expander("Participant registration link (shareable)", expanded=False):
+            selected_event_label = st.selectbox(
+                "Event",
+                options=[""] + event_labels,
+                key="events_share_link_event",
+                help="Generate a public form link for participants.",
+            )
+            selected_event_id = event_lookup.get(selected_event_label)
+            if selected_event_id:
+                public_link = _build_app_link(
+                    {"questionnaire": "event_registration", "event_id": selected_event_id}
+                )
+                st.text_input(
+                    "Participant registration link",
+                    value=public_link,
+                    key="events_share_link_value",
+                    help="Share this link so participants can register themselves.",
+                )
+                _show_link_hint_if_needed(public_link)
+                st.text_area(
+                    "Message to send",
+                    value=(
+                        f"Event registration: {selected_event_label}\n\n"
+                        f"Please register using this link:\n{public_link}"
+                    ),
+                    height=120,
+                    key="events_share_link_message",
+                )
+
         with st.expander("Event registration form", expanded=True):
             with st.form("events_registration_form", clear_on_submit=True):
                 selected_event_label = st.selectbox(
@@ -124,29 +274,30 @@ def render_events_page():
 
             if register_clicked:
                 event_id = event_lookup.get(selected_event_label)
-                first_name, last_name = _split_full_name(full_name)
-                person_payload = {
-                    "email": email,
-                    "firstName": first_name,
-                    "lastName": last_name,
-                    "phone": phone,
-                    "group": group,
-                }
                 if not event_id:
                     st.error("Select an event.")
-                elif not str(email or "").strip():
-                    st.error("Email is required.")
-                elif not str(full_name or "").strip():
-                    st.error("Full name is required.")
-                elif register_person_to_event(
-                    event_id,
-                    person_payload,
-                    status=registration_status,
-                    notes=registration_notes,
-                ):
-                    st.success("Person registered to event.")
                 else:
-                    st.error("Could not register person.")
+                    first_name, last_name = _split_full_name(full_name)
+                    person_payload = {
+                        "email": email,
+                        "firstName": first_name,
+                        "lastName": last_name,
+                        "phone": phone,
+                        "group": group,
+                    }
+                    if not str(email or "").strip():
+                        st.error("Email is required.")
+                    elif not str(full_name or "").strip():
+                        st.error("Full name is required.")
+                    elif register_person_to_event(
+                        event_id,
+                        person_payload,
+                        status=registration_status,
+                        notes=registration_notes,
+                    ):
+                        st.success("Person registered to event.")
+                    else:
+                        st.error("Could not register person.")
 
         with st.expander("Registrations by event", expanded=False):
             selected_event_label = st.selectbox(

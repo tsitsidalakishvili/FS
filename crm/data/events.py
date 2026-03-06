@@ -36,6 +36,50 @@ def list_events(limit=200):
     )
 
 
+def get_event(event_id=None, event_key=None):
+    event_id = clean_text(event_id)
+    event_key = clean_text(event_key)
+    if not event_id and not event_key:
+        return None
+    df = run_query(
+        """
+        MATCH (e:Event)
+        WHERE ($eventId IS NOT NULL AND e.eventId = $eventId)
+           OR ($eventKey IS NOT NULL AND e.eventKey = $eventKey)
+        OPTIONAL MATCH (p:Person)-[r:REGISTERED_FOR]->(e)
+        RETURN
+          e.eventId AS eventId,
+          e.eventKey AS eventKey,
+          e.name AS name,
+          coalesce(e.startDate, '') AS startDate,
+          coalesce(e.endDate, '') AS endDate,
+          coalesce(e.location, '') AS location,
+          coalesce(e.status, 'Planned') AS status,
+          coalesce(e.capacity, 0) AS capacity,
+          coalesce(e.notes, '') AS notes,
+          count(r) AS registrations
+        LIMIT 1
+        """,
+        {"eventId": event_id, "eventKey": event_key},
+        silent=True,
+    )
+    if df.empty:
+        return None
+    row = df.iloc[0]
+    return {
+        "eventId": row.get("eventId"),
+        "eventKey": row.get("eventKey"),
+        "name": row.get("name"),
+        "startDate": row.get("startDate"),
+        "endDate": row.get("endDate"),
+        "location": row.get("location"),
+        "status": row.get("status"),
+        "capacity": row.get("capacity"),
+        "notes": row.get("notes"),
+        "registrations": row.get("registrations"),
+    }
+
+
 def create_event(payload):
     name = clean_text(payload.get("name"))
     if not name:
