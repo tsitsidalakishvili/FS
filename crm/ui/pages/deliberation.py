@@ -350,6 +350,32 @@ def _render_classic_vote_list(comments, convo_id, headers):
         st.divider()
 
 
+def _render_questionnaire_comment_form(convo_id, headers):
+    st.markdown("### Add anonymous comment")
+    st.caption("Optional. No registration required.")
+    with st.form(f"delib_questionnaire_comment_form_{convo_id}", clear_on_submit=True):
+        new_comment = st.text_area(
+            "Your comment",
+            key=f"delib_questionnaire_comment_text_{convo_id}",
+            height=90,
+            placeholder="Share your view...",
+            label_visibility="collapsed",
+        )
+        submitted = st.form_submit_button("Submit anonymous comment")
+    if submitted:
+        text = (new_comment or "").strip()
+        if not text:
+            st.warning("Comment cannot be empty.")
+        else:
+            result = delib_api_post(
+                f"/conversations/{convo_id}/comments",
+                {"text": text},
+                headers=headers,
+            )
+            if result:
+                st.success("Comment submitted.")
+
+
 def render_deliberation(public_only: bool):
     if "delib_anon_id" not in st.session_state:
         st.session_state["delib_anon_id"] = str(uuid4())
@@ -377,8 +403,10 @@ def render_deliberation(public_only: bool):
         comments = delib_api_get(f"/conversations/{convo_id}/comments?status=approved") or []
         if not comments:
             st.info("No approved comments yet.")
-            return
-        _render_swipe_component(comments, convo_id, headers, compact=True)
+        else:
+            _render_swipe_component(comments, convo_id, headers, compact=True)
+        if convo.get("allow_comment_submission", True):
+            _render_questionnaire_comment_form(convo_id, headers)
         return
 
     st.subheader("Deliberation")
