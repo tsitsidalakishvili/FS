@@ -43,11 +43,6 @@ from crm.ui.pages.volunteers import render_volunteers_page
 from crm.ui.pages.data import render_data_page
 
 render_dashboard_page = dashboard_page.render_dashboard_page
-render_dashboard_trends_page = getattr(
-    dashboard_page,
-    "render_dashboard_trends_page",
-    dashboard_page.render_dashboard_page,
-)
 
 try:
     import matplotlib.pyplot as plt
@@ -1720,11 +1715,7 @@ render_feedback_widget(nav_choice)
 
 # Centralized page router (orchestration-first shell)
 if nav_choice == "Dashboard":
-    dashboard_overview_tab, dashboard_trends_tab = st.tabs(["Overview", "Trends"])
-    with dashboard_overview_tab:
-        render_dashboard_page()
-    with dashboard_trends_tab:
-        render_dashboard_trends_page()
+    render_dashboard_page()
     st.stop()
 
 if nav_choice == "Tasks":
