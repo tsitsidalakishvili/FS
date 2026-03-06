@@ -526,10 +526,9 @@ def _render_questionnaire_like_dislike_buttons(
         return
 
     if focus_comment_id:
-        anon_comments = [c for c in anon_comments if c.get("id") == focus_comment_id]
-        if not anon_comments:
-            st.info("This card has no anonymous comment reactions.")
-            return
+        focused = [c for c in anon_comments if c.get("id") == focus_comment_id]
+        if focused:
+            anon_comments = focused
 
     max_items = 1 if focus_comment_id else min(len(anon_comments), 20)
     for comment in anon_comments[:max_items]:
@@ -553,9 +552,11 @@ def _render_questionnaire_like_dislike_buttons(
         )
         if like_clicked:
             if _cast_swipe_vote(convo_id, comment_id, 1, headers):
+                st.session_state[f"delib_questionnaire_focus_comment_{convo_id}"] = comment_id
                 st.rerun()
         if dislike_clicked:
             if _cast_swipe_vote(convo_id, comment_id, -1, headers):
+                st.session_state[f"delib_questionnaire_focus_comment_{convo_id}"] = comment_id
                 st.rerun()
         st.divider()
 
@@ -601,8 +602,8 @@ def render_deliberation(public_only: bool):
                 else None
             )
             focus_key = f"delib_questionnaire_focus_comment_{convo_id}"
-            submitted_focus_comment_id = st.session_state.get(focus_key)
-            resolved_focus_comment_id = submitted_focus_comment_id or current_comment_id
+            pinned_focus_comment_id = st.session_state.get(focus_key)
+            resolved_focus_comment_id = pinned_focus_comment_id or current_comment_id
             with st.expander("Anonymous participant comments (optional Like / Dislike)", expanded=False):
                 _render_questionnaire_like_dislike_buttons(
                     comments,
@@ -610,12 +611,6 @@ def render_deliberation(public_only: bool):
                     headers,
                     focus_comment_id=resolved_focus_comment_id,
                 )
-            if submitted_focus_comment_id and any(
-                str(c.get("id") or "") == str(submitted_focus_comment_id)
-                and not bool(c.get("is_seed", False))
-                for c in comments
-            ):
-                st.session_state.pop(focus_key, None)
         if convo.get("allow_comment_submission", True):
             _render_questionnaire_comment_form(convo_id, headers)
         return
