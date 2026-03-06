@@ -1,7 +1,10 @@
 import altair as alt
+import html
 import pandas as pd
 import streamlit as st
+import textwrap
 from uuid import uuid4
+from urllib.parse import quote
 
 try:
     import matplotlib.pyplot as plt
@@ -24,10 +27,57 @@ from crm.clients.deliberation import (
 )
 from crm.ui.components.questionnaire import render_questionnaire_block
 
-SWIPE_BLANK_IMAGE = (
-    "data:image/gif;base64,"
-    "R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
-)
+def _wrap_card_text(text, max_chars=30, max_lines=8):
+    raw = " ".join(str(text or "").split())
+    if not raw:
+        return ["No statement text provided."]
+    lines = textwrap.wrap(raw, width=max_chars, break_long_words=False, break_on_hyphens=False)
+    if not lines:
+        return ["No statement text provided."]
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        last = lines[-1]
+        lines[-1] = (last[:-1] + "…") if len(last) > 1 else "…"
+    return lines
+
+
+def _build_swipe_card_image(comment, idx, total, compact=False):
+    question_lines = _wrap_card_text(comment.get("text", ""), max_chars=30, max_lines=8)
+    title = html.escape(f"Question {idx + 1} / {total}")
+    subtitle = html.escape("Swipe right = agree   •   Swipe left = disagree")
+    footer = (
+        "Reactions: "
+        f"👍 {int(comment.get('agree_count', 0))}   "
+        f"👎 {int(comment.get('disagree_count', 0))}   "
+        f"➖ {int(comment.get('pass_count', 0))}"
+    )
+    footer_text = html.escape(footer if not compact else "React with a swipe")
+
+    line_elements = []
+    start_y = 330
+    for i, line in enumerate(question_lines):
+        y = start_y + (i * 58)
+        line_elements.append(
+            f"<text x='64' y='{y}' font-size='40' font-weight='700' "
+            f"fill='#0B3A52'>{html.escape(line)}</text>"
+        )
+    lines_svg = "".join(line_elements)
+
+    svg = (
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 720 1120'>"
+        "<rect width='720' height='1120' rx='40' fill='#FFFFFF'/>"
+        "<rect x='32' y='32' width='656' height='170' rx='26' fill='#EAF6FB'/>"
+        f"<text x='64' y='102' font-size='38' font-weight='700' fill='#0B3A52'>{title}</text>"
+        f"<text x='64' y='152' font-size='24' fill='#1A5978'>{subtitle}</text>"
+        "<rect x='32' y='230' width='656' height='680' rx='30' fill='#F8FCFF' stroke='#CFE2EC' stroke-width='2'/>"
+        f"{lines_svg}"
+        "<rect x='32' y='944' width='656' height='144' rx='26' fill='#0D435C'/>"
+        "<text x='64' y='1000' font-size='28' fill='#FFFFFF'>⬅ Disagree</text>"
+        "<text x='520' y='1000' font-size='28' fill='#FFFFFF'>Agree ➡</text>"
+        f"<text x='64' y='1048' font-size='22' fill='#D8ECF7'>{footer_text}</text>"
+        "</svg>"
+    )
+    return "data:image/svg+xml;utf8," + quote(svg)
 
 
 def _is_questionnaire_participation_mode():
@@ -76,19 +126,11 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
 
     cards = []
     for idx, comment in enumerate(comments):
-        counts = (
-            f"👍 {comment.get('agree_count', 0)}   "
-            f"👎 {comment.get('disagree_count', 0)}   "
-            f"➖ {comment.get('pass_count', 0)}"
-        )
-        description = f"{comment.get('text', '')}"
-        if not compact:
-            description = f"{description}\n\n{counts}"
         cards.append(
             {
-                "name": f"Statement {idx + 1}/{len(comments)}",
-                "description": description,
-                "image": SWIPE_BLANK_IMAGE,
+                "name": f"Question {idx + 1}/{len(comments)}",
+                "description": " ",
+                "image": _build_swipe_card_image(comment, idx, len(comments), compact=compact),
             }
         )
 
@@ -125,7 +167,8 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
     st.progress((total_swiped / len(comments)) if comments else 0.0)
     if not compact:
         st.caption("Swipe right = Agree, swipe left = Disagree.")
-        st.caption(f"{total_swiped}/{len(comments)} statements swiped")
+        st.caption("Each card shows one question/comment only.")
+        st.caption(f"{total_swiped}/{len(comments)} reactions recorded")
 
     if total_swiped > processed_count:
         new_actions = swiped_cards[processed_count:]
