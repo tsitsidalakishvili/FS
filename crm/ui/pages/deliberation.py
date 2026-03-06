@@ -503,14 +503,23 @@ def _render_questionnaire_comment_form(convo_id, headers):
             if result:
                 status = str(result.get("status", "")).lower()
                 notice_key = f"delib_questionnaire_comment_notice_{convo_id}"
+                focus_key = f"delib_questionnaire_focus_comment_{convo_id}"
                 if status == "pending":
                     st.session_state[notice_key] = "pending"
                 else:
                     st.session_state[notice_key] = "approved"
+                    created_comment_id = str(result.get("id") or "").strip()
+                    if created_comment_id:
+                        st.session_state[focus_key] = created_comment_id
                 st.rerun()
 
 
-def _render_questionnaire_like_dislike_buttons(comments, convo_id, headers, focus_comment_id=None):
+def _render_questionnaire_like_dislike_buttons(
+    comments,
+    convo_id,
+    headers,
+    focus_comment_id=None,
+):
     anon_comments = [c for c in comments if not bool(c.get("is_seed", False))]
     if not anon_comments:
         st.info("No anonymous participant comments yet.")
@@ -591,13 +600,22 @@ def render_deliberation(public_only: bool):
                 if isinstance(swipe_state, dict)
                 else None
             )
+            focus_key = f"delib_questionnaire_focus_comment_{convo_id}"
+            submitted_focus_comment_id = st.session_state.get(focus_key)
+            resolved_focus_comment_id = submitted_focus_comment_id or current_comment_id
             with st.expander("Anonymous participant comments (optional Like / Dislike)", expanded=False):
                 _render_questionnaire_like_dislike_buttons(
                     comments,
                     convo_id,
                     headers,
-                    focus_comment_id=current_comment_id,
+                    focus_comment_id=resolved_focus_comment_id,
                 )
+            if submitted_focus_comment_id and any(
+                str(c.get("id") or "") == str(submitted_focus_comment_id)
+                and not bool(c.get("is_seed", False))
+                for c in comments
+            ):
+                st.session_state.pop(focus_key, None)
         if convo.get("allow_comment_submission", True):
             _render_questionnaire_comment_form(convo_id, headers)
         return
