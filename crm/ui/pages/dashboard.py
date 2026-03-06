@@ -355,3 +355,69 @@ def render_dashboard_page():
                 )
                 st.altair_chart(skill_bar, use_container_width=True)
 
+
+def render_dashboard_trends_page():
+    st.subheader("Dashboard Trends")
+    st.caption("Chart-focused view of supporter and engagement distributions.")
+    df_summary = load_supporter_summary()
+    if df_summary.empty:
+        st.info("No people data found yet.")
+        return
+
+    group_counts = (
+        df_summary["group"].value_counts().rename_axis("group").reset_index(name="count")
+    )
+    gender_counts = (
+        df_summary["gender"]
+        .fillna("Unspecified")
+        .value_counts()
+        .rename_axis("gender")
+        .reset_index(name="count")
+    )
+    rating_counts = (
+        df_summary["rating"]
+        .value_counts()
+        .sort_index()
+        .rename_axis("rating")
+        .reset_index(name="count")
+    )
+    effort_bins = (
+        pd.cut(
+            df_summary["effortScore"],
+            bins=[-0.01, 0, 10, 25, 50, 100, float("inf")],
+            labels=["0", "1-10", "11-25", "26-50", "51-100", "100+"],
+        )
+        .value_counts()
+        .sort_index()
+        .rename_axis("effortBand")
+        .reset_index(name="count")
+    )
+
+    chart_cols = st.columns(2)
+    chart_cols[0].altair_chart(
+        alt.Chart(group_counts)
+        .mark_bar()
+        .encode(x="group:N", y="count:Q", tooltip=["group", "count"]),
+        use_container_width=True,
+    )
+    chart_cols[1].altair_chart(
+        alt.Chart(gender_counts)
+        .mark_bar()
+        .encode(x="gender:N", y="count:Q", tooltip=["gender", "count"]),
+        use_container_width=True,
+    )
+
+    chart_cols = st.columns(2)
+    chart_cols[0].altair_chart(
+        alt.Chart(rating_counts)
+        .mark_bar()
+        .encode(x="rating:O", y="count:Q", tooltip=["rating", "count"]),
+        use_container_width=True,
+    )
+    chart_cols[1].altair_chart(
+        alt.Chart(effort_bins)
+        .mark_bar()
+        .encode(x="effortBand:N", y="count:Q", tooltip=["effortBand", "count"]),
+        use_container_width=True,
+    )
+

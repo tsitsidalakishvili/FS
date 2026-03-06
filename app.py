@@ -33,7 +33,7 @@ from crm.ui.components.questionnaire import (
     render_survey_page,
 )
 from crm.ui.pages.admin import render_admin_page
-from crm.ui.pages.dashboard import render_dashboard_page
+from crm.ui.pages.dashboard import render_dashboard_page, render_dashboard_trends_page
 from crm.ui.pages.deliberation import render_deliberation as render_deliberation_page
 from crm.ui.pages.events import render_events_page
 from crm.ui.pages.map import render_map_page
@@ -1693,17 +1693,25 @@ if not db_ok or neo4j_db.driver is None:
         st.error("Missing or invalid Neo4j credentials. Set NEO4J_URI and NEO4J_PASSWORD in .env.")
     st.stop()
 
-if st.session_state.get("main_nav") in {"Segments", "Segments & Outreach"}:
-    st.session_state["main_nav"] = "Outreach"
+legacy_nav_map = {
+    "Segments": "Outreach",
+    "Segments & Outreach": "Outreach",
+    "Profiles": "Profile",
+    "Volunteers": "Dashboard",
+}
+if st.session_state.get("main_nav") in legacy_nav_map:
+    st.session_state["main_nav"] = legacy_nav_map[st.session_state["main_nav"]]
 
 nav_choice = st.sidebar.radio(
     "Navigate",
     [
         "Dashboard",
         "People",
+        "Profile",
+        "Tasks",
         "Outreach",
+        "Map",
         "Events",
-        "Volunteers",
         "Data",
         "Admin",
         "Deliberation",
@@ -1713,6 +1721,47 @@ nav_choice = st.sidebar.radio(
 )
 
 render_feedback_widget(nav_choice)
+
+# Centralized page router (orchestration-first shell)
+if nav_choice == "Dashboard":
+    dashboard_overview_tab, dashboard_trends_tab = st.tabs(["Overview", "Trends"])
+    with dashboard_overview_tab:
+        render_dashboard_page()
+    with dashboard_trends_tab:
+        render_dashboard_trends_page()
+    st.stop()
+
+if nav_choice == "Profile":
+    render_profiles_tab_page()
+    st.stop()
+
+if nav_choice == "Tasks":
+    render_tasks_tab_page()
+    st.stop()
+
+if nav_choice == "Outreach":
+    render_outreach_page()
+    st.stop()
+
+if nav_choice == "Map":
+    render_map_page()
+    st.stop()
+
+if nav_choice == "Events":
+    render_events_page()
+    st.stop()
+
+if nav_choice == "Data":
+    render_data_page()
+    st.stop()
+
+if nav_choice == "Admin":
+    render_admin_page()
+    st.stop()
+
+if nav_choice == "Deliberation":
+    render_deliberation_page(public_only=False)
+    st.stop()
 
 
 if nav_choice == "Dashboard":
@@ -2080,21 +2129,9 @@ if nav_choice == "Dashboard":
 
 if nav_choice == "People":
     st.subheader("People")
-    if st.session_state.get("people_section") == "Map":
-        st.session_state["people_section"] = "Directory"
-    section = st.radio(
-        "Section",
-        ["Directory", "Profiles", "Tasks"],
-        horizontal=True,
-        key="people_section",
-        help="Switch between people directory, profiles, and tasks.",
+    st.caption(
+        "Directory page for supporter/member records. Use dedicated Profile, Tasks, Outreach, and Map pages for operations."
     )
-    if section == "Profiles":
-        render_profiles_tab_page()
-        st.stop()
-    if section == "Tasks":
-        render_tasks_tab_page()
-        st.stop()
     group_view = st.radio(
         "View",
         ["Supporters", "Members"],
