@@ -1,30 +1,22 @@
 from pathlib import Path
+import shutil
+import tempfile
+
+import streamlit.components.v1 as components
 
 
-_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V1 */"
+_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V2 */"
 
 
 def _replace_all(content, replacements):
     updated = content
     for old, new in replacements:
-        if old in updated:
-            updated = updated.replace(old, new)
+        updated = updated.replace(old, new)
     return updated
 
 
-def _patch_frontend_files(package_root: Path):
-    frontend_dir = package_root / "frontend"
-    js_path = frontend_dir / "main.js"
-    css_path = frontend_dir / "style.css"
-    if not js_path.exists() or not css_path.exists():
-        return
-
-    js = js_path.read_text(encoding="utf-8")
-    css = css_path.read_text(encoding="utf-8")
-    if _PATCH_MARKER in js and _PATCH_MARKER in css:
-        return
-
-    js_replacements = [
+def _js_replacements():
+    return [
         (
             '<button class="action-btn btn-pass" onclick="swipeCards.swipeLeft()" disabled>❌</button>',
             '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()" disabled>DISAGREE</button>',
@@ -192,12 +184,10 @@ def _patch_frontend_files(package_root: Path):
             "      }, 300);",
         ),
     ]
-    js = _replace_all(js, js_replacements)
-    if _PATCH_MARKER not in js:
-        js += f"\n\n{_PATCH_MARKER}\n"
-    js_path.write_text(js, encoding="utf-8")
 
-    css_append = f"""
+
+def _css_append():
+    return f"""
 
 {_PATCH_MARKER}
 .swipe-card.swiped-down {{
@@ -266,9 +256,39 @@ def _patch_frontend_files(package_root: Path):
   color: #fff !important;
 }}
 """
+
+
+def _build_patched_frontend_dir(package_root: Path):
+    source_frontend = package_root / "frontend"
+    if not source_frontend.exists():
+        return None
+
+    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v2"
+    target_frontend = base_temp / "frontend"
+
+    if not target_frontend.exists():
+        if base_temp.exists():
+            shutil.rmtree(base_temp, ignore_errors=True)
+        target_frontend.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(source_frontend, target_frontend, dirs_exist_ok=True)
+
+    js_path = target_frontend / "main.js"
+    css_path = target_frontend / "style.css"
+    if not js_path.exists() or not css_path.exists():
+        return None
+
+    js = js_path.read_text(encoding="utf-8")
+    css = css_path.read_text(encoding="utf-8")
+
+    if _PATCH_MARKER not in js:
+        js = _replace_all(js, _js_replacements())
+        js += f"\n\n{_PATCH_MARKER}\n"
+        js_path.write_text(js, encoding="utf-8")
     if _PATCH_MARKER not in css:
-        css += css_append
+        css += _css_append()
         css_path.write_text(css, encoding="utf-8")
+
+    return target_frontend
 
 
 def load_streamlit_swipecards():
@@ -279,7 +299,12 @@ def load_streamlit_swipecards():
 
     try:
         package_root = Path(_sc.__file__).resolve().parent
-        _patch_frontend_files(package_root)
+        patched_frontend = _build_patched_frontend_dir(package_root)
+        if patched_frontend:
+            _sc._component_func = components.declare_component(
+                "streamlit_swipecards_fs_patch",
+                path=str(patched_frontend),
+            )
     except Exception:
         # Keep graceful fallback to original dependency.
         pass
