@@ -93,7 +93,7 @@ def render_deliberation(public_only: bool):
                 key="delib_create_convo",
                 help="Create a new deliberation conversation (topic + settings).",
             ):
-                if topic.strip():
+                if len(topic.strip()) >= 3:
                     result = delib_api_post(
                         "/conversations",
                         {
@@ -108,7 +108,7 @@ def render_deliberation(public_only: bool):
                     if result:
                         st.success("Conversation created.")
                 else:
-                    st.warning("Topic is required.")
+                    st.warning("Topic must be at least 3 characters.")
 
             convo_id = st.session_state.get("delib_conversation_id")
             if convo_id:

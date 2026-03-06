@@ -66,6 +66,8 @@ def _request_json(method, path, payload=None, headers=None, show_error=True):
         return None
     last_url = None
     last_exc = None
+    last_http_status = None
+    last_http_detail = None
     for base in bases:
         url = _delib_api_url(path, base)
         if not url:
@@ -80,12 +82,28 @@ def _request_json(method, path, payload=None, headers=None, show_error=True):
                 headers=headers,
                 timeout=timeout,
             )
-            response.raise_for_status()
-            return response.json()
+            if response.status_code >= 400:
+                last_http_status = response.status_code
+                try:
+                    body = response.json()
+                    detail = body.get("detail", body)
+                except Exception:
+                    detail = response.text
+                last_http_detail = detail
+                continue
+            try:
+                return response.json()
+            except ValueError:
+                return {}
         except requests.RequestException as exc:
             last_exc = exc
             continue
     if show_error:
+        if last_http_status is not None:
+            st.error(
+                f"Deliberation API error ({last_http_status}): {last_http_detail}"
+            )
+            return None
         if isinstance(last_exc, requests.Timeout):
             if last_url and "onrender.com" in last_url:
                 st.error(
@@ -94,9 +112,10 @@ def _request_json(method, path, payload=None, headers=None, show_error=True):
                 )
             else:
                 st.error(f"Deliberation API timeout: {last_exc}")
+            render_delib_api_unavailable()
         elif last_exc is not None:
             st.error(f"Deliberation API error: {last_exc}")
-        render_delib_api_unavailable()
+            render_delib_api_unavailable()
     return None
 
 
