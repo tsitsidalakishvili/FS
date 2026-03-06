@@ -80,6 +80,31 @@ def _build_swipe_card_image(comment, idx, total, compact=False):
     return "data:image/svg+xml;utf8," + quote(svg)
 
 
+def _apply_questionnaire_card_only_layout():
+    st.markdown(
+        """
+        <style>
+        header[data-testid="stHeader"],
+        [data-testid="stToolbar"],
+        [data-testid="stDecoration"],
+        [data-testid="stStatusWidget"],
+        #MainMenu,
+        footer {
+          display: none !important;
+        }
+        .block-container {
+          padding-top: 0.4rem !important;
+          padding-bottom: 0.4rem !important;
+          padding-left: 0.3rem !important;
+          padding-right: 0.3rem !important;
+          max-width: 100% !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _is_questionnaire_participation_mode():
     try:
         value = st.query_params.get("questionnaire")
@@ -128,7 +153,7 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
     for idx, comment in enumerate(comments):
         cards.append(
             {
-                "name": f"Question {idx + 1}/{len(comments)}",
+                "name": " " if compact else f"Question {idx + 1}/{len(comments)}",
                 "description": " ",
                 "image": _build_swipe_card_image(comment, idx, len(comments), compact=compact),
             }
@@ -164,8 +189,8 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
         else []
     )
     total_swiped = len(swiped_cards)
-    st.progress((total_swiped / len(comments)) if comments else 0.0)
     if not compact:
+        st.progress((total_swiped / len(comments)) if comments else 0.0)
         st.caption("Swipe right = Agree, swipe left = Disagree.")
         st.caption("Each card shows one question/comment only.")
         st.caption(f"{total_swiped}/{len(comments)} reactions recorded")
@@ -254,12 +279,6 @@ def _render_classic_vote_list(comments, convo_id, headers):
 
 
 def render_deliberation(public_only: bool):
-    st.subheader("Deliberation")
-    st.caption("Anonymous comments + votes, consensus analysis, and clustering.")
-    st.caption(
-        "Deliberation = “What do groups of people think?” (insight/clustering from votes)."
-    )
-
     if "delib_anon_id" not in st.session_state:
         st.session_state["delib_anon_id"] = str(uuid4())
     headers = {"X-Participant-Id": st.session_state["delib_anon_id"]}
@@ -272,6 +291,7 @@ def render_deliberation(public_only: bool):
     questionnaire_mode = public_only and _is_questionnaire_participation_mode()
 
     if questionnaire_mode:
+        _apply_questionnaire_card_only_layout()
         convo_id = st.session_state.get("delib_conversation_id") or _get_query_param(
             "conversation_id"
         ) or _get_query_param("conversation")
@@ -282,15 +302,18 @@ def render_deliberation(public_only: bool):
         if not convo:
             st.error("Conversation not found.")
             return
-        st.subheader(convo.get("topic", "Deliberation"))
-        if convo.get("description"):
-            st.caption(convo.get("description"))
         comments = delib_api_get(f"/conversations/{convo_id}/comments?status=approved") or []
         if not comments:
             st.info("No approved comments yet.")
             return
         _render_swipe_component(comments, convo_id, headers, compact=True)
         return
+
+    st.subheader("Deliberation")
+    st.caption("Anonymous comments + votes, consensus analysis, and clustering.")
+    st.caption(
+        "Deliberation = “What do groups of people think?” (insight/clustering from votes)."
+    )
 
     convo_options = {c["topic"]: c["id"] for c in conversations} if conversations else {}
     selected_title = st.selectbox(
