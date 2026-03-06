@@ -29,6 +29,7 @@ from crm.ui.components.import_export import (
     render_import_export_section as render_import_export_section_ui,
 )
 from crm.ui.components.questionnaire import (
+    render_questionnaire_block,
     render_survey_page,
 )
 from crm.ui.pages.admin import render_admin_page
@@ -1664,29 +1665,42 @@ if not supporter_mode:
     st.stop()
 
 st.sidebar.markdown("### Database")
-# Clean up legacy DB selector state from older UI versions.
-st.session_state.pop("db_connection_choice", None)
-
-# Sandbox-only DB connection (hidden from UI).
-db_choice = "Sandbox (Web)"
-st.sidebar.caption("Connection: Sandbox (Web)")
-if not NEO4J_SANDBOX_URI or not NEO4J_SANDBOX_PASSWORD:
-    st.sidebar.warning(
-        "Sandbox credentials missing. Set NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD in .env or Streamlit secrets."
-    )
-    db_ok = False
+default_db_idx = (
+    1 if (NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD) else 0
+)
+db_choice = st.sidebar.radio(
+    "Connection",
+    ["Local (Desktop)", "Sandbox (Web)"],
+    index=default_db_idx,
+    key="db_connection_choice",
+    help="Switch between your local Neo4j Desktop DB and the Neo4j Sandbox.",
+)
+if db_choice == "Sandbox (Web)":
+    if not NEO4J_SANDBOX_URI or not NEO4J_SANDBOX_PASSWORD:
+        st.sidebar.warning(
+            "Sandbox credentials missing. Set NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD in .env or Streamlit secrets."
+        )
+        db_ok = False
+    else:
+        db_ok = init_driver(
+            uri=NEO4J_SANDBOX_URI,
+            user=NEO4J_SANDBOX_USER,
+            password=NEO4J_SANDBOX_PASSWORD,
+            database=NEO4J_SANDBOX_DATABASE,
+        )
 else:
-    db_ok = init_driver(
-        uri=NEO4J_SANDBOX_URI,
-        user=NEO4J_SANDBOX_USER,
-        password=NEO4J_SANDBOX_PASSWORD,
-        database=NEO4J_SANDBOX_DATABASE,
-    )
+    db_ok = init_driver()
 
 if not db_ok or neo4j_db.driver is None:
-    st.error(
-        "Missing or invalid Sandbox Neo4j credentials. Set NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD."
-    )
+    if db_choice == "Sandbox (Web)":
+        st.error(
+            "Missing or invalid Sandbox Neo4j credentials. Set NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD."
+        )
+    else:
+        st.info(
+            "Local DBMS not reachable. Start your Neo4j Desktop database and ensure Bolt is running on port 7687."
+        )
+        st.error("Missing or invalid Neo4j credentials. Set NEO4J_URI and NEO4J_PASSWORD in .env.")
     st.stop()
 
 legacy_nav_map = {
@@ -2183,6 +2197,7 @@ if nav_choice == "People":
                 st.session_state["supporter_lon"] = float(selected.get("lon"))
 
             st.markdown("**New supporter**")
+            render_questionnaire_block("supporter")
             default_areas = [
                 "Field Organizing",
                 "Events",
@@ -2502,6 +2517,7 @@ if nav_choice == "People":
                 st.session_state["member_lon_value"] = selected.get("lon")
 
             st.markdown("**New member**")
+            render_questionnaire_block("member")
             default_areas = [
                 "Field Organizing",
                 "Events",
