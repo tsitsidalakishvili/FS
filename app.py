@@ -43,6 +43,7 @@ from crm.ui.pages.segments import render_segments_tab as render_segments_tab_pag
 from crm.ui.pages.tasks import render_tasks_tab as render_tasks_tab_page
 from crm.ui.pages.volunteers import render_volunteers_page
 from crm.ui.pages.data import render_data_page
+from crm.ui.pages.slides import render_slides_page
 
 try:
     import matplotlib.pyplot as plt
@@ -1706,6 +1707,7 @@ nav_choice = st.sidebar.radio(
         "Data",
         "Admin",
         "Deliberation",
+        "Slides",
     ],
     index=0,
     key="main_nav",
@@ -3065,4 +3067,7 @@ if nav_choice == "Admin":
 
 if nav_choice == "Deliberation":
     render_deliberation_page(public_only=False)
+
+if nav_choice == "Slides":
+    render_slides_page()
 
