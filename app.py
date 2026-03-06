@@ -1657,9 +1657,7 @@ if not supporter_mode:
     render_deliberation_page(public_only=True)
     st.stop()
 
-st.sidebar.markdown("### Database")
-db_choice = "Sandbox (Web)"
-st.sidebar.caption("Connection: Sandbox (Web)")
+# Sandbox-only DB connection (hidden from UI)
 if not NEO4J_SANDBOX_URI or not NEO4J_SANDBOX_PASSWORD:
     st.sidebar.warning(
         "Sandbox credentials missing. Set NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD in .env or Streamlit secrets."
