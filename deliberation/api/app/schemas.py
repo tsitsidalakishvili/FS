@@ -65,6 +65,14 @@ class VoteCreate(BaseModel):
     participant_id: Optional[str] = None
 
 
+class ParticipationDeckOut(BaseModel):
+    conversation_id: str
+    limit: int
+    has_more: bool
+    next_cursor: Optional[str] = None
+    comments: List[CommentOut]
+
+
 class CommentMetric(BaseModel):
     id: str
     text: str
