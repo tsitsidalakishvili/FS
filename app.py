@@ -2155,7 +2155,7 @@ if nav_choice == "People":
 
     if group_view == "Supporters":
         st.subheader("Supporters")
-        form_col, list_col = st.columns([1, 2])
+        form_col = st.container()
         with form_col:
             st.markdown("**Search address**")
             search_query = st.text_input(
@@ -2434,51 +2434,47 @@ if nav_choice == "People":
                             load_map_data.clear()
                             st.success("Supporter saved.")
 
-        with list_col:
-            df_summary = load_supporter_summary()
-            supporters = df_summary[df_summary["group"] == "Supporter"] if not df_summary.empty else df_summary
-            sort_by = st.selectbox(
-                "Sort supporters by",
-                ["Effort score", "Effort hours", "Join count", "Rating", "Name (A-Z)"],
-                key="supporter_sort",
+        df_summary = load_supporter_summary()
+        supporters = (
+            df_summary[df_summary["group"] == "Supporter"] if not df_summary.empty else df_summary
+        )
+        supporters = sort_people(supporters, "Effort score")
+        if supporters.empty:
+            st.info("No supporters found.")
+        else:
+            display_df = supporters[
+                [
+                    "fullName",
+                    "email",
+                    "effortHours",
+                    "eventAttendCount",
+                    "referralCount",
+                    "effortScore",
+                    "joinCount",
+                    "skillCount",
+                    "educationLevel",
+                    "ratingStars",
+                    "gender",
+                    "age",
+                ]
+            ].rename(
+                columns={
+                    "fullName": "Name",
+                    "email": "Email",
+                    "effortHours": "Effort Hours",
+                    "eventAttendCount": "Events Attended",
+                    "referralCount": "Referrals",
+                    "effortScore": "Effort Score",
+                    "joinCount": "Joined",
+                    "skillCount": "Skills",
+                    "educationLevel": "Education",
+                    "ratingStars": "Rating",
+                    "gender": "Gender",
+                    "age": "Age",
+                }
             )
-            supporters = sort_people(supporters, sort_by)
-            if supporters.empty:
-                st.info("No supporters found.")
-            else:
-                display_df = supporters[
-                    [
-                        "fullName",
-                        "email",
-                        "effortHours",
-                        "eventAttendCount",
-                        "referralCount",
-                        "effortScore",
-                        "joinCount",
-                        "skillCount",
-                        "educationLevel",
-                        "ratingStars",
-                        "gender",
-                        "age",
-                    ]
-                ].rename(
-                    columns={
-                        "fullName": "Name",
-                        "email": "Email",
-                        "effortHours": "Effort Hours",
-                        "eventAttendCount": "Events Attended",
-                        "referralCount": "Referrals",
-                        "effortScore": "Effort Score",
-                        "joinCount": "Joined",
-                        "skillCount": "Skills",
-                        "educationLevel": "Education",
-                        "ratingStars": "Rating",
-                        "gender": "Gender",
-                        "age": "Age",
-                    }
-                )
-                st.caption(f"{len(display_df):,} people shown")
-                st.dataframe(display_df, use_container_width=True)
+            st.caption(f"{len(display_df):,} people shown")
+            st.dataframe(display_df, use_container_width=True)
 
         render_import_export_section_ui("supporters", "Supporter", "Supporter")
 
