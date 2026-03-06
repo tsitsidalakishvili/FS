@@ -41,6 +41,17 @@ def _is_questionnaire_participation_mode():
     return str(value or "").strip().lower() == "deliberation"
 
 
+def _get_query_param(name):
+    try:
+        value = st.query_params.get(name)
+    except Exception:
+        params = st.experimental_get_query_params()
+        value = params.get(name)
+    if isinstance(value, list):
+        return value[0] if value else None
+    return value
+
+
 def _cast_swipe_vote(convo_id, comment_id, choice, headers):
     result = delib_api_post(
         "/vote",
@@ -52,6 +63,96 @@ def _cast_swipe_vote(convo_id, comment_id, choice, headers):
         headers=headers,
     )
     return result is not None
+
+
+def _render_swipe_component(comments, convo_id, headers, compact=False):
+    if streamlit_swipecards is None:
+        st.warning(
+            "Swipe component is unavailable in this environment. "
+            "Use classic mode below."
+        )
+        _render_classic_vote_list(comments, convo_id, headers)
+        return
+
+    cards = []
+    for idx, comment in enumerate(comments):
+        counts = (
+            f"👍 {comment.get('agree_count', 0)}   "
+            f"👎 {comment.get('disagree_count', 0)}   "
+            f"➖ {comment.get('pass_count', 0)}"
+        )
+        description = f"{comment.get('text', '')}"
+        if not compact:
+            description = f"{description}\n\n{counts}"
+        cards.append(
+            {
+                "name": f"Statement {idx + 1}/{len(comments)}",
+                "description": description,
+                "image": SWIPE_BLANK_IMAGE,
+            }
+        )
+
+    mode_suffix = "compact" if compact else "full"
+    result = streamlit_swipecards(
+        cards=cards,
+        display_mode="cards",
+        view="mobile",
+        show_border=False,
+        last_card_message="You have reviewed all statements.",
+        colors={
+            "like_bg": "#167CA7",
+            "like_fg": "#FFFFFF",
+            "pass_bg": "#0D435C",
+            "pass_fg": "#FFFFFF",
+            "back_bg": "#4D6B7A",
+            "back_fg": "#FFFFFF",
+            "btn_border": "#CFE2EC",
+            "card_bg": "#FFFFFF",
+            "background_color": "#F8FCFF",
+            "text_color": "#0B3A52",
+        },
+        key=f"delib_swipe_component_{convo_id}_{mode_suffix}",
+    )
+
+    processed_key = f"delib_swipe_processed_{convo_id}_{mode_suffix}"
+    processed_count = int(st.session_state.get(processed_key, 0))
+    swiped_cards = (
+        result.get("swipedCards", [])
+        if isinstance(result, dict)
+        else []
+    )
+    total_swiped = len(swiped_cards)
+    st.progress((total_swiped / len(comments)) if comments else 0.0)
+    if not compact:
+        st.caption("Swipe right = Agree, swipe left = Disagree.")
+        st.caption(f"{total_swiped}/{len(comments)} statements swiped")
+
+    if total_swiped > processed_count:
+        new_actions = swiped_cards[processed_count:]
+        for action_item in new_actions:
+            idx = action_item.get("index")
+            action = action_item.get("action")
+            if not isinstance(idx, int) or idx < 0 or idx >= len(comments):
+                continue
+            if action == "right":
+                choice = 1
+            elif action == "left":
+                choice = -1
+            else:
+                continue
+            comment_id = comments[idx].get("id")
+            if comment_id:
+                _cast_swipe_vote(convo_id, comment_id, choice, headers)
+        st.session_state[processed_key] = total_swiped
+        st.rerun()
+
+    if not compact and st.button(
+        "Reset swipe progress",
+        key=f"delib_swipe_reset_{convo_id}",
+        help="Reset local swipe progress for this conversation.",
+    ):
+        st.session_state[processed_key] = 0
+        st.rerun()
 
 
 def _render_classic_vote_list(comments, convo_id, headers):
@@ -125,6 +226,29 @@ def render_deliberation(public_only: bool):
         render_delib_api_unavailable()
         return
     conversations = conversations or []
+    questionnaire_mode = public_only and _is_questionnaire_participation_mode()
+
+    if questionnaire_mode:
+        convo_id = st.session_state.get("delib_conversation_id") or _get_query_param(
+            "conversation_id"
+        ) or _get_query_param("conversation")
+        if not convo_id:
+            st.error("Missing conversation_id in participant link.")
+            return
+        convo = delib_api_get(f"/conversations/{convo_id}")
+        if not convo:
+            st.error("Conversation not found.")
+            return
+        st.subheader(convo.get("topic", "Deliberation"))
+        if convo.get("description"):
+            st.caption(convo.get("description"))
+        comments = delib_api_get(f"/conversations/{convo_id}/comments?status=approved") or []
+        if not comments:
+            st.info("No approved comments yet.")
+            return
+        _render_swipe_component(comments, convo_id, headers, compact=True)
+        return
+
     convo_options = {c["topic"]: c["id"] for c in conversations} if conversations else {}
     selected_title = st.selectbox(
         "Select conversation",
@@ -409,87 +533,7 @@ def render_deliberation(public_only: bool):
                     help="Shows one statement card at a time with real touch swipe gestures.",
                 )
                 if swipe_mode:
-                    if streamlit_swipecards is not None:
-                        cards = []
-                        for idx, comment in enumerate(comments):
-                            counts = (
-                                f"👍 {comment.get('agree_count', 0)}   "
-                                f"👎 {comment.get('disagree_count', 0)}   "
-                                f"➖ {comment.get('pass_count', 0)}"
-                            )
-                            cards.append(
-                                {
-                                    "name": f"Statement {idx + 1}/{len(comments)}",
-                                    "description": f"{comment.get('text', '')}\n\n{counts}",
-                                    "image": SWIPE_BLANK_IMAGE,
-                                }
-                            )
-
-                        result = streamlit_swipecards(
-                            cards=cards,
-                            display_mode="cards",
-                            view="mobile",
-                            show_border=False,
-                            last_card_message="You have reviewed all statements.",
-                            colors={
-                                "like_bg": "#167CA7",
-                                "like_fg": "#FFFFFF",
-                                "pass_bg": "#0D435C",
-                                "pass_fg": "#FFFFFF",
-                                "back_bg": "#4D6B7A",
-                                "back_fg": "#FFFFFF",
-                                "btn_border": "#CFE2EC",
-                                "card_bg": "#FFFFFF",
-                                "background_color": "#F8FCFF",
-                                "text_color": "#0B3A52",
-                            },
-                            key=f"delib_swipe_component_{convo_id}",
-                        )
-
-                        processed_key = f"delib_swipe_processed_{convo_id}"
-                        processed_count = int(st.session_state.get(processed_key, 0))
-                        swiped_cards = (
-                            result.get("swipedCards", [])
-                            if isinstance(result, dict)
-                            else []
-                        )
-                        total_swiped = len(swiped_cards)
-                        st.caption("Swipe right = Agree, swipe left = Disagree.")
-                        st.progress((total_swiped / len(comments)) if comments else 0.0)
-                        st.caption(f"{total_swiped}/{len(comments)} statements swiped")
-
-                        if total_swiped > processed_count:
-                            new_actions = swiped_cards[processed_count:]
-                            for action_item in new_actions:
-                                idx = action_item.get("index")
-                                action = action_item.get("action")
-                                if not isinstance(idx, int) or idx < 0 or idx >= len(comments):
-                                    continue
-                                if action == "right":
-                                    choice = 1
-                                elif action == "left":
-                                    choice = -1
-                                else:
-                                    continue
-                                comment_id = comments[idx].get("id")
-                                if comment_id:
-                                    _cast_swipe_vote(convo_id, comment_id, choice, headers)
-                            st.session_state[processed_key] = total_swiped
-                            st.rerun()
-
-                        if st.button(
-                            "Reset swipe progress",
-                            key=f"delib_swipe_reset_{convo_id}",
-                            help="Reset local swipe progress for this conversation.",
-                        ):
-                            st.session_state[processed_key] = 0
-                            st.rerun()
-                    else:
-                        st.warning(
-                            "Swipe component is unavailable in this environment. "
-                            "Use classic mode below."
-                        )
-                        _render_classic_vote_list(comments, convo_id, headers)
+                    _render_swipe_component(comments, convo_id, headers, compact=False)
                 else:
                     _render_classic_vote_list(comments, convo_id, headers)
 
