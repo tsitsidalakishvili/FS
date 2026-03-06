@@ -76,3 +76,20 @@ python import_votes.py --csv ../data/georgian_politics_votes.csv
 - **Supporter mode** (default): CRM + deliberation tab
 - **Public-only**: set `PUBLIC_ONLY=true` in `.env`
 - **Supporter gate**: set `SUPPORTER_ACCESS_CODE` in `.env`
+
+## Streamlit Cloud + Render setup (Deliberation)
+If your Streamlit app is deployed publicly, `localhost` is not reachable from Streamlit Cloud.
+
+Set this in Streamlit app **Secrets**:
+```toml
+DELIBERATION_API_URL = "https://fs-deliberation-api.onrender.com"
+```
+
+Optional timeout override (recommended for free Render cold starts):
+```toml
+DELIBERATION_API_TIMEOUT_S = "70"
+```
+
+Notes:
+- Free Render web services can sleep and take ~50+ seconds to wake.
+- The app now uses a longer timeout automatically for `*.onrender.com` APIs.

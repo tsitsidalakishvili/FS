@@ -1,7 +1,15 @@
 import requests
 import streamlit as st
 
-from crm.config import DELIBERATION_API_URL
+from crm.config import DELIBERATION_API_TIMEOUT_S, DELIBERATION_API_URL
+
+
+def _parse_timeout_seconds(value, default=20.0):
+    try:
+        timeout = float(value)
+    except Exception:
+        timeout = default
+    return max(1.0, timeout)
 
 
 def _delib_api_base_url():
@@ -16,6 +24,47 @@ def _delib_api_url(path: str):
     if not path.startswith("/"):
         path = f"/{path}"
     return f"{base}{path}"
+
+
+def _effective_timeout(url: str) -> float:
+    timeout = _parse_timeout_seconds(DELIBERATION_API_TIMEOUT_S, default=20.0)
+    # Render free services can cold-start in ~50s, so use a safer minimum there.
+    if "onrender.com" in url:
+        return max(timeout, 70.0)
+    return timeout
+
+
+def _request_json(method, path, payload=None, headers=None, show_error=True):
+    url = _delib_api_url(path)
+    if not url:
+        if show_error:
+            render_delib_api_unavailable()
+        return None
+    timeout = _effective_timeout(url)
+    try:
+        response = requests.request(
+            method=method,
+            url=url,
+            json=payload,
+            headers=headers,
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.Timeout as exc:
+        if show_error:
+            if "onrender.com" in url:
+                st.error(
+                    "Deliberation API timed out while waking up (Render cold start). "
+                    "Please wait ~1 minute and retry."
+                )
+            else:
+                st.error(f"Deliberation API timeout: {exc}")
+        return None
+    except requests.RequestException as exc:
+        if show_error:
+            st.error(f"Deliberation API error: {exc}")
+        return None
 
 
 def render_delib_api_unavailable():
@@ -38,48 +87,12 @@ def render_delib_api_unavailable():
 
 
 def delib_api_get(path, show_error=True):
-    url = _delib_api_url(path)
-    if not url:
-        if show_error:
-            render_delib_api_unavailable()
-        return None
-    try:
-        response = requests.get(url, timeout=15)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as exc:
-        if show_error:
-            st.error(f"Deliberation API error: {exc}")
-        return None
+    return _request_json("GET", path, show_error=show_error)
 
 
 def delib_api_post(path, payload, headers=None, show_error=True):
-    url = _delib_api_url(path)
-    if not url:
-        if show_error:
-            render_delib_api_unavailable()
-        return None
-    try:
-        response = requests.post(url, json=payload, headers=headers, timeout=20)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as exc:
-        if show_error:
-            st.error(f"Deliberation API error: {exc}")
-        return None
+    return _request_json("POST", path, payload=payload, headers=headers, show_error=show_error)
 
 
 def delib_api_patch(path, payload, show_error=True):
-    url = _delib_api_url(path)
-    if not url:
-        if show_error:
-            render_delib_api_unavailable()
-        return None
-    try:
-        response = requests.patch(url, json=payload, timeout=15)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as exc:
-        if show_error:
-            st.error(f"Deliberation API error: {exc}")
-        return None
+    return _request_json("PATCH", path, payload=payload, show_error=show_error)

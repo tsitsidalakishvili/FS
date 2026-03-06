@@ -13,20 +13,26 @@ except Exception:
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env"), override=True)
 
-
-def _secrets_file_exists():
-    app_secrets = os.path.join(BASE_DIR, ".streamlit", "secrets.toml")
-    user_secrets = os.path.join(os.path.expanduser("~"), ".streamlit", "secrets.toml")
-    return os.path.exists(app_secrets) or os.path.exists(user_secrets)
+def _get_secret_value(key):
+    """
+    Read a key from Streamlit secrets if available.
+    Supports both top-level keys and one-level nested sections.
+    """
+    try:
+        if key in st.secrets:
+            return st.secrets.get(key)
+        for section in st.secrets.values():
+            if isinstance(section, dict) and key in section:
+                return section.get(key)
+    except (StreamlitSecretNotFoundError, FileNotFoundError, RuntimeError, Exception):
+        return None
+    return None
 
 
 def get_config(key, default=None):
-    try:
-        if _secrets_file_exists():
-            if key in st.secrets:
-                return st.secrets.get(key, default)
-    except (StreamlitSecretNotFoundError, FileNotFoundError):
-        pass
+    secret_value = _get_secret_value(key)
+    if secret_value is not None:
+        return secret_value
     value = os.getenv(key)
     return value if value is not None else default
 
@@ -56,3 +62,4 @@ SMTP_PORT = get_config("SMTP_PORT", "587")
 SMTP_USER = get_config("SMTP_USER")
 SMTP_PASSWORD = get_config("SMTP_PASSWORD")
 SMTP_USE_TLS = str(get_config("SMTP_USE_TLS", "true")).lower() in {"1", "true", "yes", "y"}
+DELIBERATION_API_TIMEOUT_S = get_config("DELIBERATION_API_TIMEOUT_S", "20")
