@@ -49,9 +49,13 @@ def _execute_read(session, query, params=None):
 
 
 def _execute_write(session, query, params=None):
+    def _run(tx):
+        result = tx.run(query, params or {})
+        return list(result)
+
     if hasattr(session, "execute_write"):
-        return session.execute_write(lambda tx: tx.run(query, params or {}))
-    return session.write_transaction(lambda tx: tx.run(query, params or {}))
+        return session.execute_write(_run)
+    return session.write_transaction(_run)
 
 
 def _get_conversation(conversation_id: str) -> dict:
@@ -97,7 +101,7 @@ def create_conversation(payload: ConversationCreate):
     RETURN c
     """
     with driver.session(database=NEO4J_DATABASE) as session:
-        result = _execute_write(
+        records = _execute_write(
             session,
             query,
             {
@@ -110,7 +114,9 @@ def create_conversation(payload: ConversationCreate):
                 "moderation_required": payload.moderation_required,
             },
         )
-        record = result.single()
+        record = records[0] if records else None
+        if record is None:
+            raise HTTPException(status_code=500, detail="Conversation creation failed")
         convo = _node_to_dict(record["c"])
     return _conversation_out(convo)
 
@@ -138,7 +144,8 @@ def update_conversation(conversation_id: str, payload: ConversationUpdate):
     RETURN c
     """
     with driver.session(database=NEO4J_DATABASE) as session:
-        record = _execute_write(session, query, {"id": conversation_id, "updates": updates}).single()
+        records = _execute_write(session, query, {"id": conversation_id, "updates": updates})
+        record = records[0] if records else None
     if record is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return _conversation_out(_node_to_dict(record["c"]))
@@ -204,8 +211,8 @@ def seed_comments(conversation_id: str, payload: SeedCommentsRequest):
     RETURN count(cm) AS created
     """
     with driver.session(database=NEO4J_DATABASE) as session:
-        result = _execute_write(session, query, {"cid": conversation_id, "items": seed_items})
-        created = result.single()["created"]
+        records = _execute_write(session, query, {"cid": conversation_id, "items": seed_items})
+        created = records[0]["created"] if records else 0
     return {"created": int(created)}
 
 
@@ -240,12 +247,12 @@ def create_comment(
     RETURN cm
     """
     with driver.session(database=NEO4J_DATABASE) as session:
-        result = _execute_write(
+        records = _execute_write(
             session,
             query,
             {"cid": conversation_id, "id": comment_id, "text": payload.text, "status": status, "authorHash": author_hash},
         )
-        record = result.single()
+        record = records[0] if records else None
         if record is None:
             raise HTTPException(status_code=404, detail="Conversation not found")
         comment = _node_to_dict(record["cm"])
@@ -309,7 +316,8 @@ def update_comment_status(comment_id: str, payload: CommentStatusUpdate):
     RETURN cm
     """
     with driver.session(database=NEO4J_DATABASE) as session:
-        record = _execute_write(session, query, {"id": comment_id, "status": payload.status}).single()
+        records = _execute_write(session, query, {"id": comment_id, "status": payload.status})
+        record = records[0] if records else None
     if record is None:
         raise HTTPException(status_code=404, detail="Comment not found")
     comment = _node_to_dict(record["cm"])
@@ -349,7 +357,7 @@ def cast_vote(payload: VoteCreate, x_participant_id: Optional[str] = Header(None
     RETURN v
     """
     with driver.session(database=NEO4J_DATABASE) as session:
-        record = _execute_write(
+        records = _execute_write(
             session,
             query,
             {
@@ -358,7 +366,8 @@ def cast_vote(payload: VoteCreate, x_participant_id: Optional[str] = Header(None
                 "pid": participant_id,
                 "choice": payload.choice,
             },
-        ).single()
+        )
+        record = records[0] if records else None
     if record is None:
         raise HTTPException(status_code=404, detail="Conversation or comment not found")
     return {"participant_id": participant_id, "comment_id": payload.comment_id, "choice": payload.choice}

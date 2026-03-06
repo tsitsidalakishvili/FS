@@ -1,10 +1,42 @@
 import os
 from neo4j import GraphDatabase
 
-NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "change-this")
-NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "neo4j")
+
+def _load_db_config():
+    override_uri = os.getenv("DELIBERATION_NEO4J_URI")
+    override_user = os.getenv("DELIBERATION_NEO4J_USER")
+    override_password = os.getenv("DELIBERATION_NEO4J_PASSWORD")
+    override_database = os.getenv("DELIBERATION_NEO4J_DATABASE")
+    if override_uri:
+        return (
+            override_uri,
+            override_user or os.getenv("NEO4J_USER", "neo4j"),
+            override_password or os.getenv("NEO4J_PASSWORD", "change-this"),
+            override_database or os.getenv("NEO4J_DATABASE", "neo4j"),
+        )
+
+    mode = os.getenv("DELIBERATION_DB_MODE", "local").lower()
+    if mode == "sandbox":
+        sandbox_uri = os.getenv("NEO4J_SANDBOX_URI")
+        sandbox_user = (
+            os.getenv("NEO4J_SANDBOX_USER")
+            or os.getenv("NEO4J_SANDBOX_USERNAME")
+            or "neo4j"
+        )
+        sandbox_password = os.getenv("NEO4J_SANDBOX_PASSWORD")
+        sandbox_database = os.getenv("NEO4J_SANDBOX_DATABASE", "neo4j")
+        if sandbox_uri and sandbox_password:
+            return sandbox_uri, sandbox_user, sandbox_password, sandbox_database
+
+    return (
+        os.getenv("NEO4J_URI", "bolt://localhost:7687"),
+        os.getenv("NEO4J_USER", "neo4j"),
+        os.getenv("NEO4J_PASSWORD", "change-this"),
+        os.getenv("NEO4J_DATABASE", "neo4j"),
+    )
+
+
+NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, NEO4J_DATABASE = _load_db_config()
 
 _driver = None
 

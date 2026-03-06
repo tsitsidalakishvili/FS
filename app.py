@@ -28,6 +28,10 @@ from crm.services.feedback import render_feedback_widget
 from crm.ui.components.import_export import (
     render_import_export_section as render_import_export_section_ui,
 )
+from crm.ui.components.questionnaire import (
+    render_questionnaire_block,
+    render_survey_page,
+)
 from crm.ui.pages.admin import render_admin_page
 from crm.ui.pages.dashboard import render_dashboard_page
 from crm.ui.pages.deliberation import render_deliberation as render_deliberation_page
@@ -66,6 +70,43 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
+
+
+def _get_query_param(name):
+    try:
+        value = st.query_params.get(name)
+    except Exception:
+        params = st.experimental_get_query_params()
+        value = params.get(name)
+    if isinstance(value, list):
+        return value[0] if value else None
+    return value
+
+
+questionnaire_kind = _get_query_param("questionnaire")
+if questionnaire_kind:
+    kind = str(questionnaire_kind).strip().lower()
+    if kind in {"deliberation", "deliberation_admin"}:
+        convo_id = _get_query_param("conversation_id") or _get_query_param("conversation")
+        if convo_id:
+            conversations = delib_api_get("/conversations", show_error=False) or []
+            convo_topic = None
+            for convo in conversations:
+                if str(convo.get("id")) == str(convo_id):
+                    convo_topic = convo.get("topic")
+                    break
+            if convo_topic:
+                st.session_state["delib_conversation_id"] = convo_id
+                st.session_state["delib_conversation_select"] = convo_topic
+        render_deliberation_page(public_only=(kind == "deliberation"))
+        st.stop()
+    st.error("Unknown questionnaire type.")
+    st.stop()
+
+survey_id = _get_query_param("survey")
+if survey_id:
+    render_survey_page(str(survey_id).strip())
+    st.stop()
 
 
 
@@ -2097,6 +2138,7 @@ if nav_choice == "People":
                 st.session_state["supporter_lon"] = float(selected.get("lon"))
 
             st.markdown("**New supporter**")
+            render_questionnaire_block("supporter")
             default_areas = [
                 "Field Organizing",
                 "Events",
@@ -2416,6 +2458,7 @@ if nav_choice == "People":
                 st.session_state["member_lon_value"] = selected.get("lon")
 
             st.markdown("**New member**")
+            render_questionnaire_block("member")
             default_areas = [
                 "Field Organizing",
                 "Events",
