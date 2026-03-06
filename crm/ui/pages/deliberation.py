@@ -376,6 +376,37 @@ def _render_questionnaire_comment_form(convo_id, headers):
                 st.success("Comment submitted.")
 
 
+def _render_questionnaire_like_dislike_buttons(comments, convo_id, headers):
+    st.caption("Quick reactions: like or dislike only.")
+    max_items = min(len(comments), 20)
+    for comment in comments[:max_items]:
+        comment_id = comment.get("id")
+        text = str(comment.get("text") or "").strip()
+        if not comment_id or not text:
+            continue
+        st.markdown(f"**{text}**")
+        cols = st.columns([1, 1, 3])
+        like_clicked = cols[0].button(
+            "👍 Like",
+            key=f"delib_q_like_{convo_id}_{comment_id}",
+        )
+        dislike_clicked = cols[1].button(
+            "👎 Dislike",
+            key=f"delib_q_dislike_{convo_id}_{comment_id}",
+        )
+        if like_clicked:
+            if _cast_swipe_vote(convo_id, comment_id, 1, headers):
+                st.rerun()
+        if dislike_clicked:
+            if _cast_swipe_vote(convo_id, comment_id, -1, headers):
+                st.rerun()
+        st.caption(
+            f"👍 {_safe_int(comment.get('agree_count', 0))}   "
+            f"👎 {_safe_int(comment.get('disagree_count', 0))}"
+        )
+        st.divider()
+
+
 def render_deliberation(public_only: bool):
     if "delib_anon_id" not in st.session_state:
         st.session_state["delib_anon_id"] = str(uuid4())
@@ -405,6 +436,8 @@ def render_deliberation(public_only: bool):
             st.info("No approved comments yet.")
         else:
             _render_swipe_component(comments, convo_id, headers, compact=True)
+            with st.expander("Like / Dislike reactions", expanded=False):
+                _render_questionnaire_like_dislike_buttons(comments, convo_id, headers)
         if convo.get("allow_comment_submission", True):
             _render_questionnaire_comment_form(convo_id, headers)
         return
