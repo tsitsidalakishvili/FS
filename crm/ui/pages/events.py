@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import altair as alt
 from datetime import date
 from urllib.parse import urlencode
 import os
@@ -9,6 +10,7 @@ from crm.data.events import (
     EVENT_STATUSES,
     create_event,
     get_event,
+    list_registration_status_counts,
     list_event_registrations,
     list_events,
     register_person_to_event,
@@ -204,6 +206,67 @@ def render_events_page():
     if events_df.empty:
         st.info("No events found yet. Create an event first.")
     else:
+        st.markdown("### Event statistics")
+        status_df = list_registration_status_counts(limit_events=20)
+        total_events = int(len(events_df))
+        if "registrations" in events_df.columns:
+            total_regs = int(
+                pd.to_numeric(events_df["registrations"], errors="coerce").fillna(0).sum()
+            )
+        else:
+            total_regs = 0
+        attended_count = 0
+        if not status_df.empty and "registrationStatus" in status_df.columns and "count" in status_df.columns:
+            attended_count = int(
+                pd.to_numeric(
+                    status_df.loc[status_df["registrationStatus"] == "Attended", "count"],
+                    errors="coerce",
+                )
+                .fillna(0)
+                .sum()
+            )
+        attendance_rate = (attended_count / total_regs * 100.0) if total_regs else 0.0
+        metrics = st.columns(4)
+        metrics[0].metric("Events", f"{total_events:,}")
+        metrics[1].metric("Registrations", f"{total_regs:,}")
+        metrics[2].metric("Attended", f"{attended_count:,}")
+        metrics[3].metric("Attendance rate", f"{attendance_rate:.1f}%")
+
+        if not status_df.empty:
+            chart_cols = st.columns(2)
+            status_totals = (
+                status_df.groupby("registrationStatus", as_index=False)["count"].sum()
+            )
+            status_chart = (
+                alt.Chart(status_totals)
+                .mark_bar()
+                .encode(
+                    x=alt.X("registrationStatus:N", title="Registration status"),
+                    y=alt.Y("count:Q", title="Count"),
+                    tooltip=["registrationStatus:N", "count:Q"],
+                    color=alt.Color("registrationStatus:N", legend=None),
+                )
+            )
+            chart_cols[0].altair_chart(status_chart, use_container_width=True)
+
+            by_event = (
+                status_df.groupby("eventName", as_index=False)["count"].sum()
+                .sort_values("count", ascending=False)
+                .head(10)
+            )
+            event_chart = (
+                alt.Chart(by_event)
+                .mark_bar()
+                .encode(
+                    y=alt.Y("eventName:N", sort="-x", title="Event"),
+                    x=alt.X("count:Q", title="Registrations"),
+                    tooltip=["eventName:N", "count:Q"],
+                )
+            )
+            chart_cols[1].altair_chart(event_chart, use_container_width=True)
+        else:
+            st.caption("No registration analytics yet. Registrations will appear after signups.")
+
         event_labels = []
         event_lookup = {}
         for _, row in events_df.iterrows():

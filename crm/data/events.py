@@ -301,3 +301,28 @@ def list_event_registrations(event_id, limit=500):
         {"eventId": event_id, "limit": limit},
         silent=True,
     )
+
+
+def list_registration_status_counts(limit_events=20):
+    try:
+        limit_events = int(limit_events)
+    except Exception:
+        limit_events = 20
+    limit_events = max(1, min(100, limit_events))
+    return run_query(
+        """
+        MATCH (e:Event)
+        WITH e
+        ORDER BY coalesce(e.startDate, '') DESC
+        LIMIT $limitEvents
+        OPTIONAL MATCH (:Person)-[r:REGISTERED_FOR]->(e)
+        RETURN
+          e.eventId AS eventId,
+          coalesce(e.name, 'Untitled event') AS eventName,
+          coalesce(r.status, 'Registered') AS registrationStatus,
+          count(r) AS count
+        ORDER BY eventName ASC, registrationStatus ASC
+        """,
+        {"limitEvents": limit_events},
+        silent=True,
+    )

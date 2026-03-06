@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+import altair as alt
 from datetime import date
 
 from crm.data.people import search_people
@@ -118,6 +119,37 @@ def render_tasks_tab():
     df = list_tasks(status=status, group=group, limit=limit)
     if refresh:
         df = list_tasks(status=status, group=group, limit=limit)
+
+    if not df.empty and "status" in df.columns:
+        st.markdown("#### Task statistics")
+        status_counts = (
+            df["status"]
+            .fillna("Open")
+            .value_counts()
+            .rename_axis("status")
+            .reset_index(name="count")
+        )
+        total_tasks = int(status_counts["count"].sum())
+        completed_tasks = int(
+            status_counts.loc[status_counts["status"] == "Done", "count"].sum()
+        )
+        completion_rate = (completed_tasks / total_tasks * 100.0) if total_tasks else 0.0
+        metrics = st.columns(3)
+        metrics[0].metric("Total tasks", f"{total_tasks:,}")
+        metrics[1].metric("Completed", f"{completed_tasks:,}")
+        metrics[2].metric("Completion rate", f"{completion_rate:.1f}%")
+
+        status_chart = (
+            alt.Chart(status_counts)
+            .mark_bar()
+            .encode(
+                x=alt.X("status:N", title="Task status"),
+                y=alt.Y("count:Q", title="Count"),
+                tooltip=["status:N", "count:Q"],
+                color=alt.Color("status:N", legend=None),
+            )
+        )
+        st.altair_chart(status_chart, use_container_width=True)
 
     st.markdown("#### Task queue")
     if df.empty:
