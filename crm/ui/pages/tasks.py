@@ -42,6 +42,47 @@ def render_tasks_tab():
     with filter_cols[3]:
         refresh = st.button("Refresh", key="tasks_refresh", help="Reload the task queue with the selected filters.")
 
+    status = None if status_filter == "(any)" else status_filter
+    group = None if group_filter == "(any)" else group_filter
+    df = list_tasks(status=status, group=group, limit=limit)
+    if refresh:
+        df = list_tasks(status=status, group=group, limit=limit)
+
+    st.markdown("#### Task statistics")
+    if not df.empty and "status" in df.columns:
+        status_counts = (
+            df["status"]
+            .fillna("Open")
+            .value_counts()
+            .rename_axis("status")
+            .reset_index(name="count")
+        )
+        total_tasks = int(status_counts["count"].sum())
+        completed_tasks = int(
+            status_counts.loc[status_counts["status"] == "Done", "count"].sum()
+        )
+        completion_rate = (completed_tasks / total_tasks * 100.0) if total_tasks else 0.0
+        metrics = st.columns(3)
+        metrics[0].metric("Total tasks", f"{total_tasks:,}")
+        metrics[1].metric("Completed", f"{completed_tasks:,}")
+        metrics[2].metric("Completion rate", f"{completion_rate:.1f}%")
+
+        status_chart = (
+            alt.Chart(status_counts)
+            .mark_bar()
+            .encode(
+                x=alt.X("status:N", title="Task status"),
+                y=alt.Y("count:Q", title="Count"),
+                tooltip=["status:N", "count:Q"],
+                color=alt.Color("status:N", legend=None),
+            )
+        )
+        st.altair_chart(status_chart, use_container_width=True)
+    else:
+        st.caption("No task analytics yet. Create tasks to see status charts.")
+
+    st.markdown("---")
+
     st.markdown("#### Create task")
     with st.form("tasks_person_search_form"):
         person_query = st.text_input(
@@ -109,47 +150,9 @@ def render_tasks_tab():
         )
         if ok:
             st.success("Task created.")
+            df = list_tasks(status=status, group=group, limit=limit)
         else:
             st.error("Could not create task (check person + title).")
-
-    st.markdown("---")
-
-    status = None if status_filter == "(any)" else status_filter
-    group = None if group_filter == "(any)" else group_filter
-    df = list_tasks(status=status, group=group, limit=limit)
-    if refresh:
-        df = list_tasks(status=status, group=group, limit=limit)
-
-    if not df.empty and "status" in df.columns:
-        st.markdown("#### Task statistics")
-        status_counts = (
-            df["status"]
-            .fillna("Open")
-            .value_counts()
-            .rename_axis("status")
-            .reset_index(name="count")
-        )
-        total_tasks = int(status_counts["count"].sum())
-        completed_tasks = int(
-            status_counts.loc[status_counts["status"] == "Done", "count"].sum()
-        )
-        completion_rate = (completed_tasks / total_tasks * 100.0) if total_tasks else 0.0
-        metrics = st.columns(3)
-        metrics[0].metric("Total tasks", f"{total_tasks:,}")
-        metrics[1].metric("Completed", f"{completed_tasks:,}")
-        metrics[2].metric("Completion rate", f"{completion_rate:.1f}%")
-
-        status_chart = (
-            alt.Chart(status_counts)
-            .mark_bar()
-            .encode(
-                x=alt.X("status:N", title="Task status"),
-                y=alt.Y("count:Q", title="Count"),
-                tooltip=["status:N", "count:Q"],
-                color=alt.Color("status:N", legend=None),
-            )
-        )
-        st.altair_chart(status_chart, use_container_width=True)
 
     st.markdown("#### Task queue")
     if df.empty:
