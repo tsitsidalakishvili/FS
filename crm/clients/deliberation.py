@@ -1,7 +1,11 @@
 import requests
 import streamlit as st
 
-from crm.config import DELIBERATION_API_TIMEOUT_S, DELIBERATION_API_URL
+from crm.config import (
+    DELIBERATION_API_FALLBACK_URL,
+    DELIBERATION_API_TIMEOUT_S,
+    DELIBERATION_API_URL,
+)
 
 
 def _parse_timeout_seconds(value, default=20.0):
@@ -17,8 +21,28 @@ def _delib_api_base_url():
     return base.rstrip("/") if base else None
 
 
-def _delib_api_url(path: str):
-    base = _delib_api_base_url()
+def _is_localhost_base(base: str) -> bool:
+    text = (base or "").lower()
+    return ("localhost" in text) or ("127.0.0.1" in text)
+
+
+def _fallback_base_url():
+    base = (DELIBERATION_API_FALLBACK_URL or "").strip()
+    return base.rstrip("/") if base else None
+
+
+def _candidate_base_urls():
+    urls = []
+    primary = _delib_api_base_url()
+    fallback = _fallback_base_url()
+    if primary:
+        urls.append(primary)
+    if (not primary or _is_localhost_base(primary)) and fallback and fallback not in urls:
+        urls.append(fallback)
+    return urls
+
+
+def _delib_api_url(path: str, base: str):
     if not base:
         return None
     if not path.startswith("/"):
@@ -35,44 +59,75 @@ def _effective_timeout(url: str) -> float:
 
 
 def _request_json(method, path, payload=None, headers=None, show_error=True):
-    url = _delib_api_url(path)
-    if not url:
+    bases = _candidate_base_urls()
+    if not bases:
         if show_error:
             render_delib_api_unavailable()
         return None
-    timeout = _effective_timeout(url)
-    try:
-        response = requests.request(
-            method=method,
-            url=url,
-            json=payload,
-            headers=headers,
-            timeout=timeout,
-        )
-        response.raise_for_status()
-        return response.json()
-    except requests.Timeout as exc:
-        if show_error:
-            if "onrender.com" in url:
+    last_url = None
+    last_exc = None
+    last_http_status = None
+    last_http_detail = None
+    for base in bases:
+        url = _delib_api_url(path, base)
+        if not url:
+            continue
+        last_url = url
+        timeout = _effective_timeout(url)
+        try:
+            response = requests.request(
+                method=method,
+                url=url,
+                json=payload,
+                headers=headers,
+                timeout=timeout,
+            )
+            if response.status_code >= 400:
+                last_http_status = response.status_code
+                try:
+                    body = response.json()
+                    detail = body.get("detail", body)
+                except Exception:
+                    detail = response.text
+                last_http_detail = detail
+                continue
+            try:
+                return response.json()
+            except ValueError:
+                return {}
+        except requests.RequestException as exc:
+            last_exc = exc
+            continue
+    if show_error:
+        if last_http_status is not None:
+            st.error(
+                f"Deliberation API error ({last_http_status}): {last_http_detail}"
+            )
+            return None
+        if isinstance(last_exc, requests.Timeout):
+            if last_url and "onrender.com" in last_url:
                 st.error(
                     "Deliberation API timed out while waking up (Render cold start). "
                     "Please wait ~1 minute and retry."
                 )
             else:
-                st.error(f"Deliberation API timeout: {exc}")
-        return None
-    except requests.RequestException as exc:
-        if show_error:
-            st.error(f"Deliberation API error: {exc}")
-        return None
+                st.error(f"Deliberation API timeout: {last_exc}")
+            render_delib_api_unavailable()
+        elif last_exc is not None:
+            st.error(f"Deliberation API error: {last_exc}")
+            render_delib_api_unavailable()
+    return None
 
 
 def render_delib_api_unavailable():
+    bases = _candidate_base_urls()
     base = _delib_api_base_url()
-    if base:
+    if bases:
         st.warning("Deliberation backend is not reachable.")
-        st.caption(f"Expected at `{base}`.")
-        if "localhost" in base or "127.0.0.1" in base:
+        st.caption("Tried:")
+        for item in bases:
+            st.caption(f"- `{item}`")
+        if base and ("localhost" in base or "127.0.0.1" in base):
             st.caption(
                 "Streamlit Cloud cannot reach your local machine. "
                 "Deploy the deliberation API separately and set `DELIBERATION_API_URL`."

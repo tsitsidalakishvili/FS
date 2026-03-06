@@ -90,6 +90,11 @@ Optional timeout override (recommended for free Render cold starts):
 DELIBERATION_API_TIMEOUT_S = "70"
 ```
 
+Optional fallback (used when primary URL is localhost/unreachable):
+```toml
+DELIBERATION_API_FALLBACK_URL = "https://fs-stns.onrender.com"
+```
+
 Notes:
 - Free Render web services can sleep and take ~50+ seconds to wake.
 - The app now uses a longer timeout automatically for `*.onrender.com` APIs.

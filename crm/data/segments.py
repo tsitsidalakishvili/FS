@@ -1,5 +1,7 @@
 import json
 
+import streamlit as st
+
 from crm.db.neo4j import run_query, run_write
 from crm.utils.text import clean_text
 
@@ -10,7 +12,7 @@ def upsert_segment(name, description, filter_spec):
         return False
     description = clean_text(description) or ""
     filter_json = json.dumps(filter_spec or {}, ensure_ascii=False)
-    return run_write(
+    result = run_write(
         """
         MERGE (s:Segment {name: $name})
         ON CREATE SET s.segmentId = randomUUID(), s.createdAt = datetime()
@@ -20,8 +22,14 @@ def upsert_segment(name, description, filter_spec):
         """,
         {"name": name, "description": description, "filterJson": filter_json},
     )
+    if result:
+        list_segments.clear()
+        load_segment_filter.clear()
+        run_saved_segment.clear()
+    return result
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def list_segments():
     return run_query(
         """
@@ -41,15 +49,21 @@ def delete_segment(segment_id):
     segment_id = clean_text(segment_id)
     if not segment_id:
         return False
-    return run_write(
+    result = run_write(
         """
         MATCH (s:Segment {segmentId: $id})
         DETACH DELETE s
         """,
         {"id": segment_id},
     )
+    if result:
+        list_segments.clear()
+        load_segment_filter.clear()
+        run_saved_segment.clear()
+    return result
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def load_segment_filter(segment_id):
     segment_id = clean_text(segment_id)
     if not segment_id:
@@ -150,3 +164,9 @@ def run_segment(filter_spec, limit=500):
     LIMIT $limit
     """
     return run_query(query, params=params, silent=True)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def run_saved_segment(segment_id, limit=500):
+    spec = load_segment_filter(segment_id)
+    return run_segment(spec, limit=limit)

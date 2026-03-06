@@ -33,7 +33,7 @@ from crm.ui.components.questionnaire import (
     render_survey_page,
 )
 from crm.ui.pages.admin import render_admin_page
-from crm.ui.pages.dashboard import render_dashboard_page
+from crm.ui.pages import dashboard as dashboard_page
 from crm.ui.pages.deliberation import render_deliberation as render_deliberation_page
 from crm.ui.pages.events import render_events_page
 from crm.ui.pages.map import render_map_page
@@ -42,6 +42,13 @@ from crm.ui.pages.profiles import render_profiles_tab as render_profiles_tab_pag
 from crm.ui.pages.tasks import render_tasks_tab as render_tasks_tab_page
 from crm.ui.pages.volunteers import render_volunteers_page
 from crm.ui.pages.data import render_data_page
+
+render_dashboard_page = dashboard_page.render_dashboard_page
+render_dashboard_trends_page = getattr(
+    dashboard_page,
+    "render_dashboard_trends_page",
+    dashboard_page.render_dashboard_page,
+)
 
 try:
     import matplotlib.pyplot as plt
@@ -1680,17 +1687,25 @@ if not db_ok or neo4j_db.driver is None:
     )
     st.stop()
 
-if st.session_state.get("main_nav") in {"Segments", "Segments & Outreach"}:
-    st.session_state["main_nav"] = "Outreach"
+legacy_nav_map = {
+    "Segments": "Outreach",
+    "Segments & Outreach": "Outreach",
+    "Profiles": "People",
+    "Profile": "People",
+    "Volunteers": "Dashboard",
+}
+if st.session_state.get("main_nav") in legacy_nav_map:
+    st.session_state["main_nav"] = legacy_nav_map[st.session_state["main_nav"]]
 
 nav_choice = st.sidebar.radio(
     "Navigate",
     [
         "Dashboard",
         "People",
+        "Tasks",
         "Outreach",
+        "Map",
         "Events",
-        "Volunteers",
         "Data",
         "Admin",
         "Deliberation",
@@ -1700,6 +1715,43 @@ nav_choice = st.sidebar.radio(
 )
 
 render_feedback_widget(nav_choice)
+
+# Centralized page router (orchestration-first shell)
+if nav_choice == "Dashboard":
+    dashboard_overview_tab, dashboard_trends_tab = st.tabs(["Overview", "Trends"])
+    with dashboard_overview_tab:
+        render_dashboard_page()
+    with dashboard_trends_tab:
+        render_dashboard_trends_page()
+    st.stop()
+
+if nav_choice == "Tasks":
+    render_tasks_tab_page()
+    st.stop()
+
+if nav_choice == "Outreach":
+    render_outreach_page()
+    st.stop()
+
+if nav_choice == "Map":
+    render_map_page()
+    st.stop()
+
+if nav_choice == "Events":
+    render_events_page()
+    st.stop()
+
+if nav_choice == "Data":
+    render_data_page()
+    st.stop()
+
+if nav_choice == "Admin":
+    render_admin_page()
+    st.stop()
+
+if nav_choice == "Deliberation":
+    render_deliberation_page(public_only=False)
+    st.stop()
 
 
 if nav_choice == "Dashboard":
@@ -2067,21 +2119,21 @@ if nav_choice == "Dashboard":
 
 if nav_choice == "People":
     st.subheader("People")
-    if st.session_state.get("people_section") == "Map":
+    if st.session_state.get("people_section") not in {None, "Directory", "Profile"}:
         st.session_state["people_section"] = "Directory"
     section = st.radio(
         "Section",
-        ["Directory", "Profiles", "Tasks"],
+        ["Directory", "Profile"],
         horizontal=True,
         key="people_section",
-        help="Switch between people directory, profiles, and tasks.",
+        help="Use Directory for list/add workflows, or Profile for one-person editing.",
     )
-    if section == "Profiles":
+    if section == "Profile":
         render_profiles_tab_page()
         st.stop()
-    if section == "Tasks":
-        render_tasks_tab_page()
-        st.stop()
+    st.caption(
+        "Directory page for supporter/member records. Use dedicated Tasks, Outreach, and Map pages for operations."
+    )
     group_view = st.radio(
         "View",
         ["Supporters", "Members"],
