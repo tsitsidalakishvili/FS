@@ -27,7 +27,25 @@ from crm.clients.deliberation import (
 )
 from crm.ui.components.questionnaire import render_questionnaire_block
 
-def _wrap_card_text(text, max_chars=30, max_lines=8):
+def _safe_int(value):
+    try:
+        return int(value)
+    except Exception:
+        return 0
+
+
+def _resolve_card_typography(text):
+    char_count = len(" ".join(str(text or "").split()))
+    if char_count <= 85:
+        return {"font_size": 52, "line_height": 62, "max_chars": 24, "max_lines": 6}
+    if char_count <= 150:
+        return {"font_size": 44, "line_height": 56, "max_chars": 28, "max_lines": 7}
+    if char_count <= 230:
+        return {"font_size": 38, "line_height": 50, "max_chars": 32, "max_lines": 9}
+    return {"font_size": 32, "line_height": 44, "max_chars": 36, "max_lines": 10}
+
+
+def _wrap_card_text(text, max_chars, max_lines):
     raw = " ".join(str(text or "").split())
     if not raw:
         return ["No statement text provided."]
@@ -42,38 +60,73 @@ def _wrap_card_text(text, max_chars=30, max_lines=8):
 
 
 def _build_swipe_card_image(comment, idx, total, compact=False):
-    question_lines = _wrap_card_text(comment.get("text", ""), max_chars=30, max_lines=8)
+    card_text = comment.get("text", "")
+    typography = _resolve_card_typography(card_text)
+    question_lines = _wrap_card_text(
+        card_text,
+        max_chars=typography["max_chars"],
+        max_lines=typography["max_lines"],
+    )
+    font_size = typography["font_size"]
+    line_height = typography["line_height"]
+
     title = html.escape(f"Question {idx + 1} / {total}")
     subtitle = html.escape("Swipe right = agree   •   Swipe left = disagree")
     footer = (
         "Reactions: "
-        f"👍 {int(comment.get('agree_count', 0))}   "
-        f"👎 {int(comment.get('disagree_count', 0))}   "
-        f"➖ {int(comment.get('pass_count', 0))}"
+        f"👍 {_safe_int(comment.get('agree_count', 0))}   "
+        f"👎 {_safe_int(comment.get('disagree_count', 0))}   "
+        f"➖ {_safe_int(comment.get('pass_count', 0))}"
     )
     footer_text = html.escape(footer if not compact else "React with a swipe")
 
+    panel_y = 230
+    panel_h = 680
+    text_block_h = ((len(question_lines) - 1) * line_height) + font_size
+    start_y = int(panel_y + max(74, (panel_h - text_block_h) / 2) + (font_size * 0.82))
     line_elements = []
-    start_y = 330
     for i, line in enumerate(question_lines):
-        y = start_y + (i * 58)
+        y = start_y + (i * line_height)
         line_elements.append(
-            f"<text x='64' y='{y}' font-size='40' font-weight='700' "
+            f"<text x='80' y='{y}' font-size='{font_size}' font-weight='700' "
             f"fill='#0B3A52'>{html.escape(line)}</text>"
         )
     lines_svg = "".join(line_elements)
 
     svg = (
         "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 720 1120'>"
-        "<rect width='720' height='1120' rx='40' fill='#FFFFFF'/>"
-        "<rect x='32' y='32' width='656' height='170' rx='26' fill='#EAF6FB'/>"
-        f"<text x='64' y='102' font-size='38' font-weight='700' fill='#0B3A52'>{title}</text>"
-        f"<text x='64' y='152' font-size='24' fill='#1A5978'>{subtitle}</text>"
-        "<rect x='32' y='230' width='656' height='680' rx='30' fill='#F8FCFF' stroke='#CFE2EC' stroke-width='2'/>"
+        "<defs>"
+        "<linearGradient id='bgGrad' x1='0%' y1='0%' x2='100%' y2='100%'>"
+        "<stop offset='0%' stop-color='#0B3A52'/>"
+        "<stop offset='55%' stop-color='#167CA7'/>"
+        "<stop offset='100%' stop-color='#42B5D9'/>"
+        "</linearGradient>"
+        "<linearGradient id='headerGrad' x1='0%' y1='0%' x2='100%' y2='0%'>"
+        "<stop offset='0%' stop-color='#0A3146'/>"
+        "<stop offset='100%' stop-color='#12769F'/>"
+        "</linearGradient>"
+        "<linearGradient id='questionGrad' x1='0%' y1='0%' x2='0%' y2='100%'>"
+        "<stop offset='0%' stop-color='#FFFFFF'/>"
+        "<stop offset='100%' stop-color='#F0F9FF'/>"
+        "</linearGradient>"
+        "<linearGradient id='footerGrad' x1='0%' y1='0%' x2='100%' y2='100%'>"
+        "<stop offset='0%' stop-color='#0D435C'/>"
+        "<stop offset='100%' stop-color='#0A2D3D'/>"
+        "</linearGradient>"
+        "</defs>"
+        "<rect width='720' height='1120' rx='40' fill='url(#bgGrad)'/>"
+        "<circle cx='640' cy='110' r='120' fill='#FFFFFF' opacity='0.10'/>"
+        "<circle cx='90' cy='1060' r='170' fill='#FFFFFF' opacity='0.08'/>"
+        "<rect x='20' y='20' width='680' height='1080' rx='36' fill='#FFFFFF' opacity='0.16'/>"
+        "<rect x='32' y='32' width='656' height='170' rx='26' fill='url(#headerGrad)'/>"
+        f"<text x='64' y='102' font-size='36' font-weight='700' fill='#FFFFFF'>{title}</text>"
+        f"<text x='64' y='152' font-size='24' fill='#D8ECF7'>{subtitle}</text>"
+        "<rect x='32' y='230' width='656' height='680' rx='34' fill='url(#questionGrad)' stroke='#A9D2E6' stroke-width='3'/>"
         f"{lines_svg}"
-        "<rect x='32' y='944' width='656' height='144' rx='26' fill='#0D435C'/>"
-        "<text x='64' y='1000' font-size='28' fill='#FFFFFF'>⬅ Disagree</text>"
-        "<text x='520' y='1000' font-size='28' fill='#FFFFFF'>Agree ➡</text>"
+        "<rect x='32' y='944' width='656' height='144' rx='26' fill='url(#footerGrad)'/>"
+        "<line x1='360' y1='968' x2='360' y2='1062' stroke='#4F8DA8' stroke-width='2'/>"
+        "<text x='64' y='1000' font-size='30' font-weight='700' fill='#FFFFFF'>⬅ Disagree</text>"
+        "<text x='478' y='1000' font-size='30' font-weight='700' fill='#FFFFFF'>Agree ➡</text>"
         f"<text x='64' y='1048' font-size='22' fill='#D8ECF7'>{footer_text}</text>"
         "</svg>"
     )
@@ -84,6 +137,9 @@ def _apply_questionnaire_card_only_layout():
     st.markdown(
         """
         <style>
+        [data-testid="stAppViewContainer"] {
+          background: linear-gradient(145deg, #0B3A52 0%, #167CA7 52%, #44BEE0 100%) !important;
+        }
         header[data-testid="stHeader"],
         [data-testid="stToolbar"],
         [data-testid="stDecoration"],
@@ -98,6 +154,9 @@ def _apply_questionnaire_card_only_layout():
           padding-left: 0.3rem !important;
           padding-right: 0.3rem !important;
           max-width: 100% !important;
+        }
+        [data-testid="stVerticalBlock"] > div {
+          background: transparent !important;
         }
         </style>
         """,
