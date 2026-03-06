@@ -1706,7 +1706,8 @@ if not db_ok or neo4j_db.driver is None:
 legacy_nav_map = {
     "Segments": "Outreach",
     "Segments & Outreach": "Outreach",
-    "Profiles": "Profile",
+    "Profiles": "People",
+    "Profile": "People",
     "Volunteers": "Dashboard",
 }
 if st.session_state.get("main_nav") in legacy_nav_map:
@@ -1717,7 +1718,6 @@ nav_choice = st.sidebar.radio(
     [
         "Dashboard",
         "People",
-        "Profile",
         "Tasks",
         "Outreach",
         "Map",
@@ -1739,10 +1739,6 @@ if nav_choice == "Dashboard":
         render_dashboard_page()
     with dashboard_trends_tab:
         render_dashboard_trends_page()
-    st.stop()
-
-if nav_choice == "Profile":
-    render_profiles_tab_page()
     st.stop()
 
 if nav_choice == "Tasks":
@@ -2139,8 +2135,20 @@ if nav_choice == "Dashboard":
 
 if nav_choice == "People":
     st.subheader("People")
+    if st.session_state.get("people_section") not in {None, "Directory", "Profile"}:
+        st.session_state["people_section"] = "Directory"
+    section = st.radio(
+        "Section",
+        ["Directory", "Profile"],
+        horizontal=True,
+        key="people_section",
+        help="Use Directory for list/add workflows, or Profile for one-person editing.",
+    )
+    if section == "Profile":
+        render_profiles_tab_page()
+        st.stop()
     st.caption(
-        "Directory page for supporter/member records. Use dedicated Profile, Tasks, Outreach, and Map pages for operations."
+        "Directory page for supporter/member records. Use dedicated Tasks, Outreach, and Map pages for operations."
     )
     group_view = st.radio(
         "View",
