@@ -79,10 +79,10 @@ def _build_swipe_card_image(comment, idx, total, compact=False):
         f"👎 {_safe_int(comment.get('disagree_count', 0))}   "
         f"➖ {_safe_int(comment.get('pass_count', 0))}"
     )
-    footer_text = html.escape(footer if not compact else "React with a swipe")
+    footer_text = html.escape(footer)
 
-    panel_y = 230
-    panel_h = 680
+    panel_y = 210 if compact else 230
+    panel_h = 860 if compact else 680
     text_block_h = ((len(question_lines) - 1) * line_height) + font_size
     start_y = int(panel_y + max(74, (panel_h - text_block_h) / 2) + (font_size * 0.82))
     line_elements = []
@@ -93,6 +93,20 @@ def _build_swipe_card_image(comment, idx, total, compact=False):
             f"fill='#0B3A52'>{html.escape(line)}</text>"
         )
     lines_svg = "".join(line_elements)
+    subtitle_svg = (
+        f"<text x='64' y='152' font-size='24' fill='#D8ECF7'>{subtitle}</text>"
+        if not compact
+        else ""
+    )
+    footer_svg = (
+        "<rect x='32' y='944' width='656' height='144' rx='26' fill='url(#footerGrad)'/>"
+        "<line x1='360' y1='968' x2='360' y2='1062' stroke='#4F8DA8' stroke-width='2'/>"
+        "<text x='64' y='1000' font-size='30' font-weight='700' fill='#FFFFFF'>⬅ Disagree</text>"
+        "<text x='478' y='1000' font-size='30' font-weight='700' fill='#FFFFFF'>Agree ➡</text>"
+        f"<text x='64' y='1048' font-size='22' fill='#D8ECF7'>{footer_text}</text>"
+        if not compact
+        else ""
+    )
 
     svg = (
         "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 720 1120'>"
@@ -121,14 +135,10 @@ def _build_swipe_card_image(comment, idx, total, compact=False):
         "<rect x='20' y='20' width='680' height='1080' rx='36' fill='#FFFFFF' opacity='0.16'/>"
         "<rect x='32' y='32' width='656' height='170' rx='26' fill='url(#headerGrad)'/>"
         f"<text x='64' y='102' font-size='36' font-weight='700' fill='#FFFFFF'>{title}</text>"
-        f"<text x='64' y='152' font-size='24' fill='#D8ECF7'>{subtitle}</text>"
-        "<rect x='32' y='230' width='656' height='680' rx='34' fill='url(#questionGrad)' stroke='#A9D2E6' stroke-width='3'/>"
+        f"{subtitle_svg}"
+        f"<rect x='32' y='{panel_y}' width='656' height='{panel_h}' rx='34' fill='url(#questionGrad)' stroke='#A9D2E6' stroke-width='3'/>"
         f"{lines_svg}"
-        "<rect x='32' y='944' width='656' height='144' rx='26' fill='url(#footerGrad)'/>"
-        "<line x1='360' y1='968' x2='360' y2='1062' stroke='#4F8DA8' stroke-width='2'/>"
-        "<text x='64' y='1000' font-size='30' font-weight='700' fill='#FFFFFF'>⬅ Disagree</text>"
-        "<text x='478' y='1000' font-size='30' font-weight='700' fill='#FFFFFF'>Agree ➡</text>"
-        f"<text x='64' y='1048' font-size='22' fill='#D8ECF7'>{footer_text}</text>"
+        f"{footer_svg}"
         "</svg>"
     )
     return "data:image/svg+xml;utf8," + quote(svg)
