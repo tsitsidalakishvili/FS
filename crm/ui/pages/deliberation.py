@@ -255,7 +255,7 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
             "Use classic mode below."
         )
         _render_classic_vote_list(comments, convo_id, headers)
-        return
+        return {"current_comment_id": None, "total_swiped": 0}
 
     cards = []
     for idx, comment in enumerate(comments):
@@ -297,6 +297,12 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
         else []
     )
     total_swiped = len(swiped_cards)
+    current_comment_id = None
+    if comments and total_swiped < len(comments):
+        active_comment = comments[total_swiped]
+        if isinstance(active_comment, dict):
+            current_comment_id = active_comment.get("id")
+
     if not compact:
         st.progress((total_swiped / len(comments)) if comments else 0.0)
         st.caption("Swipe right = Agree, swipe left = Disagree, swipe down = Pass.")
@@ -331,6 +337,8 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
     ):
         st.session_state[processed_key] = 0
         st.rerun()
+
+    return {"current_comment_id": current_comment_id, "total_swiped": total_swiped}
 
 
 def _render_classic_vote_list(comments, convo_id, headers):
@@ -414,14 +422,19 @@ def _render_questionnaire_comment_form(convo_id, headers):
                 st.success("Comment submitted.")
 
 
-def _render_questionnaire_like_dislike_buttons(comments, convo_id, headers):
-    st.caption("Read comments first. Like/Dislike is optional.")
+def _render_questionnaire_like_dislike_buttons(comments, convo_id, headers, focus_comment_id=None):
     anon_comments = [c for c in comments if not bool(c.get("is_seed", False))]
     if not anon_comments:
         st.info("No anonymous participant comments yet.")
         return
 
-    max_items = min(len(anon_comments), 20)
+    if focus_comment_id:
+        anon_comments = [c for c in anon_comments if c.get("id") == focus_comment_id]
+        if not anon_comments:
+            st.info("This card has no anonymous comment reactions.")
+            return
+
+    max_items = 1 if focus_comment_id else min(len(anon_comments), 20)
     for comment in anon_comments[:max_items]:
         comment_id = comment.get("id")
         text = str(comment.get("text") or "").strip()
@@ -478,9 +491,19 @@ def render_deliberation(public_only: bool):
         if not comments:
             st.info("No approved comments yet.")
         else:
-            _render_swipe_component(comments, convo_id, headers, compact=True)
+            swipe_state = _render_swipe_component(comments, convo_id, headers, compact=True)
+            current_comment_id = (
+                swipe_state.get("current_comment_id")
+                if isinstance(swipe_state, dict)
+                else None
+            )
             with st.expander("Anonymous participant comments (optional Like / Dislike)", expanded=False):
-                _render_questionnaire_like_dislike_buttons(comments, convo_id, headers)
+                _render_questionnaire_like_dislike_buttons(
+                    comments,
+                    convo_id,
+                    headers,
+                    focus_comment_id=current_comment_id,
+                )
         if convo.get("allow_comment_submission", True):
             _render_questionnaire_comment_form(convo_id, headers)
         return
