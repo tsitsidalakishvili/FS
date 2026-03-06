@@ -1,5 +1,6 @@
 import hashlib
 import os
+import random
 from typing import List, Optional
 from uuid import uuid4
 
@@ -17,6 +18,7 @@ from .schemas import (
     MetricsOut,
     ReportOut,
     SeedCommentsRequest,
+    SimulateVotesRequest,
     VoteCreate,
 )
 
@@ -371,6 +373,83 @@ def cast_vote(payload: VoteCreate, x_participant_id: Optional[str] = Header(None
     if record is None:
         raise HTTPException(status_code=404, detail="Conversation or comment not found")
     return {"participant_id": participant_id, "comment_id": payload.comment_id, "choice": payload.choice}
+
+
+@router.post("/conversations/{conversation_id}/simulate-votes")
+def simulate_votes(conversation_id: str, payload: SimulateVotesRequest):
+    _get_conversation(conversation_id)
+    participants = max(1, min(int(payload.participants), 1000))
+    requested_votes_per = max(1, min(int(payload.votes_per_participant), 200))
+    rng = random.Random(payload.seed if payload.seed is not None else 42)
+
+    driver = get_driver()
+    with driver.session(database=NEO4J_DATABASE) as session:
+        comment_records = _execute_read(
+            session,
+            """
+            MATCH (c:Conversation {id: $cid})-[:HAS_COMMENT]->(cm:Comment)
+            WHERE cm.status = "approved"
+            RETURN cm.id AS id
+            ORDER BY cm.createdAt, cm.id
+            """,
+            {"cid": conversation_id},
+        )
+
+    comment_ids = [record["id"] for record in comment_records if record.get("id")]
+    if not comment_ids:
+        raise HTTPException(status_code=400, detail="No approved comments available")
+
+    votes_per_participant = min(requested_votes_per, len(comment_ids))
+    votes = []
+    participant_ids = []
+    for _ in range(participants):
+        participant_id = str(uuid4())
+        participant_ids.append(participant_id)
+        selected_comments = (
+            rng.sample(comment_ids, votes_per_participant)
+            if votes_per_participant < len(comment_ids)
+            else list(comment_ids)
+        )
+        for comment_id in selected_comments:
+            roll = rng.random()
+            if roll < 0.44:
+                choice = 1
+            elif roll < 0.88:
+                choice = -1
+            else:
+                choice = 0
+            votes.append(
+                {
+                    "participant_id": participant_id,
+                    "comment_id": comment_id,
+                    "choice": choice,
+                }
+            )
+
+    with driver.session(database=NEO4J_DATABASE) as session:
+        records = _execute_write(
+            session,
+            """
+            MATCH (c:Conversation {id: $cid})
+            UNWIND $votes AS v
+            MATCH (c)-[:HAS_COMMENT]->(cm:Comment {id: v.comment_id})
+            WHERE cm.status = "approved"
+            MERGE (p:Participant {id: v.participant_id})
+            ON CREATE SET p.createdAt = datetime()
+            MERGE (p)-[:PARTICIPATED_IN]->(c)
+            MERGE (p)-[r:VOTED]->(cm)
+            SET r.choice = v.choice,
+                r.votedAt = datetime()
+            RETURN count(r) AS total
+            """,
+            {"cid": conversation_id, "votes": votes},
+        )
+    generated_votes = int(records[0]["total"]) if records else 0
+    return {
+        "participants": participants,
+        "votes_per_participant": votes_per_participant,
+        "generated_votes": generated_votes,
+    }
 
 
 def _collect_comments_and_votes(conversation_id: str):
