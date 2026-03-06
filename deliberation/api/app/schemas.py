@@ -65,6 +65,12 @@ class VoteCreate(BaseModel):
     participant_id: Optional[str] = None
 
 
+class SimulateVotesRequest(BaseModel):
+    participants: int = Field(default=120, ge=1, le=1000)
+    votes_per_participant: int = Field(default=20, ge=1, le=200)
+    seed: Optional[int] = None
+
+
 class CommentMetric(BaseModel):
     id: str
     text: str

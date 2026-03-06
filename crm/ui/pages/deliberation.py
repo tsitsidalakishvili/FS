@@ -171,6 +171,57 @@ def render_deliberation(public_only: bool):
                         if result:
                             st.success("Conversation updated.")
 
+                    st.markdown("### Generate demo votes")
+                    st.caption(
+                        "Use this to quickly populate reports/charts for demos when real votes are low."
+                    )
+                    demo_cols = st.columns(3)
+                    with demo_cols[0]:
+                        demo_participants = st.number_input(
+                            "Participants",
+                            min_value=1,
+                            max_value=1000,
+                            value=120,
+                            step=10,
+                            key="delib_demo_participants",
+                        )
+                    with demo_cols[1]:
+                        demo_votes_per = st.number_input(
+                            "Votes per participant",
+                            min_value=1,
+                            max_value=200,
+                            value=20,
+                            step=1,
+                            key="delib_demo_votes_per",
+                        )
+                    with demo_cols[2]:
+                        demo_seed = st.number_input(
+                            "Seed",
+                            min_value=0,
+                            max_value=999999,
+                            value=42,
+                            step=1,
+                            key="delib_demo_seed",
+                        )
+                    if st.button(
+                        "Generate demo votes",
+                        key="delib_generate_demo_votes",
+                        help="Create simulated participants and votes for the selected conversation.",
+                    ):
+                        result = delib_api_post(
+                            f"/conversations/{convo_id}/simulate-votes",
+                            {
+                                "participants": int(demo_participants),
+                                "votes_per_participant": int(demo_votes_per),
+                                "seed": int(demo_seed),
+                            },
+                        )
+                        if result:
+                            st.success(
+                                f"Generated {result.get('generated_votes', 0)} votes "
+                                f"across {result.get('participants', 0)} participants."
+                            )
+
                     st.markdown("### Seed comments (bulk)")
                     seed_text = st.text_area(
                         "One comment per line",
