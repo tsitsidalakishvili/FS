@@ -1,50 +1,62 @@
 {
   "agents": {
     "Supervisor": {
+      "display_name": "Team Lead (Supervisor)",
       "prompt": "prompts/Supervisor.md",
       "temperature": 0.2
     },
     "CampaignOpsExpert": {
+      "display_name": "Campaign Operations (CampaignOpsExpert)",
       "prompt": "prompts/CampaignOpsExpert.md",
       "temperature": 0.2
     },
     "ProductManager": {
+      "display_name": "Product Manager (ProductManager)",
       "prompt": "prompts/ProductManager.md",
       "temperature": 0.2
     },
     "Neo4jArchitect": {
+      "display_name": "Graph Architect (Neo4jArchitect)",
       "prompt": "prompts/Neo4jArchitect.md",
       "temperature": 0.2
     },
     "BackendEngineer": {
+      "display_name": "Backend Engineer (BackendEngineer)",
       "prompt": "prompts/BackendEngineer.md",
       "temperature": 0.2
     },
     "StreamlitEngineer": {
+      "display_name": "Streamlit Engineer (StreamlitEngineer)",
       "prompt": "prompts/StreamlitEngineer.md",
       "temperature": 0.2
     },
     "PrivacyCompliance": {
+      "display_name": "Privacy & Compliance (PrivacyCompliance)",
       "prompt": "prompts/PrivacyCompliance.md",
       "temperature": 0.2
     },
     "SecurityReviewer": {
+      "display_name": "Security Review (SecurityReviewer)",
       "prompt": "prompts/SecurityReviewer.md",
       "temperature": 0.2
     },
     "QAReviewer": {
+      "display_name": "QA / Testing (QAReviewer)",
       "prompt": "prompts/QAReviewer.md",
       "temperature": 0.2
     },
     "IntegrationsEngineer": {
+      "display_name": "Integrations (IntegrationsEngineer)",
       "prompt": "prompts/IntegrationsEngineer.md",
       "temperature": 0.2
     },
     "DeploymentEngineer": {
+      "display_name": "Deployments (DeploymentEngineer)",
       "prompt": "prompts/DeploymentEngineer.md",
       "temperature": 0.2
     },
     "ExecutorEngineer": {
+      "display_name": "Executor (Code Changes) (ExecutorEngineer)",
       "prompt": "prompts/ExecutorEngineer.md",
       "temperature": 0.1
     }
