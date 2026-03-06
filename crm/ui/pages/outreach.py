@@ -1,8 +1,13 @@
 import streamlit as st
 from datetime import date
 
+from crm.data.events import (
+    EVENT_REGISTRATION_STATUSES,
+    EVENT_STATUSES,
+    create_event_for_people,
+)
 from crm.data.people import search_people
-from crm.data.segments import list_segments, run_saved_segment
+from crm.data.segments import list_segments, run_saved_segment, run_segment
 from crm.data.tasks import TASK_STATUSES, bulk_create_tasks
 from crm.data.whatsapp_groups import (
     delete_whatsapp_group,
@@ -24,6 +29,109 @@ def _render_template(template, context):
         return template.format(**context)
     except Exception:
         return template
+
+
+def _split_full_name(full_name):
+    parts = [p for p in str(full_name or "").strip().split() if p]
+    if not parts:
+        return "", ""
+    if len(parts) == 1:
+        return parts[0], ""
+    return parts[0], " ".join(parts[1:])
+
+
+def _build_people_rows_from_df(target_df):
+    rows = []
+    if target_df is None or target_df.empty:
+        return rows
+    for _, row in target_df.iterrows():
+        email = str(row.get("email") or "").strip()
+        if not email:
+            continue
+        first_name = str(row.get("firstName") or "").strip()
+        last_name = str(row.get("lastName") or "").strip()
+        if (not first_name and not last_name) and row.get("fullName"):
+            first_name, last_name = _split_full_name(row.get("fullName"))
+        rows.append(
+            {
+                "email": email,
+                "firstName": first_name,
+                "lastName": last_name,
+                "phone": str(row.get("phone") or "").strip(),
+                "group": str(row.get("group") or "").strip(),
+            }
+        )
+    return rows
+
+
+def _render_event_builder(target_df, prefix):
+    st.markdown("### Create event")
+    people_rows = _build_people_rows_from_df(target_df)
+    if not people_rows:
+        st.info("No valid people with email in this audience.")
+        return
+    st.caption(f"Audience size: {len(people_rows):,} people")
+
+    with st.form(f"{prefix}_event_form"):
+        form_cols = st.columns(2)
+        with form_cols[0]:
+            name = st.text_input("Event name *", key=f"{prefix}_event_name")
+            set_start = st.checkbox("Set start date", value=False, key=f"{prefix}_event_set_start")
+            start_date_val = st.date_input(
+                "Start date",
+                value=date.today(),
+                key=f"{prefix}_event_start",
+                disabled=not set_start,
+            )
+            set_end = st.checkbox("Set end date", value=False, key=f"{prefix}_event_set_end")
+            end_date_val = st.date_input(
+                "End date",
+                value=date.today(),
+                key=f"{prefix}_event_end",
+                disabled=not set_end,
+            )
+            location = st.text_input("Location", key=f"{prefix}_event_location")
+        with form_cols[1]:
+            status = st.selectbox("Status", EVENT_STATUSES, key=f"{prefix}_event_status")
+            registration_status = st.selectbox(
+                "Default registration status",
+                EVENT_REGISTRATION_STATUSES,
+                index=0,
+                key=f"{prefix}_event_registration_status",
+            )
+            capacity = st.number_input(
+                "Capacity",
+                min_value=0,
+                value=max(0, len(people_rows)),
+                step=10,
+                key=f"{prefix}_event_capacity",
+            )
+            notes = st.text_area("Notes", key=f"{prefix}_event_notes", height=80)
+
+        create_event_clicked = st.form_submit_button("Create event for audience")
+
+    if create_event_clicked:
+        payload = {
+            "name": name,
+            "startDate": start_date_val.isoformat() if set_start else "",
+            "endDate": end_date_val.isoformat() if set_end else "",
+            "location": location,
+            "status": status,
+            "capacity": capacity,
+            "notes": notes,
+        }
+        event_id = create_event_for_people(
+            payload,
+            people_rows,
+            registration_status=registration_status,
+        )
+        if event_id:
+            st.success(
+                f"Event created and {len(people_rows):,} people registered. "
+                f"Event ID: {event_id}"
+            )
+        else:
+            st.error("Could not create event. Event name is required.")
 
 
 def _render_task_builder(target_df, prefix):
@@ -161,6 +269,36 @@ def _render_segment_outreach():
         filename=f"segment_{seg_id}_preview.csv",
     )
     _render_task_builder(rdf, prefix="outreach_segment")
+
+    st.markdown("---")
+    st.markdown("### Events for outreach audiences")
+    event_scope = st.radio(
+        "Event audience",
+        ["Selected segment", "All people"],
+        horizontal=True,
+        key="outreach_event_scope",
+        help="Create an event and register either this segment or everyone.",
+    )
+    if event_scope == "Selected segment":
+        event_target_df = rdf
+    else:
+        all_limit = st.number_input(
+            "All-people preview limit",
+            min_value=50,
+            max_value=5000,
+            value=500,
+            step=50,
+            key="outreach_all_people_limit",
+            help="Safety limit for creating event registrations for all people.",
+        )
+        with st.spinner("Loading all people audience..."):
+            event_target_df = run_segment({}, limit=all_limit)
+        if event_target_df.empty:
+            st.info("No people found for all-people audience.")
+            return
+        st.caption(f"All-people preview loaded: {len(event_target_df):,}")
+
+    _render_event_builder(event_target_df, prefix="outreach_segment")
 
 
 def _render_individual_outreach():
