@@ -9,6 +9,8 @@ def render_table_with_export(
     column_config: dict | None = None,
     height: int | None = None,
 ):
+    # Kept for backward compatibility with existing call sites.
+    _ = key_prefix, filename
     dataframe_kwargs = {
         "use_container_width": True,
         "column_config": column_config or {},
@@ -17,11 +19,3 @@ def render_table_with_export(
     if isinstance(height, int) and height > 0:
         dataframe_kwargs["height"] = height
     st.dataframe(df, **dataframe_kwargs)
-    csv_data = df.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        "Export current table (CSV)",
-        data=csv_data,
-        file_name=filename,
-        mime="text/csv",
-        key=f"{key_prefix}_export_csv",
-    )
