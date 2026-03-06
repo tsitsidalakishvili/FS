@@ -4,7 +4,14 @@ import altair as alt
 from datetime import date
 
 from crm.data.people import search_people
-from crm.data.tasks import TASK_STATUSES, create_task, list_tasks, update_task_status
+from crm.data.segments import list_segments, run_saved_segment
+from crm.data.tasks import (
+    TASK_STATUSES,
+    bulk_create_tasks,
+    create_task,
+    list_tasks,
+    update_task_status,
+)
 from crm.ui.components.table_utils import render_table_with_export
 
 
@@ -86,11 +93,11 @@ def render_tasks_tab():
     st.markdown("#### Create task")
     with st.form("tasks_person_search_form"):
         person_query = st.text_input(
-            "Find Person (Name/Email)",
+            "Find person or segment (Name/Email)",
             key="tasks_person_query",
-            help="Search people by name/email to attach the task to a person.",
+            help="Search people by name/email. Segment options are also available in the dropdown below.",
         )
-        search_clicked = st.form_submit_button("Search people")
+        search_clicked = st.form_submit_button("Search")
     if search_clicked:
         query_clean = (person_query or "").strip()
         if len(query_clean) < 2:
@@ -103,23 +110,57 @@ def render_tasks_tab():
     matches = pd.DataFrame()
     if committed_query:
         with st.spinner("Searching people..."):
-            matches = search_people(committed_query, limit=50)
-    options = [""] + (
-        matches["email"].tolist()
-        if not matches.empty and "email" in matches.columns
-        else []
-    )
+            matches = search_people(committed_query, limit=120)
+
+    segments_df = list_segments()
+    if committed_query and not segments_df.empty and "name" in segments_df.columns:
+        segments_df = segments_df[
+            segments_df["name"].fillna("").str.lower().str.contains(committed_query.lower())
+        ]
+
+    target_map = {"": None}
+    if not segments_df.empty:
+        for row in segments_df.itertuples(index=False):
+            segment_id = str(getattr(row, "segmentId", "") or "").strip()
+            segment_name = str(getattr(row, "name", "") or "Unnamed segment").strip()
+            if not segment_id:
+                continue
+            label = f"Segment: {segment_name}"
+            target_map[label] = {
+                "type": "segment",
+                "segment_id": segment_id,
+                "segment_name": segment_name,
+            }
+
+    if not matches.empty and "email" in matches.columns:
+        for row in matches.itertuples(index=False):
+            email = str(getattr(row, "email", "") or "").strip()
+            full_name = str(getattr(row, "fullName", "") or "").strip()
+            if not email:
+                continue
+            person_label = full_name if full_name else email
+            label = f"Person: {person_label} — {email}"
+            target_map[label] = {
+                "type": "person",
+                "email": email,
+                "full_name": full_name,
+            }
+
+    person_count = len([v for v in target_map.values() if isinstance(v, dict) and v.get("type") == "person"])
+    segment_count = len([v for v in target_map.values() if isinstance(v, dict) and v.get("type") == "segment"])
     if committed_query:
-        st.caption(f"{len(options)-1:,} people found.")
+        st.caption(f"{person_count:,} people and {segment_count:,} segments found.")
+    elif segment_count:
+        st.caption(f"{segment_count:,} segments available. Search to include matching people.")
 
     with st.form("tasks_create_form"):
         create_cols = st.columns([2, 2, 2, 1])
         with create_cols[0]:
-            person_email = st.selectbox(
-                "Person",
-                options=options,
-                key="tasks_person_email",
-                help="Pick the person who should receive this follow-up task.",
+            target_label = st.selectbox(
+                "Person / Segment",
+                options=list(target_map.keys()),
+                key="tasks_target",
+                help="Pick one person or one saved segment.",
             )
         with create_cols[1]:
             title = st.text_input(
@@ -137,22 +178,54 @@ def render_tasks_tab():
         with create_cols[3]:
             status_new = st.selectbox("New Status", TASK_STATUSES, index=0, key="tasks_new_status")
             add_task_clicked = st.form_submit_button(
-                "Add task", help="Create a task linked to the selected person."
+                "Add task", help="Create a task for the selected person or all people in the selected segment."
             )
     if add_task_clicked:
+        target = target_map.get(target_label)
+        if not target:
+            st.error("Select a person or segment.")
+            return
         due_date = due_date_value.isoformat() if set_due else ""
-        ok = create_task(
-            person_email,
-            title,
-            description=description,
-            due_date=due_date,
-            status=status_new,
-        )
-        if ok:
-            st.success("Task created.")
-            df = list_tasks(status=status, group=group, limit=limit)
+        if target.get("type") == "person":
+            ok = create_task(
+                target.get("email"),
+                title,
+                description=description,
+                due_date=due_date,
+                status=status_new,
+            )
+            if ok:
+                st.success("Task created.")
+                df = list_tasks(status=status, group=group, limit=limit)
+            else:
+                st.error("Could not create task (check person + title).")
         else:
-            st.error("Could not create task (check person + title).")
+            segment_df = run_saved_segment(target.get("segment_id"), limit=2000)
+            if segment_df.empty:
+                st.error("Selected segment has no people.")
+            else:
+                rows = []
+                for row in segment_df.itertuples(index=False):
+                    email = str(getattr(row, "email", "") or "").strip()
+                    if not email:
+                        continue
+                    rows.append(
+                        {
+                            "email": email,
+                            "title": title,
+                            "description": description,
+                            "status": status_new,
+                            "dueDate": due_date,
+                        }
+                    )
+                created = bulk_create_tasks(rows, default_status=status_new)
+                if created > 0:
+                    st.success(
+                        f"Created {created:,} tasks for segment '{target.get('segment_name', 'Segment')}'."
+                    )
+                    df = list_tasks(status=status, group=group, limit=limit)
+                else:
+                    st.error("Could not create tasks for the selected segment.")
 
     st.markdown("#### Task queue")
     if df.empty:
