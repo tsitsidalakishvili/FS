@@ -1,5 +1,6 @@
 import json
 import os
+from urllib.parse import urlencode
 
 import streamlit as st
 
@@ -54,6 +55,58 @@ def _build_message(template, link):
         return message
 
 
+def _normalize_base_url(value):
+    text = (value or "").strip()
+    if not text:
+        return ""
+    return text.rstrip("/")
+
+
+def _detect_base_url():
+    configured = _normalize_base_url(
+        os.getenv("APP_URL") or os.getenv("PUBLIC_APP_URL") or os.getenv("STREAMLIT_APP_URL")
+    )
+    if configured:
+        return configured
+
+    try:
+        headers = getattr(getattr(st, "context", None), "headers", None)
+        if headers:
+            host = headers.get("x-forwarded-host") or headers.get("host")
+            if host:
+                proto = headers.get("x-forwarded-proto") or "https"
+                prefix = headers.get("x-forwarded-prefix") or ""
+                return _normalize_base_url(f"{proto}://{host}{prefix}")
+    except Exception:
+        pass
+
+    try:
+        from streamlit.web.server.websocket_headers import _get_websocket_headers
+
+        headers = _get_websocket_headers() or {}
+        host = headers.get("x-forwarded-host") or headers.get("host")
+        if host:
+            proto = headers.get("x-forwarded-proto") or "https"
+            prefix = headers.get("x-forwarded-prefix") or ""
+            return _normalize_base_url(f"{proto}://{host}{prefix}")
+    except Exception:
+        pass
+    return "<APP_URL>"
+
+
+def _build_app_link(params):
+    base = _detect_base_url()
+    return f"{base}?{urlencode(params)}"
+
+
+def _show_link_hint_if_needed(link):
+    if link.startswith("<APP_URL>"):
+        st.caption(
+            "Could not auto-detect your app URL in this environment. "
+            "Set APP_URL in Streamlit secrets for fully qualified links."
+        )
+
+
 def _render_field(field, key_prefix):
     field_id = field.get("id") or "field"
     label = field.get("label") or field_id
@@ -91,13 +144,14 @@ def render_survey_block(kind):
     if not selected:
         return
     template = options[selected]
-    link = f"<APP_URL>?survey={template['_id']}"
+    link = _build_app_link({"survey": template["_id"]})
     st.text_input(
         "Shareable link",
         value=link,
         key=f"survey_link_{kind}",
-        help="Replace <APP_URL> with your Streamlit app URL.",
+        help="Auto-generated from current app URL. You can override with APP_URL secret.",
     )
+    _show_link_hint_if_needed(link)
     st.text_area(
         "Message to send",
         value=_build_message(template, link),
@@ -169,18 +223,18 @@ def render_questionnaire_block(kind, show_expander=True):
                 return
 
             convo_id = convo_options[selected_topic]
-            public_link = (
-                f"<APP_URL>?questionnaire=deliberation&conversation_id={convo_id}"
+            public_link = _build_app_link(
+                {"questionnaire": "deliberation", "conversation_id": convo_id}
             )
-            admin_link = (
-                f"<APP_URL>?questionnaire=deliberation_admin&conversation_id={convo_id}"
+            admin_link = _build_app_link(
+                {"questionnaire": "deliberation_admin", "conversation_id": convo_id}
             )
 
             st.text_input(
                 "Participant link",
                 value=public_link,
                 key=f"questionnaire_link_public_{kind}",
-                help="Replace <APP_URL> with your Streamlit app URL.",
+                help="Auto-generated from current app URL. You can override with APP_URL secret.",
             )
             st.text_input(
                 "Admin preview link",
@@ -188,6 +242,7 @@ def render_questionnaire_block(kind, show_expander=True):
                 key=f"questionnaire_link_admin_{kind}",
                 help="Internal link with Configure/Moderate/Reports tabs.",
             )
+            _show_link_hint_if_needed(public_link)
             message = (
                 f"Freedom Square questionnaire ({label})\n\n"
                 "Please vote and comment using this link:\n"
