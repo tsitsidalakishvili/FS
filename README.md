@@ -10,6 +10,8 @@ This folder now contains the **combined** application:
   app.py                  # CRM + Deliberation UI entrypoint
   crm/                    # modularized CRM app code
   data/                   # sample CSVs (imports)
+  neo4j/
+    migrations/           # graph schema migration scripts + runbook
   scripts/                # local utilities (e.g., testneo4j.py)
   AIteam/
     console.py            # Agent Chain console UI
@@ -71,6 +73,11 @@ Generate votes CSV:
 python generate_votes_csv.py --conversation-id <id> --output ../data/georgian_politics_votes.csv
 python import_votes.py --csv ../data/georgian_politics_votes.csv
 ```
+
+## Graph model and schema migration
+- Canonical graph model: `GRAPH_SCHEMA.md`
+- Schema migration runbook: `neo4j/migrations/README.md`
+- Core migration script: `neo4j/migrations/001_core_schema.cypher`
 
 ## Access modes
 - **Supporter mode** (default): CRM + deliberation tab
