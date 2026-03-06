@@ -51,6 +51,30 @@ def update_task_status(task_id, status):
     )
 
 
+def delete_task(task_id):
+    task_id = clean_text(task_id)
+    if not task_id:
+        return False
+    exists = run_query(
+        """
+        MATCH (t:Task {taskId: $taskId})
+        RETURN t.taskId AS taskId
+        LIMIT 1
+        """,
+        {"taskId": task_id},
+        silent=True,
+    )
+    if exists.empty:
+        return False
+    return run_write(
+        """
+        MATCH (t:Task {taskId: $taskId})
+        DETACH DELETE t
+        """,
+        {"taskId": task_id},
+    )
+
+
 def list_tasks(status=None, person_email=None, group=None, limit=300):
     status = clean_text(status)
     person_email = clean_text(person_email)

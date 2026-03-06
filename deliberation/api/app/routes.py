@@ -212,6 +212,43 @@ def get_conversation(conversation_id: str):
     return _conversation_out(convo, comments=row["comments"], participants=row["participants"])
 
 
+@router.delete("/conversations/{conversation_id}")
+def delete_conversation(conversation_id: str):
+    _get_conversation(conversation_id)
+    driver = get_driver()
+    with driver.session(database=NEO4J_DATABASE) as session:
+        _execute_write(
+            session,
+            """
+            MATCH (c:Conversation {id: $id})
+            OPTIONAL MATCH (c)-[:HAS_COMMENT]->(cm:Comment)
+            WITH c, collect(DISTINCT cm) AS comments
+            FOREACH (comment IN comments | DETACH DELETE comment)
+            WITH c
+            OPTIONAL MATCH (ar:AnalysisRun)-[:FOR_CONVERSATION]->(c)
+            WITH c, collect(DISTINCT ar) AS runs
+            FOREACH (run IN runs | DETACH DELETE run)
+            WITH c
+            OPTIONAL MATCH (cl:Cluster)-[:OF_CONVERSATION]->(c)
+            WITH c, collect(DISTINCT cl) AS clusters
+            FOREACH (cluster IN clusters | DETACH DELETE cluster)
+            WITH c
+            DETACH DELETE c
+            """,
+            {"id": conversation_id},
+        )
+        _execute_write(
+            session,
+            """
+            MATCH (p:Participant)
+            WHERE NOT (p)-[:PARTICIPATED_IN]->(:Conversation)
+              AND NOT (p)-[:VOTED]->(:Comment)
+            DETACH DELETE p
+            """,
+        )
+    return {"deleted": True, "conversation_id": conversation_id}
+
+
 @router.post("/conversations/{conversation_id}/seed-comments:bulk")
 def seed_comments(conversation_id: str, payload: SeedCommentsRequest):
     if not payload.comments:

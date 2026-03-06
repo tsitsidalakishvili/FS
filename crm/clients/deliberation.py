@@ -151,3 +151,7 @@ def delib_api_post(path, payload, headers=None, show_error=True):
 
 def delib_api_patch(path, payload, show_error=True):
     return _request_json("PATCH", path, payload=payload, show_error=show_error)
+
+
+def delib_api_delete(path, show_error=True):
+    return _request_json("DELETE", path, show_error=show_error)

@@ -116,6 +116,30 @@ def create_event(payload):
     )
 
 
+def delete_event(event_id):
+    event_id = clean_text(event_id)
+    if not event_id:
+        return False
+    exists = run_query(
+        """
+        MATCH (e:Event {eventId: $eventId})
+        RETURN e.eventId AS eventId
+        LIMIT 1
+        """,
+        {"eventId": event_id},
+        silent=True,
+    )
+    if exists.empty:
+        return False
+    return run_write(
+        """
+        MATCH (e:Event {eventId: $eventId})
+        DETACH DELETE e
+        """,
+        {"eventId": event_id},
+    )
+
+
 def _clean_people_rows(rows):
     cleaned = []
     for row in rows or []:
