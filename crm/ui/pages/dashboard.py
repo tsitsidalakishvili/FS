@@ -27,25 +27,25 @@ def render_dashboard_page():
     metrics[2].metric("Members", f"{total_members:,}")
     metrics[3].metric("Avg effort score", f"{avg_effort:.1f}")
 
-    st.markdown("### Action feed")
-    tasks = list_tasks(status="Open", limit=15)
-    if tasks.empty:
-        st.info("No open tasks yet.")
-    else:
-        task_df = tasks[
-            ["title", "dueDate", "firstName", "lastName", "email", "group", "updatedAt"]
-        ].rename(
-            columns={
-                "title": "Task",
-                "dueDate": "Due",
-                "firstName": "First",
-                "lastName": "Last",
-                "email": "Email",
-                "group": "Group",
-                "updatedAt": "Updated",
-            }
-        )
-        st.dataframe(task_df, use_container_width=True)
+    with st.expander("Task feed", expanded=True):
+        tasks = list_tasks(status="Open", limit=15)
+        if tasks.empty:
+            st.info("No open tasks yet.")
+        else:
+            task_df = tasks[
+                ["title", "dueDate", "firstName", "lastName", "email", "group", "updatedAt"]
+            ].rename(
+                columns={
+                    "title": "Task",
+                    "dueDate": "Due",
+                    "firstName": "First",
+                    "lastName": "Last",
+                    "email": "Email",
+                    "group": "Group",
+                    "updatedAt": "Updated",
+                }
+            )
+            st.dataframe(task_df, use_container_width=True)
 
     st.markdown("### Snapshot charts")
     chart_cols = st.columns(3)
