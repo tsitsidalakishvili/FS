@@ -59,7 +59,7 @@ st.markdown(
 /* Make Streamlit tooltip icons more visible */
 [data-testid="stTooltipIcon"] {
   opacity: 1 !important;
-  color: #6b7280 !important;
+  color: #b8c7d4 !important;
 }
 [data-testid="stTooltipIcon"] svg {
   width: 18px !important;
