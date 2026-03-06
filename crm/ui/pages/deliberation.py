@@ -378,8 +378,13 @@ def _render_questionnaire_comment_form(convo_id, headers):
 
 def _render_questionnaire_like_dislike_buttons(comments, convo_id, headers):
     st.caption("Read comments first. Like/Dislike is optional.")
-    max_items = min(len(comments), 20)
-    for comment in comments[:max_items]:
+    anon_comments = [c for c in comments if not bool(c.get("is_seed", False))]
+    if not anon_comments:
+        st.info("No anonymous participant comments yet.")
+        return
+
+    max_items = min(len(anon_comments), 20)
+    for comment in anon_comments[:max_items]:
         comment_id = comment.get("id")
         text = str(comment.get("text") or "").strip()
         if not comment_id or not text:
@@ -436,7 +441,7 @@ def render_deliberation(public_only: bool):
             st.info("No approved comments yet.")
         else:
             _render_swipe_component(comments, convo_id, headers, compact=True)
-            with st.expander("Comments (optional Like / Dislike)", expanded=False):
+            with st.expander("Anonymous participant comments (optional Like / Dislike)", expanded=False):
                 _render_questionnaire_like_dislike_buttons(comments, convo_id, headers)
         if convo.get("allow_comment_submission", True):
             _render_questionnaire_comment_form(convo_id, headers)
