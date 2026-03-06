@@ -554,7 +554,6 @@ def import_conversation_dataset(conversation_id: str, payload: ConversationDatas
         row_conversation_id = str(item.conversation_id or "").strip()
         if row_conversation_id and row_conversation_id != conversation_id:
             conversation_mismatch_rows += 1
-            continue
 
         comment_id = str(item.comment_id or "").strip()
         if not comment_id:
@@ -563,26 +562,30 @@ def import_conversation_dataset(conversation_id: str, payload: ConversationDatas
         comment_text = str(item.comment_text or "").strip() or None
         is_seed = _normalize_optional_bool(item.is_seed)
         comment_created_at = _normalize_optional_timestamp(item.comment_created_at)
-
-        if comment_text is not None or is_seed is not None or comment_created_at is not None:
-            existing = comments_map.get(comment_id)
-            if existing is None:
-                comments_map[comment_id] = {
-                    "comment_id": comment_id,
-                    "comment_text": comment_text,
-                    "is_seed": bool(is_seed) if is_seed is not None else False,
-                    "comment_created_at": comment_created_at,
-                }
-            else:
-                if comment_text and not existing.get("comment_text"):
-                    existing["comment_text"] = comment_text
-                if is_seed is True:
-                    existing["is_seed"] = True
-                if comment_created_at and not existing.get("comment_created_at"):
-                    existing["comment_created_at"] = comment_created_at
+        existing = comments_map.get(comment_id)
+        if existing is None:
+            comments_map[comment_id] = {
+                "comment_id": comment_id,
+                "comment_text": comment_text,
+                "is_seed": bool(is_seed) if is_seed is not None else False,
+                "comment_created_at": comment_created_at,
+            }
+        else:
+            if comment_text and not existing.get("comment_text"):
+                existing["comment_text"] = comment_text
+            if is_seed is True:
+                existing["is_seed"] = True
+            if comment_created_at and not existing.get("comment_created_at"):
+                existing["comment_created_at"] = comment_created_at
 
         choice = _normalize_vote_choice(item.vote)
         participant_raw = str(item.participant_id or "").strip()
+        participant_cluster_raw = str(item.participant_cluster or "").strip()
+        participant_cluster = (
+            participant_cluster_raw
+            if participant_cluster_raw and participant_cluster_raw.lower() not in {"nan", "none", "null"}
+            else None
+        )
         if choice is not None and participant_raw:
             votes.append(
                 {
@@ -590,6 +593,7 @@ def import_conversation_dataset(conversation_id: str, payload: ConversationDatas
                     "comment_id": comment_id,
                     "choice": int(choice),
                     "reaction_created_at": _normalize_optional_timestamp(item.reaction_created_at),
+                    "participant_cluster": participant_cluster,
                 }
             )
         elif item.vote is not None or participant_raw:
@@ -650,6 +654,7 @@ def import_conversation_dataset(conversation_id: str, payload: ConversationDatas
                 WHERE cm.status = "approved"
                 MERGE (p:Participant {id: v.participant_id})
                 ON CREATE SET p.createdAt = datetime()
+                SET p.importedCluster = coalesce(v.participant_cluster, p.importedCluster)
                 MERGE (p)-[:PARTICIPATED_IN]->(c)
                 MERGE (p)-[r:VOTED]->(cm)
                 SET r.choice = v.choice,
@@ -667,7 +672,7 @@ def import_conversation_dataset(conversation_id: str, payload: ConversationDatas
             unique_votes = int(row["unique_votes"]) if row else 0
 
     unmatched_vote_rows = max(0, len(votes) - imported_rows)
-    skipped_rows = invalid_rows + conversation_mismatch_rows + unmatched_vote_rows
+    skipped_rows = invalid_rows + unmatched_vote_rows
     return {
         "received_rows": len(payload.rows),
         "comments_received": len(comments),

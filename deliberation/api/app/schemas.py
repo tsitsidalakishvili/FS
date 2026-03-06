@@ -84,6 +84,7 @@ class VotesImportRequest(BaseModel):
 class ConversationDatasetImportRow(BaseModel):
     conversation_id: Optional[str] = None
     participant_id: Optional[str] = None
+    participant_cluster: Optional[str] = None
     comment_id: str
     comment_text: Optional[str] = None
     is_seed: Optional[Union[bool, int, str]] = None

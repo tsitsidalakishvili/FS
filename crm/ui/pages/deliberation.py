@@ -622,7 +622,14 @@ def render_deliberation(public_only: bool):
                         },
                     )
                     if result:
+                        created_convo_id = str(result.get("id") or "").strip()
+                        if created_convo_id:
+                            st.session_state["delib_conversation_id"] = created_convo_id
+                        created_topic = str(result.get("topic") or topic).strip()
+                        if created_topic:
+                            st.session_state["delib_conversation_select"] = created_topic
                         st.success("Conversation created.")
+                        st.rerun()
                 else:
                     st.warning("Topic must be at least 3 characters.")
 
@@ -804,8 +811,8 @@ def render_deliberation(public_only: bool):
                     st.markdown("### One-file CSV import (question + comments + reactions)")
                     st.caption(
                         "Upload one CSV containing comment records and vote reactions. "
-                        "Useful columns: conversation_id, participant_id, comment_id, comment_text, "
-                        "is_seed, comment_created_at, vote, reaction_created_at."
+                        "Useful columns: conversation_id, participant_id, participant_cluster, "
+                        "comment_id, comment_text, is_seed, comment_created_at, vote, reaction_created_at."
                     )
                     combined_upload = st.file_uploader(
                         "Combined deliberation CSV",
@@ -830,6 +837,10 @@ def render_deliberation(public_only: bool):
                             participant_default = _guess_column(
                                 columns,
                                 {"participant_id", "participant", "voter_id", "user_id"},
+                            )
+                            participant_cluster_default = _guess_column(
+                                columns,
+                                {"participant_cluster", "cluster_id", "cluster", "segment"},
                             )
                             comment_id_default = _guess_column(
                                 columns,
@@ -870,6 +881,14 @@ def render_deliberation(public_only: bool):
                                     if participant_default in options
                                     else 0,
                                     key="delib_combined_participant_col",
+                                )
+                                participant_cluster_col = st.selectbox(
+                                    "Participant cluster column (optional)",
+                                    options=options,
+                                    index=options.index(participant_cluster_default)
+                                    if participant_cluster_default in options
+                                    else 0,
+                                    key="delib_combined_participant_cluster_col",
                                 )
                             with map_cols[1]:
                                 comment_id_col = st.selectbox(
@@ -967,6 +986,12 @@ def render_deliberation(public_only: bool):
                                             )
                                             if participant_value:
                                                 row_payload["participant_id"] = participant_value
+                                        if participant_cluster_col:
+                                            participant_cluster_value = _clean_optional_text_csv_value(
+                                                source.get(participant_cluster_col)
+                                            )
+                                            if participant_cluster_value:
+                                                row_payload["participant_cluster"] = participant_cluster_value
                                         if comment_text_col:
                                             comment_text_value = _clean_optional_text_csv_value(
                                                 source.get(comment_text_col)
@@ -1005,6 +1030,7 @@ def render_deliberation(public_only: bool):
                                             {"rows": rows},
                                         )
                                         if result:
+                                            mismatch_rows = int(result.get("conversation_mismatch_rows", 0) or 0)
                                             st.success(
                                                 "Imported one-file dataset: "
                                                 f"{result.get('comments_created', 0)} comments created, "
@@ -1012,6 +1038,11 @@ def render_deliberation(public_only: bool):
                                                 f"{result.get('votes_imported', 0)} votes imported, "
                                                 f"{result.get('skipped_rows', 0)} rows skipped."
                                             )
+                                            if mismatch_rows > 0:
+                                                st.caption(
+                                                    f"Note: {mismatch_rows} row(s) had a different conversation_id in the file; "
+                                                    "they were still imported into the selected conversation."
+                                                )
                                             if run_analysis_after_combined:
                                                 refreshed = delib_api_post(
                                                     f"/conversations/{convo_id}/analyze",
@@ -1022,145 +1053,6 @@ def render_deliberation(public_only: bool):
                                                         "Monitor / Reports has been refreshed with the imported dataset."
                                                     )
 
-                    st.markdown("### Votes from CSV (bulk import for clustering)")
-                    st.caption(
-                        "Upload a CSV with participant_id, comment_id, vote (agree/disagree/pass) "
-                        "to pre-load real voting data."
-                    )
-                    votes_upload = st.file_uploader(
-                        "Votes CSV",
-                        type=["csv"],
-                        key="delib_votes_csv_upload",
-                    )
-                    if votes_upload is not None:
-                        try:
-                            df_votes = pd.read_csv(votes_upload)
-                        except Exception as exc:
-                            st.error(f"Could not read votes CSV: {exc}")
-                            df_votes = pd.DataFrame()
-                        if not df_votes.empty:
-                            st.dataframe(df_votes.head(10), use_container_width=True)
-                            columns = df_votes.columns.tolist()
-                            options = [""] + columns
-
-                            participant_default = _guess_column(
-                                columns,
-                                {"participant_id", "participant", "voter_id", "user_id"},
-                            )
-                            comment_default = _guess_column(
-                                columns,
-                                {"comment_id", "statement_id", "seed_id"},
-                            )
-                            vote_default = _guess_column(
-                                columns,
-                                {"vote", "choice", "value"},
-                            )
-
-                            participant_index = (
-                                options.index(participant_default) if participant_default in options else 0
-                            )
-                            comment_index = (
-                                options.index(comment_default) if comment_default in options else 0
-                            )
-                            vote_index = options.index(vote_default) if vote_default in options else 0
-
-                            vote_cols = st.columns(3)
-                            with vote_cols[0]:
-                                participant_col = st.selectbox(
-                                    "Participant ID column",
-                                    options=options,
-                                    index=participant_index,
-                                    key="delib_votes_csv_participant_col",
-                                )
-                            with vote_cols[1]:
-                                comment_col = st.selectbox(
-                                    "Comment ID column",
-                                    options=options,
-                                    index=comment_index,
-                                    key="delib_votes_csv_comment_col",
-                                )
-                            with vote_cols[2]:
-                                vote_col = st.selectbox(
-                                    "Vote column",
-                                    options=options,
-                                    index=vote_index,
-                                    key="delib_votes_csv_vote_col",
-                                )
-
-                            controls = st.columns([1, 1])
-                            with controls[0]:
-                                max_vote_rows = st.number_input(
-                                    "Max rows to import",
-                                    min_value=1,
-                                    max_value=25000,
-                                    value=2000,
-                                    step=100,
-                                    key="delib_votes_csv_max_rows",
-                                )
-                            with controls[1]:
-                                run_analysis_after_import = st.checkbox(
-                                    "Run analysis after import",
-                                    value=True,
-                                    key="delib_votes_csv_run_analysis",
-                                )
-
-                            st.caption("Accepted vote values: agree / disagree / pass (or 1 / -1 / 0)")
-                            if st.button(
-                                "Import votes from CSV",
-                                key="delib_votes_csv_btn",
-                                help="Bulk import participant votes for this conversation.",
-                            ):
-                                if not participant_col or not comment_col or not vote_col:
-                                    st.warning("Select participant, comment, and vote columns.")
-                                else:
-                                    subset = df_votes[[participant_col, comment_col, vote_col]].head(
-                                        int(max_vote_rows)
-                                    )
-                                    vote_rows = []
-                                    for participant_value, comment_value, vote_value in subset.itertuples(
-                                        index=False, name=None
-                                    ):
-                                        participant_id = _clean_id_csv_value(participant_value)
-                                        comment_id = _clean_id_csv_value(comment_value)
-                                        cleaned_vote = _clean_vote_csv_value(vote_value)
-                                        if (
-                                            not participant_id
-                                            or participant_id.lower() in {"nan", "none"}
-                                            or not comment_id
-                                            or comment_id.lower() in {"nan", "none"}
-                                            or cleaned_vote is None
-                                        ):
-                                            continue
-                                        vote_rows.append(
-                                            {
-                                                "participant_id": participant_id,
-                                                "comment_id": comment_id,
-                                                "vote": cleaned_vote,
-                                            }
-                                        )
-                                    if not vote_rows:
-                                        st.warning("No valid vote rows found in the selected columns.")
-                                    else:
-                                        result = delib_api_post(
-                                            f"/conversations/{convo_id}/votes:bulk",
-                                            {"votes": vote_rows},
-                                        )
-                                        if result:
-                                            st.success(
-                                                "Imported "
-                                                f"{result.get('imported_rows', 0)} rows "
-                                                f"({result.get('unique_votes', 0)} unique participant-comment votes). "
-                                                f"Skipped {result.get('skipped_rows', 0)} rows."
-                                            )
-                                            if run_analysis_after_import:
-                                                refreshed = delib_api_post(
-                                                    f"/conversations/{convo_id}/analyze",
-                                                    {},
-                                                )
-                                                if refreshed:
-                                                    st.success(
-                                                        "Monitor / Reports has been refreshed with the imported votes."
-                                                    )
             else:
                 st.info("Select a conversation to edit settings or seed comments.")
 
@@ -1281,7 +1173,7 @@ def render_deliberation(public_only: bool):
                     elif total_votes < 6:
                         st.info(
                             "Vote volume is still low; clustering may look unstable. "
-                            "You can import a votes CSV from Configure."
+                            "You can import a one-file CSV dataset from Configure."
                         )
 
                     st.subheader("Potential agreement topics")
@@ -1370,7 +1262,7 @@ def render_deliberation(public_only: bool):
             with csv_tab:
                 st.subheader("CSV clustering workflow")
                 st.caption(
-                    "Use Configure → Votes from CSV to import participant votes, then click Run analysis in "
+                    "Use Configure → One-file CSV import (question + comments + reactions) to import data, then click Run analysis in "
                     "Vote-based report."
                 )
                 sample_df = pd.DataFrame(
