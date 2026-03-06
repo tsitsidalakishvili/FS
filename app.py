@@ -1657,6 +1657,9 @@ if not supporter_mode:
     render_deliberation_page(public_only=True)
     st.stop()
 
+# Clean up legacy DB selection widget state from older UI versions.
+st.session_state.pop("db_connection_choice", None)
+
 # Sandbox-only DB connection (hidden from UI)
 if not NEO4J_SANDBOX_URI or not NEO4J_SANDBOX_PASSWORD:
     st.sidebar.warning(
