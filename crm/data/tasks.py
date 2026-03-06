@@ -1,3 +1,5 @@
+import streamlit as st
+
 from crm.db.neo4j import run_query, run_write
 from crm.utils.text import clean_text
 
@@ -12,7 +14,7 @@ def create_task(person_email, title, description=None, due_date=None, status="Op
         return False
     due_date = clean_text(due_date)
     status = status if status in TASK_STATUSES else "Open"
-    return run_write(
+    ok = run_write(
         """
         MATCH (p:Person {email: $email})
         CREATE (t:Task {
@@ -34,6 +36,9 @@ def create_task(person_email, title, description=None, due_date=None, status="Op
             "dueDate": due_date,
         },
     )
+    if ok:
+        _clear_task_caches()
+    return ok
 
 
 def update_task_status(task_id, status):
@@ -41,7 +46,7 @@ def update_task_status(task_id, status):
     status = status if status in TASK_STATUSES else None
     if not task_id or not status:
         return False
-    return run_write(
+    ok = run_write(
         """
         MATCH (t:Task {taskId: $taskId})
         SET t.status = $status,
@@ -49,8 +54,12 @@ def update_task_status(task_id, status):
         """,
         {"taskId": task_id, "status": status},
     )
+    if ok:
+        _clear_task_caches()
+    return ok
 
 
+@st.cache_data(ttl=20, show_spinner=False)
 def list_tasks(status=None, person_email=None, group=None, limit=300):
     status = clean_text(status)
     person_email = clean_text(person_email)
@@ -116,7 +125,7 @@ def bulk_create_tasks(rows, default_status="Open"):
         )
     if not cleaned:
         return 0
-    run_write(
+    ok = run_write(
         """
         UNWIND $rows AS row
         MATCH (p:Person {email: row.email})
@@ -133,4 +142,11 @@ def bulk_create_tasks(rows, default_status="Open"):
         """,
         {"rows": cleaned},
     )
-    return len(cleaned)
+    if ok:
+        _clear_task_caches()
+        return len(cleaned)
+    return 0
+
+
+def _clear_task_caches():
+    list_tasks.clear()

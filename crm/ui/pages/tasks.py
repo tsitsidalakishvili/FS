@@ -134,5 +134,6 @@ def render_tasks_tab():
             ok = update_task_status(selected_task, new_status)
             if ok:
                 st.success("Updated.")
+                st.rerun()
             else:
                 st.error("Update failed.")

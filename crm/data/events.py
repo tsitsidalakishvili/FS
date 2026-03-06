@@ -1,9 +1,12 @@
 from uuid import uuid4
 
+import streamlit as st
+
 from crm.db.neo4j import run_query, run_write
 from crm.utils.text import clean_text
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def list_events(limit=200):
     try:
         limit = int(limit)
@@ -38,7 +41,7 @@ def create_event(payload):
     if not name:
         return False
     event_key = clean_text(payload.get("eventKey")) or str(uuid4())
-    return run_write(
+    ok = run_write(
         """
         CREATE (e:Event {
           eventId: randomUUID(),
@@ -64,3 +67,6 @@ def create_event(payload):
             "notes": clean_text(payload.get("notes")),
         },
     )
+    if ok:
+        list_events.clear()
+    return ok

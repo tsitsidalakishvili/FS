@@ -133,7 +133,7 @@ def enrich_people_core(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def load_supporter_summary():
     df = run_query(
         """
@@ -181,7 +181,7 @@ def load_supporter_summary():
     return enrich_people_core(df)
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def load_map_data():
     df = run_query(
         """
@@ -266,6 +266,11 @@ def load_map_data():
     )
     df["ratingColor"] = df["rating"].apply(rating_color)
     return df
+
+
+def clear_people_caches():
+    load_supporter_summary.clear()
+    load_map_data.clear()
 
 
 def answer_chat(question, df_summary):
