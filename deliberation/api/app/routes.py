@@ -19,6 +19,7 @@ from .schemas import (
     ReportOut,
     SeedCommentsRequest,
     SimulateVotesRequest,
+    VotesImportRequest,
     VoteCreate,
 )
 
@@ -83,6 +84,32 @@ def _conversation_out(convo: dict, comments=None, participants=None) -> dict:
         "comments": comments,
         "participants": participants,
     }
+
+
+def _normalize_vote_choice(value) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        as_int = int(value)
+        if float(value) == float(as_int) and as_int in (-1, 0, 1):
+            return as_int
+        return None
+    normalized = str(value or "").strip().lower()
+    if not normalized:
+        return None
+    mapping = {
+        "agree": 1,
+        "yes": 1,
+        "1": 1,
+        "disagree": -1,
+        "no": -1,
+        "-1": -1,
+        "pass": 0,
+        "skip": 0,
+        "neutral": 0,
+        "0": 0,
+    }
+    return mapping.get(normalized)
 
 
 @router.post("/conversations", response_model=ConversationOut)
@@ -373,6 +400,69 @@ def cast_vote(payload: VoteCreate, x_participant_id: Optional[str] = Header(None
     if record is None:
         raise HTTPException(status_code=404, detail="Conversation or comment not found")
     return {"participant_id": participant_id, "comment_id": payload.comment_id, "choice": payload.choice}
+
+
+@router.post("/conversations/{conversation_id}/votes:bulk")
+def import_votes_bulk(conversation_id: str, payload: VotesImportRequest):
+    if not payload.votes:
+        raise HTTPException(status_code=400, detail="No votes provided")
+
+    _get_conversation(conversation_id)
+    cleaned_votes = []
+    invalid_rows = 0
+    for item in payload.votes:
+        participant_raw = str(item.participant_id or "").strip()
+        comment_id = str(item.comment_id or "").strip()
+        choice = _normalize_vote_choice(item.vote)
+        if not participant_raw or not comment_id or choice is None:
+            invalid_rows += 1
+            continue
+        cleaned_votes.append(
+            {
+                "participant_id": _hash_participant(participant_raw),
+                "comment_id": comment_id,
+                "choice": int(choice),
+            }
+        )
+
+    if not cleaned_votes:
+        raise HTTPException(
+            status_code=400,
+            detail="No valid votes found. Use participant_id, comment_id, and vote=agree|disagree|pass.",
+        )
+
+    driver = get_driver()
+    with driver.session(database=NEO4J_DATABASE) as session:
+        records = _execute_write(
+            session,
+            """
+            MATCH (c:Conversation {id: $cid})
+            UNWIND $votes AS v
+            MATCH (c)-[:HAS_COMMENT]->(cm:Comment {id: v.comment_id})
+            WHERE cm.status = "approved"
+            MERGE (p:Participant {id: v.participant_id})
+            ON CREATE SET p.createdAt = datetime()
+            MERGE (p)-[:PARTICIPATED_IN]->(c)
+            MERGE (p)-[r:VOTED]->(cm)
+            SET r.choice = v.choice,
+                r.votedAt = datetime()
+            WITH count(*) AS imported_rows, count(DISTINCT r) AS unique_votes
+            RETURN imported_rows, unique_votes
+            """,
+            {"cid": conversation_id, "votes": cleaned_votes},
+        )
+    row = records[0] if records else None
+    imported_rows = int(row["imported_rows"]) if row else 0
+    unique_votes = int(row["unique_votes"]) if row else 0
+    unmatched_rows = max(0, len(cleaned_votes) - imported_rows)
+    skipped_rows = invalid_rows + unmatched_rows
+    return {
+        "received_rows": len(payload.votes),
+        "valid_rows": len(cleaned_votes),
+        "imported_rows": imported_rows,
+        "unique_votes": unique_votes,
+        "skipped_rows": skipped_rows,
+    }
 
 
 @router.post("/conversations/{conversation_id}/simulate-votes")

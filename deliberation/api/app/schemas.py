@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 from pydantic import BaseModel, Field
 
 
@@ -69,6 +69,16 @@ class SimulateVotesRequest(BaseModel):
     participants: int = Field(default=120, ge=1, le=1000)
     votes_per_participant: int = Field(default=20, ge=1, le=200)
     seed: Optional[int] = None
+
+
+class VoteImportRow(BaseModel):
+    participant_id: str
+    comment_id: str
+    vote: Union[int, str]
+
+
+class VotesImportRequest(BaseModel):
+    votes: List[VoteImportRow]
 
 
 class CommentMetric(BaseModel):
