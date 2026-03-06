@@ -98,3 +98,32 @@ DELIBERATION_API_FALLBACK_URL = "https://fs-stns.onrender.com"
 Notes:
 - Free Render web services can sleep and take ~50+ seconds to wake.
 - The app now uses a longer timeout automatically for `*.onrender.com` APIs.
+
+## WhatsApp group chats connection
+The Outreach page now supports WhatsApp group chat campaigns through a webhook connector.
+
+Set these in `.env` (local) or Streamlit secrets (cloud):
+```toml
+WHATSAPP_GROUP_WEBHOOK_URL = "https://your-automation-endpoint.example/webhook"
+WHATSAPP_GROUP_WEBHOOK_TOKEN = ""
+```
+
+How it works:
+- Add your WhatsApp groups in **Outreach → WhatsApp group chats** (name + invite link).
+- Write a campaign message and click **Send to WhatsApp group**.
+- The app sends a POST request to your webhook; your automation layer (Make/Zapier/worker) delivers it to WhatsApp.
+
+Webhook payload format:
+```json
+{
+  "platform": "whatsapp",
+  "channel": "group",
+  "source": "outreach_page",
+  "group": {
+    "groupId": "uuid",
+    "name": "Group Name",
+    "inviteLink": "https://chat.whatsapp.com/..."
+  },
+  "message": "Campaign message text"
+}
+```

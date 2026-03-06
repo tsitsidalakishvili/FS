@@ -4,6 +4,15 @@ from datetime import date
 from crm.data.people import search_people
 from crm.data.segments import list_segments, run_saved_segment
 from crm.data.tasks import TASK_STATUSES, bulk_create_tasks
+from crm.data.whatsapp_groups import (
+    delete_whatsapp_group,
+    list_whatsapp_groups,
+    upsert_whatsapp_group,
+)
+from crm.services.whatsapp import (
+    send_whatsapp_group_message,
+    whatsapp_group_connection_configured,
+)
 from crm.ui.components.table_utils import render_table_with_export
 from crm.ui.pages.segments import render_segments_tab
 
@@ -233,6 +242,97 @@ def _render_individual_outreach():
     _render_task_builder(target_df, prefix="outreach_individual")
 
 
+def _render_whatsapp_group_chats():
+    st.markdown("### WhatsApp group chats")
+    connected = whatsapp_group_connection_configured()
+    st.write(f"**Connection**: {'Configured' if connected else 'Not configured'}")
+    if not connected:
+        st.caption(
+            "Set `WHATSAPP_GROUP_WEBHOOK_URL` (and optional `WHATSAPP_GROUP_WEBHOOK_TOKEN`) "
+            "in `.env` or Streamlit secrets."
+        )
+
+    with st.expander("Add / update WhatsApp group", expanded=False):
+        with st.form("outreach_whatsapp_group_form", clear_on_submit=True):
+            name = st.text_input("Group name")
+            invite_link = st.text_input("Group invite link")
+            notes = st.text_area("Notes (optional)")
+            save_group = st.form_submit_button("Save group")
+        if save_group:
+            if not (name or "").strip() or not (invite_link or "").strip():
+                st.warning("Group name and invite link are required.")
+            elif upsert_whatsapp_group(name, invite_link, notes):
+                st.success("WhatsApp group saved.")
+            else:
+                st.error("Could not save WhatsApp group.")
+
+    groups_df = list_whatsapp_groups()
+    if groups_df.empty:
+        st.info("No WhatsApp groups yet. Add one to start campaigns.")
+        return
+
+    preview_cols = [c for c in ["name", "inviteLink", "notes", "updatedAt"] if c in groups_df.columns]
+    render_table_with_export(
+        groups_df[preview_cols] if preview_cols else groups_df,
+        key_prefix="outreach_whatsapp_groups",
+        filename="whatsapp_groups.csv",
+    )
+
+    group_names = groups_df["name"].dropna().tolist() if "name" in groups_df.columns else []
+    selected_name = st.selectbox(
+        "Select group chat",
+        options=[""] + group_names,
+        key="outreach_whatsapp_group_selected",
+    )
+    if not selected_name:
+        st.caption("Select a group chat to send a message.")
+        return
+
+    selected_row_df = groups_df[groups_df["name"] == selected_name]
+    if selected_row_df.empty:
+        st.error("Selected group could not be loaded.")
+        return
+    selected_row = selected_row_df.iloc[0]
+    group_payload = {
+        "groupId": selected_row.get("groupId"),
+        "name": selected_row.get("name"),
+        "inviteLink": selected_row.get("inviteLink"),
+    }
+
+    message = st.text_area(
+        "Campaign message",
+        key="outreach_whatsapp_message",
+        help="This message is sent to your webhook connector for WhatsApp group delivery.",
+    )
+    append_invite = st.checkbox(
+        "Append invite link to message",
+        value=False,
+        key="outreach_whatsapp_append_invite",
+    )
+    if st.button("Send to WhatsApp group", key="outreach_whatsapp_send"):
+        final_message = (message or "").strip()
+        invite = (group_payload.get("inviteLink") or "").strip()
+        if append_invite and invite:
+            final_message = (final_message + f"\n\nGroup link: {invite}").strip()
+        ok, error = send_whatsapp_group_message(
+            group=group_payload,
+            message=final_message,
+            source="outreach_page",
+        )
+        if ok:
+            st.success("Message sent to WhatsApp connector.")
+        else:
+            st.error(f"Could not send message: {error}")
+
+    with st.expander("Delete selected group", expanded=False):
+        if st.button("Delete group", key="outreach_whatsapp_delete"):
+            group_id = selected_row.get("groupId")
+            if delete_whatsapp_group(group_id):
+                st.success("Group deleted.")
+            else:
+                st.error("Could not delete group.")
+
+
 def render_outreach_page():
     st.subheader("Outreach")
     st.caption("Choose outreach target type: segments or individuals.")
@@ -248,5 +348,4 @@ def render_outreach_page():
     else:
         _render_individual_outreach()
 
-    st.markdown("### Messaging campaigns")
-    st.info("SMS/email campaign tools are in progress. Use task lists for now.")
+    _render_whatsapp_group_chats()

@@ -8,6 +8,7 @@ from crm.config import (
     FEEDBACK_EMAIL_TO,
     PUBLIC_ONLY,
     SUPPORTER_ACCESS_CODE,
+    WHATSAPP_GROUP_WEBHOOK_URL,
 )
 from crm.services.feedback import feedback_email_configured
 
@@ -33,3 +34,6 @@ def render_admin_page():
     st.write(f"**Configured**: {'Yes' if feedback_email_configured() else 'No'}")
     st.write(f"**From**: {FEEDBACK_EMAIL_FROM or 'Not set'}")
     st.write(f"**To**: {FEEDBACK_EMAIL_TO or 'Not set'}")
+
+    st.markdown("### WhatsApp")
+    st.write(f"**Group webhook configured**: {'Yes' if WHATSAPP_GROUP_WEBHOOK_URL else 'No'}")
