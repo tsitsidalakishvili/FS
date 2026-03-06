@@ -81,6 +81,21 @@ class VotesImportRequest(BaseModel):
     votes: List[VoteImportRow]
 
 
+class ConversationDatasetImportRow(BaseModel):
+    conversation_id: Optional[str] = None
+    participant_id: Optional[str] = None
+    comment_id: str
+    comment_text: Optional[str] = None
+    is_seed: Optional[Union[bool, int, str]] = None
+    comment_created_at: Optional[str] = None
+    vote: Optional[Union[int, str]] = None
+    reaction_created_at: Optional[str] = None
+
+
+class ConversationDatasetImportRequest(BaseModel):
+    rows: List[ConversationDatasetImportRow]
+
+
 class CommentMetric(BaseModel):
     id: str
     text: str

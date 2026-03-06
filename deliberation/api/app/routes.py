@@ -1,6 +1,7 @@
 import hashlib
 import os
 import random
+from datetime import datetime
 from typing import List, Optional
 from uuid import uuid4
 
@@ -9,6 +10,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from .analytics import compute_cluster_insights, compute_metrics, run_clustering
 from .db import NEO4J_DATABASE, get_driver
 from .schemas import (
+    ConversationDatasetImportRequest,
     CommentCreate,
     CommentOut,
     CommentStatusUpdate,
@@ -110,6 +112,41 @@ def _normalize_vote_choice(value) -> Optional[int]:
         "0": 0,
     }
     return mapping.get(normalized)
+
+
+def _normalize_optional_bool(value) -> Optional[bool]:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        as_int = int(value)
+        if float(value) == float(as_int):
+            if as_int == 1:
+                return True
+            if as_int == 0:
+                return False
+        return None
+    normalized = str(value or "").strip().lower()
+    if normalized in {"true", "t", "yes", "y", "1"}:
+        return True
+    if normalized in {"false", "f", "no", "n", "0"}:
+        return False
+    return None
+
+
+def _normalize_optional_timestamp(value) -> Optional[str]:
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw or raw.lower() in {"nan", "none", "null"}:
+        return None
+    candidate = raw[:-1] + "+00:00" if raw.endswith("Z") else raw
+    try:
+        parsed = datetime.fromisoformat(candidate)
+    except Exception:
+        return None
+    return parsed.isoformat()
 
 
 @router.post("/conversations", response_model=ConversationOut)
@@ -498,6 +535,148 @@ def import_votes_bulk(conversation_id: str, payload: VotesImportRequest):
         "valid_rows": len(cleaned_votes),
         "imported_rows": imported_rows,
         "unique_votes": unique_votes,
+        "skipped_rows": skipped_rows,
+    }
+
+
+@router.post("/conversations/{conversation_id}/dataset:bulk")
+def import_conversation_dataset(conversation_id: str, payload: ConversationDatasetImportRequest):
+    if not payload.rows:
+        raise HTTPException(status_code=400, detail="No rows provided")
+    _get_conversation(conversation_id)
+
+    comments_map = {}
+    votes = []
+    invalid_rows = 0
+    conversation_mismatch_rows = 0
+
+    for item in payload.rows:
+        row_conversation_id = str(item.conversation_id or "").strip()
+        if row_conversation_id and row_conversation_id != conversation_id:
+            conversation_mismatch_rows += 1
+            continue
+
+        comment_id = str(item.comment_id or "").strip()
+        if not comment_id:
+            invalid_rows += 1
+            continue
+        comment_text = str(item.comment_text or "").strip() or None
+        is_seed = _normalize_optional_bool(item.is_seed)
+        comment_created_at = _normalize_optional_timestamp(item.comment_created_at)
+
+        if comment_text is not None or is_seed is not None or comment_created_at is not None:
+            existing = comments_map.get(comment_id)
+            if existing is None:
+                comments_map[comment_id] = {
+                    "comment_id": comment_id,
+                    "comment_text": comment_text,
+                    "is_seed": bool(is_seed) if is_seed is not None else False,
+                    "comment_created_at": comment_created_at,
+                }
+            else:
+                if comment_text and not existing.get("comment_text"):
+                    existing["comment_text"] = comment_text
+                if is_seed is True:
+                    existing["is_seed"] = True
+                if comment_created_at and not existing.get("comment_created_at"):
+                    existing["comment_created_at"] = comment_created_at
+
+        choice = _normalize_vote_choice(item.vote)
+        participant_raw = str(item.participant_id or "").strip()
+        if choice is not None and participant_raw:
+            votes.append(
+                {
+                    "participant_id": _hash_participant(participant_raw),
+                    "comment_id": comment_id,
+                    "choice": int(choice),
+                    "reaction_created_at": _normalize_optional_timestamp(item.reaction_created_at),
+                }
+            )
+        elif item.vote is not None or participant_raw:
+            invalid_rows += 1
+
+    comments = list(comments_map.values())
+    driver = get_driver()
+    created_comments = 0
+    updated_comments = 0
+
+    if comments:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            records = _execute_write(
+                session,
+                """
+                MATCH (c:Conversation {id: $cid})
+                UNWIND $comments AS row
+                OPTIONAL MATCH (existing:Comment {id: row.comment_id})
+                WITH c, row, existing IS NOT NULL AS existed
+                MERGE (cm:Comment {id: row.comment_id})
+                ON CREATE SET
+                  cm.text = coalesce(row.comment_text, row.comment_id),
+                  cm.createdAt = CASE
+                    WHEN row.comment_created_at IS NULL THEN datetime()
+                    ELSE datetime(row.comment_created_at)
+                  END,
+                  cm.status = "approved",
+                  cm.isSeed = coalesce(row.is_seed, false),
+                  cm.authorHash = CASE WHEN coalesce(row.is_seed, false) THEN "seed" ELSE "import" END
+                ON MATCH SET
+                  cm.text = coalesce(row.comment_text, cm.text),
+                  cm.status = coalesce(cm.status, "approved"),
+                  cm.isSeed = CASE
+                    WHEN row.is_seed = true THEN true
+                    ELSE coalesce(cm.isSeed, false)
+                  END
+                MERGE (c)-[:HAS_COMMENT]->(cm)
+                RETURN
+                  sum(CASE WHEN existed THEN 0 ELSE 1 END) AS created_comments,
+                  sum(CASE WHEN existed THEN 1 ELSE 0 END) AS updated_comments
+                """,
+                {"cid": conversation_id, "comments": comments},
+            )
+            row = records[0] if records else None
+            created_comments = int(row["created_comments"]) if row else 0
+            updated_comments = int(row["updated_comments"]) if row else 0
+
+    imported_rows = 0
+    unique_votes = 0
+    if votes:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            records = _execute_write(
+                session,
+                """
+                MATCH (c:Conversation {id: $cid})
+                UNWIND $votes AS v
+                MATCH (c)-[:HAS_COMMENT]->(cm:Comment {id: v.comment_id})
+                WHERE cm.status = "approved"
+                MERGE (p:Participant {id: v.participant_id})
+                ON CREATE SET p.createdAt = datetime()
+                MERGE (p)-[:PARTICIPATED_IN]->(c)
+                MERGE (p)-[r:VOTED]->(cm)
+                SET r.choice = v.choice,
+                    r.votedAt = CASE
+                      WHEN v.reaction_created_at IS NULL THEN datetime()
+                      ELSE datetime(v.reaction_created_at)
+                    END
+                WITH count(*) AS imported_rows, count(DISTINCT r) AS unique_votes
+                RETURN imported_rows, unique_votes
+                """,
+                {"cid": conversation_id, "votes": votes},
+            )
+            row = records[0] if records else None
+            imported_rows = int(row["imported_rows"]) if row else 0
+            unique_votes = int(row["unique_votes"]) if row else 0
+
+    unmatched_vote_rows = max(0, len(votes) - imported_rows)
+    skipped_rows = invalid_rows + conversation_mismatch_rows + unmatched_vote_rows
+    return {
+        "received_rows": len(payload.rows),
+        "comments_received": len(comments),
+        "comments_created": created_comments,
+        "comments_updated": updated_comments,
+        "votes_valid": len(votes),
+        "votes_imported": imported_rows,
+        "unique_votes": unique_votes,
+        "conversation_mismatch_rows": conversation_mismatch_rows,
         "skipped_rows": skipped_rows,
     }
 
