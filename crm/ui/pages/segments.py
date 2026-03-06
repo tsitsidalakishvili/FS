@@ -5,10 +5,10 @@ from crm.data.people import get_distinct_values
 from crm.data.segments import (
     delete_segment,
     list_segments,
-    load_segment_filter,
-    run_segment,
+    run_saved_segment,
     upsert_segment,
 )
+from crm.ui.components.table_utils import render_table_with_export
 
 
 def render_segments_tab():
@@ -112,7 +112,7 @@ def render_segments_tab():
         return
 
     st.caption("Existing segments")
-    st.dataframe(
+    render_table_with_export(
         sdf.rename(
             columns={
                 "name": "Name",
@@ -120,7 +120,8 @@ def render_segments_tab():
                 "updatedAt": "Updated",
             }
         ),
-        use_container_width=True,
+        key_prefix="segments_list",
+        filename="segments.csv",
     )
 
     names = sdf["name"].dropna().tolist() if "name" in sdf.columns else []
@@ -178,8 +179,8 @@ def render_segments_tab():
                 st.error("Delete failed.")
 
     if st.session_state.get("segments_last_run") == str(seg_id):
-        spec = load_segment_filter(seg_id)
-        rdf = run_segment(spec, limit=run_limit)
+        with st.spinner("Running segment..."):
+            rdf = run_saved_segment(seg_id, limit=run_limit)
         if rdf.empty:
             st.info("No matches for this segment.")
         else:
@@ -194,4 +195,8 @@ def render_segments_tab():
                 "skills",
             ]
             cols = [col for col in ordered if col in rdf.columns]
-            st.dataframe(rdf[cols] if cols else rdf, use_container_width=True)
+            render_table_with_export(
+                rdf[cols] if cols else rdf,
+                key_prefix=f"segments_run_{seg_id}",
+                filename=f"segment_{seg_id}_results.csv",
+            )

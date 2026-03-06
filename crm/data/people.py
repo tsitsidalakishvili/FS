@@ -1,4 +1,5 @@
 import pandas as pd
+import streamlit as st
 
 from crm.db.neo4j import run_query, run_write
 from crm.utils.text import clean_text
@@ -30,9 +31,15 @@ def upsert_person(payload):
         MERGE (p)-[:LIVES_AT]->(a)
     )
     """
-    return run_write(query, payload)
+    result = run_write(query, payload)
+    if result:
+        search_people.clear()
+        load_person_profile.clear()
+        get_distinct_values.clear()
+    return result
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def search_people(query, limit=50):
     query = clean_text(query)
     try:
@@ -65,6 +72,7 @@ def search_people(query, limit=50):
     )
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def load_person_profile(email):
     email = clean_text(email)
     if not email:
@@ -108,7 +116,7 @@ def update_person_profile(email, payload):
     if not email:
         return False
     # Only updates core fields; tags/skills/involvement are left as-is for now.
-    return run_write(
+    result = run_write(
         """
         MATCH (p:Person {email: $email})
         SET p.firstName = $firstName,
@@ -136,8 +144,13 @@ def update_person_profile(email, payload):
             "facebookGroupMember": bool(payload.get("facebookGroupMember", False)),
         },
     )
+    if result:
+        search_people.clear()
+        load_person_profile.clear()
+    return result
 
 
+@st.cache_data(ttl=120, show_spinner=False)
 def get_distinct_values(label, prop="name"):
     query = f"""
     MATCH (n:{label})
@@ -190,4 +203,9 @@ def bulk_upsert_people(rows):
         MERGE (p)-[:LIVES_AT]->(a)
     )
     """
-    return run_write(query, {"rows": rows})
+    result = run_write(query, {"rows": rows})
+    if result:
+        search_people.clear()
+        load_person_profile.clear()
+        get_distinct_values.clear()
+    return result

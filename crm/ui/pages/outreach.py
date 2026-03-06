@@ -1,8 +1,10 @@
 import streamlit as st
+from datetime import date
 
 from crm.data.people import search_people
-from crm.data.segments import list_segments, load_segment_filter, run_segment
+from crm.data.segments import list_segments, run_saved_segment
 from crm.data.tasks import TASK_STATUSES, bulk_create_tasks
+from crm.ui.components.table_utils import render_table_with_export
 from crm.ui.pages.segments import render_segments_tab
 
 
@@ -51,10 +53,12 @@ def _render_task_builder(target_df, prefix):
         key=f"{prefix}_task_desc_template",
         help="Optional notes. Same placeholders are supported.",
     )
-    due_date = st.text_input(
-        "Due date (YYYY-MM-DD, optional)",
-        value="",
+    set_due = st.checkbox("Set due date", value=False, key=f"{prefix}_task_set_due")
+    due_date_value = st.date_input(
+        "Due date",
+        value=date.today(),
         key=f"{prefix}_task_due",
+        disabled=not set_due,
     )
     status = st.selectbox(
         "Task status",
@@ -75,7 +79,7 @@ def _render_task_builder(target_df, prefix):
                     "email": row.get("email"),
                     "title": _render_template(title_template, context),
                     "description": _render_template(desc_template, context),
-                    "dueDate": due_date,
+                    "dueDate": due_date_value.isoformat() if set_due else "",
                     "status": status,
                 }
             )
@@ -125,7 +129,6 @@ def _render_segment_outreach():
         st.error("Could not resolve segment.")
         return
 
-    spec = load_segment_filter(seg_id)
     limit = st.number_input(
         "Preview limit",
         min_value=10,
@@ -135,30 +138,46 @@ def _render_segment_outreach():
         key="outreach_preview_limit",
         help="Max number of people to preview + target for tasks.",
     )
-    rdf = run_segment(spec, limit=limit)
+    with st.spinner("Loading segment preview..."):
+        rdf = run_saved_segment(seg_id, limit=limit)
     if rdf.empty:
         st.info("No matches for this segment.")
         return
 
     st.markdown("### Segment preview")
     st.caption(f"{len(rdf):,} people in this preview.")
-    st.dataframe(rdf, use_container_width=True)
+    render_table_with_export(
+        rdf,
+        key_prefix="outreach_segment_preview",
+        filename=f"segment_{seg_id}_preview.csv",
+    )
     _render_task_builder(rdf, prefix="outreach_segment")
 
 
 def _render_individual_outreach():
     st.markdown("### Individual outreach")
     st.caption("Select specific people and create outreach tasks.")
-    query = st.text_input(
-        "Search people by name or email",
-        key="outreach_individual_search",
-        help="Find people to include in this outreach batch.",
-    )
-    if not query.strip():
+    with st.form("outreach_individual_search_form"):
+        query = st.text_input(
+            "Search people by name or email",
+            key="outreach_individual_search",
+            help="Find people to include in this outreach batch.",
+        )
+        search_clicked = st.form_submit_button("Search people")
+    if search_clicked:
+        query_clean = (query or "").strip()
+        if len(query_clean) < 2:
+            st.warning("Enter at least 2 characters to search.")
+            st.session_state["outreach_individual_search_committed"] = ""
+        else:
+            st.session_state["outreach_individual_search_committed"] = query_clean
+    committed_query = st.session_state.get("outreach_individual_search_committed", "")
+    if not committed_query:
         st.info("Search to find people for individual outreach.")
         return
 
-    matches = search_people(query, limit=200)
+    with st.spinner("Searching people..."):
+        matches = search_people(committed_query, limit=200)
     if matches.empty:
         st.info("No people found for that search.")
         return
@@ -206,7 +225,11 @@ def _render_individual_outreach():
     ]
     st.markdown("### Selected people")
     st.caption(f"{len(target_df):,} people selected.")
-    st.dataframe(target_df[preview_cols] if preview_cols else target_df, use_container_width=True)
+    render_table_with_export(
+        target_df[preview_cols] if preview_cols else target_df,
+        key_prefix="outreach_individual_preview",
+        filename="outreach_individual_preview.csv",
+    )
     _render_task_builder(target_df, prefix="outreach_individual")
 
 
