@@ -124,13 +124,6 @@ def render_dashboard_page():
         """,
         silent=True,
     )
-    df_types = run_query(
-        """
-        MATCH (p:Person)-[:CLASSIFIED_AS]->(st:SupporterType)
-        RETURN st.name AS type, count(p) AS count
-        """,
-        silent=True,
-    )
     df_type_gender = run_query(
         """
         MATCH (p:Person)-[:CLASSIFIED_AS]->(st:SupporterType)
@@ -232,33 +225,6 @@ def render_dashboard_page():
         indicator_metrics[2].metric("Facebook Group Member (%)", f"{facebook_pct:.1f}%")
 
     with st.expander("People breakdown", expanded=False):
-        if not df_types.empty:
-            type_cols = st.columns(2)
-            with type_cols[0]:
-                st.markdown("**Supporters by Type (Share)**")
-                type_share = (
-                    alt.Chart(df_types)
-                    .mark_arc(innerRadius=55)
-                    .encode(
-                        theta=alt.Theta("count:Q"),
-                        color=alt.Color("type:N"),
-                        tooltip=["type:N", "count:Q"],
-                    )
-                )
-                st.altair_chart(type_share, use_container_width=True)
-            with type_cols[1]:
-                st.markdown("**Supporters by Type (Counts)**")
-                type_bar = (
-                    alt.Chart(df_types)
-                    .mark_bar()
-                    .encode(
-                        x=alt.X("type:N", sort="-y"),
-                        y=alt.Y("count:Q"),
-                        tooltip=["type:N", "count:Q"],
-                    )
-                )
-                st.altair_chart(type_bar, use_container_width=True)
-
         if not df_type_gender.empty:
             st.markdown("**Gender by Supporter Type**")
             gender_stack = (
