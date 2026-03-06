@@ -96,6 +96,10 @@ def age_group(value):
 def enrich_people_core(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
+    if "timeAvailability" not in df.columns:
+        df["timeAvailability"] = "Unspecified"
+    else:
+        df["timeAvailability"] = df["timeAvailability"].fillna("Unspecified")
     df["types"] = df["types"].apply(lambda v: v or [])
     df["group"] = df["types"].apply(classify_group)
     df["age"] = pd.to_numeric(df["age"], errors="coerce")
@@ -160,6 +164,7 @@ def load_supporter_summary():
           p.firstName AS firstName,
           p.lastName AS lastName,
           coalesce(p.gender, 'Unspecified') AS gender,
+          coalesce(p.timeAvailability, 'Unspecified') AS timeAvailability,
           p.age AS age,
           types,
           activityCount,
