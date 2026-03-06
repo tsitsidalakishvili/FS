@@ -1,5 +1,6 @@
 """10-slide client demo presentation for Freedom Square CRM + Deliberation."""
 
+import markdown as _md
 import streamlit as st
 
 
@@ -291,7 +292,13 @@ def render_slides_page():
 
     slide = _SLIDES[st.session_state.slide_index]
 
-    # Slide card
+    # Convert the slide's markdown content to HTML so it can live inside the card div.
+    content_html = _md.markdown(
+        slide["content"],
+        extensions=["tables", "fenced_code"],
+    )
+
+    # Full slide card — header + body in one styled div.
     st.markdown(
         f"""
 <div style="
@@ -311,13 +318,29 @@ def render_slides_page():
     margin-bottom:4px;
   ">Slide {slide['number']} of {total}</div>
   <h2 style="color:#ffffff; margin:0 0 24px 0; font-size:1.8rem;">{slide['title']}</h2>
+  <div style="
+    color:#e0e0e0;
+    font-size:1.05rem;
+    line-height:1.75;
+  ">
+    <style>
+      .slide-body strong {{ color: #ffffff; }}
+      .slide-body code {{ background: rgba(255,255,255,0.12); border-radius: 4px; padding: 1px 6px; font-size:0.95em; }}
+      .slide-body pre {{ background: rgba(0,0,0,0.35); border-radius: 8px; padding: 12px 16px; overflow-x: auto; margin: 12px 0; }}
+      .slide-body pre code {{ background: none; padding: 0; }}
+      .slide-body table {{ border-collapse: collapse; width: 100%; margin: 12px 0; }}
+      .slide-body th {{ background: rgba(255,255,255,0.15); color: #ffffff; padding: 8px 12px; text-align: left; }}
+      .slide-body td {{ padding: 7px 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }}
+      .slide-body ul, .slide-body ol {{ padding-left: 1.4em; margin: 6px 0; }}
+      .slide-body li {{ margin-bottom: 4px; }}
+      .slide-body p {{ margin: 6px 0; }}
+    </style>
+    <div class="slide-body">{content_html}</div>
+  </div>
 </div>
 """,
         unsafe_allow_html=True,
     )
-
-    # Content rendered natively (supports markdown tables, code blocks, etc.)
-    st.markdown(slide["content"])
 
     st.markdown("---")
 
