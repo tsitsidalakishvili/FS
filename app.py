@@ -2157,39 +2157,8 @@ if nav_choice == "People":
         st.subheader("Supporters")
         form_col = st.container()
         with form_col:
-            st.markdown("**Search address**")
-            search_query = st.text_input(
-                "Search address",
-                key="supporter_address_search",
-                help="Type an address/place name, then click “Find address” to pick a geocoded match.",
-            )
-            if st.button(
-                "Find address",
-                key="supporter_address_button",
-                help="Lookup address via OpenStreetMap and fill lat/lon.",
-            ):
-                results = nominatim_search(search_query)
-                st.session_state["supporter_address_results"] = results
             if "supporter_address_results" not in st.session_state:
                 st.session_state["supporter_address_results"] = []
-
-            options = st.session_state["supporter_address_results"]
-            labels = [item.get("display_name", "") for item in options]
-            selected_label = st.selectbox(
-                "Matches",
-                [""] + labels,
-                key="supporter_address_select",
-                help="Select the best match to auto-fill address + latitude/longitude in the form.",
-            )
-            if selected_label:
-                idx = labels.index(selected_label)
-                selected = options[idx]
-                st.session_state["supporter_address_value"] = selected.get("display_name")
-                st.session_state["supporter_lat_value"] = float(selected.get("lat"))
-                st.session_state["supporter_lon_value"] = float(selected.get("lon"))
-                st.session_state["supporter_address"] = selected.get("display_name")
-                st.session_state["supporter_lat"] = float(selected.get("lat"))
-                st.session_state["supporter_lon"] = float(selected.get("lon"))
 
             st.markdown("**New supporter**")
             default_areas = [
@@ -2213,6 +2182,46 @@ if nav_choice == "People":
 
             with st.form("supporter_form"):
                 with st.expander("Contact", expanded=True):
+                    search_cols = st.columns([4, 1])
+                    with search_cols[0]:
+                        search_query = st.text_input(
+                            "Find address",
+                            key="supporter_address_search",
+                            help="Type an address/place name, then click Find address to fetch geocoded matches.",
+                        )
+                    with search_cols[1]:
+                        find_address = st.form_submit_button(
+                            "Find address",
+                            help="Lookup address via OpenStreetMap.",
+                        )
+                    if find_address:
+                        query_clean = (search_query or "").strip()
+                        if not query_clean:
+                            st.warning("Enter an address to search.")
+                        else:
+                            st.session_state["supporter_address_results"] = nominatim_search(
+                                query_clean
+                            )
+
+                    options = st.session_state.get("supporter_address_results", [])
+                    labels = [item.get("display_name", "") for item in options]
+                    selected_label = st.selectbox(
+                        "Address matches",
+                        [""] + labels,
+                        key="supporter_address_select",
+                        help="Select a match to auto-fill Address + Latitude/Longitude.",
+                    )
+                    selected = None
+                    if selected_label:
+                        idx = labels.index(selected_label)
+                        selected = options[idx]
+                        st.session_state["supporter_address_value"] = selected.get("display_name")
+                        st.session_state["supporter_lat_value"] = float(selected.get("lat"))
+                        st.session_state["supporter_lon_value"] = float(selected.get("lon"))
+                        st.session_state["supporter_address"] = selected.get("display_name")
+                        st.session_state["supporter_lat"] = float(selected.get("lat"))
+                        st.session_state["supporter_lon"] = float(selected.get("lon"))
+
                     col_a, col_b = st.columns(2)
                     with col_a:
                         first_name = st.text_input("First Name")
@@ -2244,6 +2253,10 @@ if nav_choice == "People":
                                 format="%.6f",
                                 key="supporter_lon",
                             )
+                    if selected is not None:
+                        address = selected.get("display_name") or address
+                        latitude = float(selected.get("lat"))
+                        longitude = float(selected.get("lon"))
 
                 with st.expander("Engagement", expanded=False):
                     col_a, col_b = st.columns(2)
