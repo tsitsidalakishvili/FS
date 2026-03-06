@@ -1716,7 +1716,11 @@ render_feedback_widget(nav_choice)
 
 
 if nav_choice == "Dashboard":
-    render_dashboard_page()
+    dashboard_overview_tab, dashboard_map_tab = st.tabs(["Overview", "Map"])
+    with dashboard_overview_tab:
+        render_dashboard_page()
+    with dashboard_map_tab:
+        render_map_page()
     st.stop()
     dash_overview, dash_chat = st.tabs(["Overview", "Chatbox"])
     with dash_overview:
@@ -2076,21 +2080,20 @@ if nav_choice == "Dashboard":
 
 if nav_choice == "People":
     st.subheader("People")
+    if st.session_state.get("people_section") == "Map":
+        st.session_state["people_section"] = "Directory"
     section = st.radio(
         "Section",
-        ["Directory", "Profiles", "Tasks", "Map"],
+        ["Directory", "Profiles", "Tasks"],
         horizontal=True,
         key="people_section",
-        help="Switch between people directory, profiles, tasks, and the field map.",
+        help="Switch between people directory, profiles, and tasks.",
     )
     if section == "Profiles":
         render_profiles_tab_page()
         st.stop()
     if section == "Tasks":
         render_tasks_tab_page()
-        st.stop()
-    if section == "Map":
-        render_map_page()
         st.stop()
     group_view = st.radio(
         "View",
