@@ -17,6 +17,21 @@ app = FastAPI(title="Polis-style Deliberation API")
 app.include_router(router)
 
 
+@app.get("/")
+def root():
+    return {
+        "service": "fs-deliberation-api",
+        "status": "ok",
+        "docs": "/docs",
+        "health": "/healthz",
+    }
+
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
+
+
 @app.on_event("startup")
 def on_startup():
     init_constraints()
