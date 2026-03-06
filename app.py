@@ -37,8 +37,8 @@ from crm.ui.pages.dashboard import render_dashboard_page
 from crm.ui.pages.deliberation import render_deliberation as render_deliberation_page
 from crm.ui.pages.events import render_events_page
 from crm.ui.pages.map import render_map_page
+from crm.ui.pages.outreach import render_outreach_page
 from crm.ui.pages.profiles import render_profiles_tab as render_profiles_tab_page
-from crm.ui.pages.segments_outreach import render_segments_outreach_page
 from crm.ui.pages.tasks import render_tasks_tab as render_tasks_tab_page
 from crm.ui.pages.volunteers import render_volunteers_page
 from crm.ui.pages.data import render_data_page
@@ -1693,15 +1693,15 @@ if not db_ok or neo4j_db.driver is None:
         st.error("Missing or invalid Neo4j credentials. Set NEO4J_URI and NEO4J_PASSWORD in .env.")
     st.stop()
 
-if st.session_state.get("main_nav") in {"Segments", "Outreach"}:
-    st.session_state["main_nav"] = "Segments & Outreach"
+if st.session_state.get("main_nav") in {"Segments", "Segments & Outreach"}:
+    st.session_state["main_nav"] = "Outreach"
 
 nav_choice = st.sidebar.radio(
     "Navigate",
     [
         "Dashboard",
         "People",
-        "Segments & Outreach",
+        "Outreach",
         "Events",
         "Volunteers",
         "Data",
@@ -3043,8 +3043,8 @@ if nav_choice == "Profiles":
     render_profiles_tab_page()
 
 
-if nav_choice == "Segments & Outreach":
-    render_segments_outreach_page()
+if nav_choice == "Outreach":
+    render_outreach_page()
 
 
 if nav_choice == "Events":
