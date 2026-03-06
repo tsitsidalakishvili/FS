@@ -208,6 +208,7 @@ def build_comments(rng):
 def build_delib_import_comments(comment_rows):
     return [
         {
+            "external_id": row["external_id"],
             "comment_text": row["comment_text"],
             "status": row["moderation_status"],
             "is_seed": row["is_seed"].lower(),
@@ -376,7 +377,7 @@ def main():
     write_csv(
         deliberation_data_dir / "georgian_politics_comments_simulated.csv",
         delib_comments,
-        ["comment_text", "status", "is_seed"],
+        ["external_id", "comment_text", "status", "is_seed"],
     )
     write_csv(
         deliberation_data_dir / "georgian_politics_votes_simulated.csv",

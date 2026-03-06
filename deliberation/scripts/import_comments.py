@@ -27,17 +27,25 @@ def normalize_status(raw_status: str, is_seed: bool) -> str:
 
 def load_comments(csv_path: str):
     comments = []
+    used_ids = set()
     with open(csv_path, newline="", encoding="utf-8") as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
             text = (row.get("comment_text") or "").strip()
             if not text:
                 continue
+            imported_id = (
+                (row.get("comment_id") or row.get("external_id") or "").strip()
+            )
+            comment_id = imported_id or str(uuid.uuid4())
+            if comment_id in used_ids:
+                comment_id = str(uuid.uuid4())
+            used_ids.add(comment_id)
             is_seed = parse_bool(row.get("is_seed", "false"))
             status = normalize_status(row.get("status"), is_seed)
             comments.append(
                 {
-                    "id": str(uuid.uuid4()),
+                    "id": comment_id,
                     "text": text,
                     "status": status,
                     "is_seed": is_seed,
