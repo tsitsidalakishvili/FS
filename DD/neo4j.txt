@@ -1,0 +1,4 @@
+NEO4J_URI=bolt://3.237.105.144
+NEO4J_USERNAME=neo4j
+NEO4J_PASSWORD=masts-mouths-designation
+NEO4J_DATABASE=neo4j
