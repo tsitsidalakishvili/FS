@@ -237,6 +237,49 @@ def _apply_questionnaire_card_only_layout():
         [data-testid="stVerticalBlock"] > div {
           background: transparent !important;
         }
+        [data-testid="stExpander"] details {
+          background: #F8FCFF !important;
+          border: 1px solid #CFE2EC !important;
+          border-radius: 14px !important;
+        }
+        [data-testid="stExpander"] details > summary {
+          background: #FFFFFF !important;
+          color: #0B3A52 !important;
+          border-radius: 14px !important;
+          padding: 0.4rem 0.7rem !important;
+        }
+        [data-testid="stExpander"] details > div {
+          background: #F8FCFF !important;
+          border-radius: 0 0 14px 14px !important;
+          padding: 0.45rem 0.6rem 0.7rem 0.6rem !important;
+        }
+        [data-testid="stExpander"] details * {
+          color: #0B3A52 !important;
+        }
+        [data-testid="stForm"] {
+          background: #F8FCFF !important;
+          border: 1px solid #CFE2EC !important;
+          border-radius: 14px !important;
+          padding: 0.6rem !important;
+        }
+        .fs-questionnaire-note {
+          background: #F8FCFF;
+          border: 1px solid #CFE2EC;
+          border-radius: 12px;
+          padding: 0.5rem 0.7rem;
+          margin: 0.35rem 0 0.55rem 0;
+          color: #0B3A52;
+        }
+        .fs-questionnaire-note h4 {
+          margin: 0;
+          font-size: 1.02rem;
+          color: #0B3A52;
+        }
+        .fs-questionnaire-note p {
+          margin: 0.2rem 0 0 0;
+          color: #365D72;
+          font-size: 0.9rem;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -427,8 +470,15 @@ def _render_classic_vote_list(comments, convo_id, headers):
 
 
 def _render_questionnaire_comment_form(convo_id, headers):
-    st.markdown("### Add anonymous comment")
-    st.caption("Optional. No registration required.")
+    st.markdown(
+        """
+        <div class="fs-questionnaire-note">
+          <h4>Add anonymous comment</h4>
+          <p>Optional. No registration required.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     with st.form(f"delib_questionnaire_comment_form_{convo_id}", clear_on_submit=True):
         new_comment = st.text_area(
             "Your comment",
