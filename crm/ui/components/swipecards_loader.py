@@ -5,7 +5,7 @@ import tempfile
 import streamlit.components.v1 as components
 
 
-_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V5 */"
+_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V6 */"
 
 
 def _replace_all(content, replacements):
@@ -239,7 +239,12 @@ def _css_append():
 }}
 
 .action-buttons {{
-  width: 360px !important;
+  width: 100% !important;
+  max-width: 420px;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: center !important;
+  align-items: center !important;
   gap: 8px;
 }}
 
@@ -251,6 +256,19 @@ def _css_append():
   padding: 0 14px;
   font-size: 12px !important;
   letter-spacing: 0.03em;
+}}
+
+.btn-disagree,
+.btn-pass,
+.btn-like {{
+  order: 1;
+  flex: 1 1 30%;
+}}
+
+.btn-back {{
+  order: 2;
+  flex: 0 0 70px;
+  margin-top: 2px;
 }}
 
 .btn-disagree {{
@@ -291,7 +309,7 @@ def _build_patched_frontend_dir(package_root: Path):
     if not source_frontend.exists():
         return None
 
-    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v5"
+    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v6"
     target_frontend = base_temp / "frontend"
 
     if not target_frontend.exists():
