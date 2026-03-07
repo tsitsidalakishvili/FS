@@ -149,3 +149,34 @@ Set this in `.env` or Streamlit secrets to connect the external DD app:
 ```toml
 DUE_DILIGENCE_APP_URL = "https://your-dd-app.example"
 ```
+
+## Production runtime + delivery (Docker/CI/Observability)
+
+This repository includes production readiness assets:
+
+- `Dockerfile` (CRM) + `deliberation/api/Dockerfile` (API), both with non-root users and health checks
+- `docker-compose.yml` with CRM, deliberation API, Neo4j, Redis and optional monitoring profile
+- `.github/workflows/ci.yml` for build, test, and deploy-readiness checks
+- `monitoring/` Prometheus + Alertmanager config
+- `docs/environment-config-spec.md` and `docs/runbook.md`
+
+### Start production-like stack locally
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+Optional monitoring stack:
+
+```bash
+docker compose --profile monitoring up -d
+```
+
+Useful endpoints:
+
+- CRM health: `http://localhost:8501/_stcore/health`
+- API liveness: `http://localhost:8010/healthz`
+- API readiness: `http://localhost:8010/readyz`
+- API metrics: `http://localhost:8010/metrics`
+- Prometheus (profile): `http://localhost:9090`

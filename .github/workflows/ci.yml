@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Test and quality gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r deliberation/api/requirements.txt -r requirements-dev.txt
+
+      - name: Compile Python sources
+        run: python -m compileall app.py crm deliberation/api/app tests
+
+      - name: Run unit tests
+        env:
+          DELIBERATION_SKIP_DB_INIT: "true"
+        run: pytest -q tests/deliberation_api
+
+  build:
+    name: Build container images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build CRM image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: local/crm:ci
+
+      - name: Build deliberation API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./deliberation/api
+          file: ./deliberation/api/Dockerfile
+          push: false
+          tags: local/deliberation-api:ci
+
+  deploy-readiness:
+    name: Deploy readiness checks
+    runs-on: ubuntu-latest
+    needs: [test, build]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deployment config
+        run: |
+          docker compose -f docker-compose.yml config -q
+          python scripts/ci/deploy_readiness.py
