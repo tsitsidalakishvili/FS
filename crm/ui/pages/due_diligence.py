@@ -1,8 +1,14 @@
 import streamlit as st
 import streamlit.components.v1 as components
-from urllib.parse import quote_plus, urlencode
+from urllib.parse import parse_qsl, quote_plus, urlencode, urlparse, urlunparse
 
 from crm.config import FEEDBACK_EMAIL_TO, get_config
+from crm.data.competitors import (
+    COMPETITOR_TYPES,
+    delete_competitor,
+    list_competitors,
+    upsert_competitor,
+)
 
 
 def _link_button(label: str, url: str) -> None:
@@ -27,15 +33,98 @@ def _build_gmail_compose_url(*, to_email: str, subject: str, body: str) -> str:
     return "https://mail.google.com/mail/?" + urlencode(params, quote_via=quote_plus)
 
 
+def _append_query_params(url: str, params: dict[str, str]) -> str:
+    clean_url = str(url or "").strip()
+    if not clean_url:
+        return ""
+    parsed = urlparse(clean_url)
+    merged = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    for key, value in params.items():
+        text = str(value or "").strip()
+        if text:
+            merged[key] = text
+    new_query = urlencode(merged, quote_via=quote_plus)
+    return urlunparse(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            new_query,
+            parsed.fragment,
+        )
+    )
+
+
+def _render_competitor_watchlist() -> tuple[str, str]:
+    st.markdown("#### Competitor watchlist")
+    with st.form("dd_competitor_form", clear_on_submit=True):
+        form_cols = st.columns([2, 1])
+        with form_cols[0]:
+            comp_name = st.text_input("Competitor name")
+        with form_cols[1]:
+            comp_type = st.selectbox("Type", list(COMPETITOR_TYPES), index=0)
+        comp_notes = st.text_area("Notes (optional)", height=80)
+        save_clicked = st.form_submit_button("Save competitor")
+    if save_clicked:
+        if not str(comp_name or "").strip():
+            st.warning("Competitor name is required.")
+        elif upsert_competitor(comp_name, comp_type, comp_notes):
+            st.success("Competitor saved.")
+            st.rerun()
+        else:
+            st.error("Could not save competitor.")
+
+    competitors_df = list_competitors()
+    if competitors_df.empty:
+        st.caption("No competitors saved yet.")
+        return "", ""
+
+    st.dataframe(competitors_df, use_container_width=True, height=220)
+    options = {}
+    for row in competitors_df.itertuples(index=False):
+        competitor_id = str(getattr(row, "competitorId", "") or "").strip()
+        name = str(getattr(row, "name", "") or "").strip()
+        competitor_type = str(getattr(row, "competitorType", "") or "").strip()
+        if not competitor_id or not name:
+            continue
+        label = f"{name} ({competitor_type})"
+        if label in options:
+            label = f"{label} [{competitor_id[:8]}]"
+        options[label] = (name, competitor_type, competitor_id)
+
+    if not options:
+        return "", ""
+
+    selected_label = st.selectbox(
+        "Select competitor",
+        options=[""] + list(options.keys()),
+        key="dd_competitor_select",
+    )
+    selected = options.get(selected_label)
+    if selected:
+        name, competitor_type, competitor_id = selected
+        delete_cols = st.columns([2, 1])
+        with delete_cols[1]:
+            if st.button("Delete selected", key="dd_delete_competitor"):
+                if delete_competitor(competitor_id):
+                    st.success("Competitor deleted.")
+                    st.rerun()
+                else:
+                    st.error("Could not delete competitor.")
+        return name, competitor_type
+    return "", ""
+
+
 def _render_workflow_buttons() -> None:
     st.markdown("### Workflow steps (icons + buttons)")
     steps = [
         {
-            "id": "crm",
-            "label": "1) CRM Context",
-            "icon": "👤",
-            "detail": "Starts when organizer opens DD from a profile/task/event context.",
-            "timing": "When DD tab opens",
+            "id": "start",
+            "label": "1) Start Point",
+            "icon": "🚦",
+            "detail": "Investigation can start from CRM context OR a rival/competitor lead.",
+            "timing": "At intake",
         },
         {
             "id": "resolve",
@@ -123,7 +212,9 @@ def render_due_diligence_page():
             penwidth=1.6
           ];
 
-          CRMContext [label="1. CRM Context\\nProfile / Task / Event"];
+          CRMContext [label="CRM Context\\nProfile / Task / Event"];
+          RivalLead [label="Rival / Competitor Lead\\nPerson or Company", fillcolor="#FFF5EB", color="#B96A1D"];
+          StartPoint [label="1. Start Point\\nChoose intake source", shape=diamond, fillcolor="#EEF4FF"];
           EntityResolution [label="2. Entity Resolution\\nPerson/Company ID"];
           Enrichment [label="3. Enrichment\\nWikidata / OpenSanctions / News"];
           GraphStore [label="4. Neo4j Graph\\nwith source + ingested_at"];
@@ -132,7 +223,9 @@ def render_due_diligence_page():
           ActionBacklog [label="7. CRM Actions\\nFollow-up / Escalation"];
           WeeklyMonitor [label="Weekly Monitoring\\nrefresh news links", fillcolor="#EEF7EE", color="#2C7A4B"];
 
-          CRMContext -> EntityResolution [label="tab opened"];
+          CRMContext -> StartPoint [label="from CRM"];
+          RivalLead -> StartPoint [label="direct intake"];
+          StartPoint -> EntityResolution [label="subject selected"];
           EntityResolution -> Enrichment [label="run checks"];
           EntityResolution -> GraphStore [label="entity exists"];
           Enrichment -> GraphStore [label="new entities + links"];
@@ -179,6 +272,50 @@ def render_due_diligence_page():
             "Use this tab to access the working Due Diligence app and run live checks. "
             "Case workflow (Phase 2) will build on top of this foundation."
         )
+        st.markdown("#### Investigation start point")
+        start_mode = st.radio(
+            "Start from",
+            ["CRM context", "Rival person", "Rival company", "Competitor watchlist"],
+            horizontal=True,
+            key="dd_start_mode",
+        )
+        subject_name = ""
+        subject_type = ""
+        if start_mode == "CRM context":
+            subject_name = st.text_input(
+                "CRM subject (person/company)",
+                key="dd_start_crm_subject",
+                help="Use this when the investigation starts from CRM context.",
+            ).strip()
+            subject_type = st.selectbox(
+                "CRM subject type",
+                ["Person", "Company"],
+                key="dd_start_crm_subject_type",
+            )
+        elif start_mode == "Rival person":
+            subject_name = st.text_input(
+                "Rival person name",
+                key="dd_start_rival_person",
+                help="Investigate a rival individual directly without opening a CRM profile first.",
+            ).strip()
+            subject_type = "Person"
+        elif start_mode == "Rival company":
+            subject_name = st.text_input(
+                "Rival company name",
+                key="dd_start_rival_company",
+                help="Investigate a rival organization directly.",
+            ).strip()
+            subject_type = "Company"
+        else:
+            with st.expander("Manage competitor watchlist", expanded=True):
+                selected_name, selected_type = _render_competitor_watchlist()
+            subject_name = selected_name
+            subject_type = selected_type
+
+        if subject_name:
+            st.success(f"Current DD subject: {subject_name} ({subject_type})")
+        else:
+            st.caption("Select or enter a subject to prefill DD app launch and Gmail share.")
 
         app_url = (
             str(get_config("DUE_DILIGENCE_APP_URL") or "").strip()
@@ -187,9 +324,17 @@ def render_due_diligence_page():
         if app_url:
             st.success("External Due Diligence app is configured.")
             st.text_input("Configured app URL", value=app_url, key="dd_app_url_preview")
+            app_launch_url = _append_query_params(
+                app_url,
+                {
+                    "subject": subject_name,
+                    "subject_type": subject_type,
+                    "start_mode": start_mode.replace(" ", "_").lower(),
+                },
+            )
             action_cols = st.columns(3)
             with action_cols[0]:
-                _link_button("🚀 Open DD app", app_url)
+                _link_button("🚀 Open DD app", app_launch_url or app_url)
             with action_cols[1]:
                 if st.button("🖼️ Toggle embed", key="dd_embed_toggle", use_container_width=True):
                     st.session_state["dd_embed_external_app"] = not bool(
@@ -204,13 +349,18 @@ def render_due_diligence_page():
                 )
                 gmail_url = _build_gmail_compose_url(
                     to_email=to_email,
-                    subject="Due Diligence app link",
-                    body=f"Please review the Due Diligence app:\n{app_url}",
+                    subject="Due Diligence subject review",
+                    body=(
+                        f"Start mode: {start_mode}\n"
+                        f"Subject: {subject_name or 'not set'}\n"
+                        f"Subject type: {subject_type or 'not set'}\n\n"
+                        f"Due Diligence app:\n{app_launch_url or app_url}"
+                    ),
                 )
                 _link_button("✉️ Open in Gmail", gmail_url)
             with st.expander("Open app inside this tab", expanded=False):
                 if st.checkbox("Embed external DD app", key="dd_embed_external_app"):
-                    components.iframe(app_url, height=900, scrolling=True)
+                    components.iframe(app_launch_url or app_url, height=900, scrolling=True)
         else:
             st.info(
                 "External DD app URL is not configured yet. "
