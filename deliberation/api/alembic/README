@@ -1,0 +1,5 @@
+Alembic migration environment for secure backend schema.
+
+Run from deliberation/api:
+  alembic -c alembic.ini upgrade head
+

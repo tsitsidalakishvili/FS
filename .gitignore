@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 agent_chain/runs/
 AIteam/agent_chain/runs/
+deliberation/api/secure_backend.db
