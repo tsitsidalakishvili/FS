@@ -5,6 +5,7 @@ from urllib.parse import urlencode
 import streamlit as st
 
 from crm.clients.deliberation import delib_api_get, render_delib_api_unavailable
+from crm.ui.components.slack_share import render_slack_link_sender
 from crm.ui.components.whatsapp_share import render_whatsapp_group_link_sender
 
 FORMS_DIR = os.path.abspath(
@@ -172,6 +173,18 @@ def render_survey_block(kind):
         send_button_label="Send survey link to WhatsApp group",
         append_link_by_default=False,
     )
+    render_slack_link_sender(
+        key_prefix=f"survey_share_slack_{kind}",
+        source=f"survey_share_{kind}",
+        link=link,
+        default_message=st.session_state.get(
+            survey_message_key,
+            _build_message(template, link),
+        ),
+        title="Send survey link to Slack",
+        send_button_label="Send survey link to Slack",
+        append_link_by_default=False,
+    )
     st.markdown("**Preview**")
     for section in template.get("sections", []):
         st.markdown(f"- {section.get('title','Section')}")
@@ -278,6 +291,15 @@ def render_questionnaire_block(kind, show_expander=True):
                 send_button_label="Send deliberation link to WhatsApp group",
                 append_link_by_default=False,
             )
+            render_slack_link_sender(
+                key_prefix=f"delib_questionnaire_share_slack_{kind}",
+                source="deliberation_questionnaire_share",
+                link=public_link,
+                default_message=st.session_state.get(message_key, message),
+                title="Send deliberation link to Slack",
+                send_button_label="Send deliberation link to Slack",
+                append_link_by_default=False,
+            )
             with st.expander("Admin link sharing (optional)", expanded=False):
                 admin_message = (
                     f"Freedom Square deliberation admin preview ({label})\n\n"
@@ -298,6 +320,15 @@ def render_questionnaire_block(kind, show_expander=True):
                     default_message=st.session_state.get(admin_message_key, admin_message),
                     title="Send admin preview link to WhatsApp group",
                     send_button_label="Send admin preview link to WhatsApp group",
+                    append_link_by_default=False,
+                )
+                render_slack_link_sender(
+                    key_prefix=f"delib_questionnaire_admin_share_slack_{kind}",
+                    source="deliberation_questionnaire_admin_share",
+                    link=admin_link,
+                    default_message=st.session_state.get(admin_message_key, admin_message),
+                    title="Send admin preview link to Slack",
+                    send_button_label="Send admin preview link to Slack",
                     append_link_by_default=False,
                 )
 

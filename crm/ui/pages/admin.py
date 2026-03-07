@@ -7,6 +7,8 @@ from crm.config import (
     FEEDBACK_EMAIL_FROM,
     FEEDBACK_EMAIL_TO,
     PUBLIC_ONLY,
+    SLACK_USERNAME,
+    SLACK_WEBHOOK_URL,
     SUPPORTER_ACCESS_CODE,
     WHATSAPP_GROUP_WEBHOOK_URL,
 )
@@ -15,6 +17,7 @@ from crm.data.segments import delete_segment, list_segments
 from crm.data.tasks import delete_task, list_tasks
 from crm.data.whatsapp_groups import delete_whatsapp_group, list_whatsapp_groups
 from crm.services.feedback import feedback_email_configured
+from crm.services.slack import send_slack_message
 
 
 def _render_delete_conversations():
@@ -266,6 +269,24 @@ def render_admin_page():
 
     st.markdown("### WhatsApp")
     st.write(f"**Group webhook configured**: {'Yes' if WHATSAPP_GROUP_WEBHOOK_URL else 'No'}")
+
+    st.markdown("### Slack")
+    slack_configured = bool(SLACK_WEBHOOK_URL)
+    st.write(f"**Webhook configured**: {'Yes' if slack_configured else 'No'}")
+    st.write(f"**Username**: {SLACK_USERNAME or 'Not set'}")
+    with st.form("admin_slack_test_form"):
+        test_message = st.text_area(
+            "Test Slack message",
+            value="Freedom Square CRM is connected to Slack.",
+            height=90,
+        )
+        send_test = st.form_submit_button("Send test message to Slack")
+    if send_test:
+        ok, error = send_slack_message(test_message, source="admin_page_test")
+        if ok:
+            st.success("Test message sent to Slack.")
+        else:
+            st.error(f"Could not send Slack test message: {error}")
 
     st.markdown("---")
     st.markdown("### Admin controls (delete records)")

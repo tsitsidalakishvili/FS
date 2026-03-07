@@ -127,3 +127,15 @@ Webhook payload format:
   "message": "Campaign message text"
 }
 ```
+
+## Slack connection
+You can connect Slack using an Incoming Webhook and send shareable links directly from:
+- Questionnaire templates (survey + deliberation links)
+- Events registration link sharing
+- Admin page (test message)
+
+Set these in `.env` (local) or Streamlit secrets (cloud):
+```toml
+SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+SLACK_USERNAME = "Freedom Square CRM"
+```

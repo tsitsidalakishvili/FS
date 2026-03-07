@@ -15,6 +15,7 @@ from crm.data.events import (
     list_events,
     register_person_to_event,
 )
+from crm.ui.components.slack_share import render_slack_link_sender
 from crm.ui.components.table_utils import render_table_with_export
 from crm.ui.components.whatsapp_share import render_whatsapp_group_link_sender
 
@@ -331,6 +332,21 @@ def render_events_page():
                     ),
                     title="Send event registration link to WhatsApp group",
                     send_button_label="Send event link to WhatsApp group",
+                    append_link_by_default=False,
+                )
+                render_slack_link_sender(
+                    key_prefix=f"events_share_link_slack_{selected_event_id}",
+                    source="events_registration_share",
+                    link=public_link,
+                    default_message=st.session_state.get(
+                        "events_share_link_message",
+                        (
+                            f"Event registration: {selected_event_label}\n\n"
+                            f"Please register using this link:\n{public_link}"
+                        ),
+                    ),
+                    title="Send event registration link to Slack",
+                    send_button_label="Send event link to Slack",
                     append_link_by_default=False,
                 )
 
