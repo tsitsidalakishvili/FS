@@ -5,7 +5,7 @@ import tempfile
 import streamlit.components.v1 as components
 
 
-_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V19 */"
+_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V20 */"
 
 
 def _replace_all(content, replacements):
@@ -53,6 +53,15 @@ def _js_replacements():
             '<button class="action-btn btn-back" onclick="swipeCards.goBack()">',
             '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()"><span class="fs-swipe-icon fs-down" aria-hidden="true"></span><span class="fs-swipe-copy"><b>PASS</b><small>SWIPE DOWN</small></span></button>\n'
             '          <button class="action-btn btn-back" onclick="swipeCards.goBack()">',
+        ),
+        (
+            '<button class="action-btn btn-back" onclick="swipeCards.goBack()">\n'
+            '            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n'
+            '              <path d="M12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21C8.5 21 5.5 18.5 4 15.5" stroke="#FFA500" stroke-width="2.5" stroke-linecap="round" fill="none"/>\n'
+            '              <path d="M2 14L4 12.5L6 14" stroke="#FFA500" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>\n'
+            '            </svg>\n'
+            '          </button>',
+            '<button class="action-btn btn-back" onclick="swipeCards.goBack()"><span class="fs-swipe-icon fs-back" aria-hidden="true"></span><span class="fs-swipe-copy"><b>BACK</b><small>UNDO LAST</small></span></button>',
         ),
         (
             '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">PASS</button>',
@@ -294,6 +303,10 @@ def _css_append():
   background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxNDAgOTAnPgogIDxyZWN0IHdpZHRoPScxNDAnIGhlaWdodD0nOTAnIGZpbGw9J25vbmUnLz4KICA8Y2lyY2xlIGN4PSc3MCcgY3k9JzI4JyByPScyMicgZmlsbD0nI0Q4RUNGNycvPgogIDxwYXRoIGQ9J003MCAxOHYxOG0wIDBsLTgtOG04IDhsOC04JyBzdHJva2U9JyMwQjNBNTInIHN0cm9rZS13aWR0aD0nNCcgc3Ryb2tlLWxpbmVjYXA9J3JvdW5kJyBzdHJva2UtbGluZWpvaW49J3JvdW5kJyBmaWxsPSdub25lJy8+CiAgPGcgZmlsbD0nIzdCODc5NCc+CiAgICA8cGF0aCBkPSdNNzAgNTBsLTEyLTEwaDh2LTZoOHY2aDh6Jy8+CiAgICA8cGF0aCBkPSdNNzAgNjZsLTEyLTEwaDh2LTZoOHY2aDh6JyBvcGFjaXR5PScwLjgnLz4KICA8L2c+Cjwvc3ZnPg==");
 }}
 
+.fs-back {{
+  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxNDAgOTAnPgogIDxyZWN0IHdpZHRoPScxNDAnIGhlaWdodD0nOTAnIGZpbGw9J25vbmUnLz4KICA8Y2lyY2xlIGN4PSc3MCcgY3k9JzQ1JyByPScyNCcgZmlsbD0nI0Q4RUNGNycvPgogIDxwYXRoIGQ9J004NiA0NUg2MG0wIDBsOC04bS04IDhsOCA4JyBzdHJva2U9JyMwQjNBNTInIHN0cm9rZS13aWR0aD0nNCcgc3Ryb2tlLWxpbmVjYXA9J3JvdW5kJyBzdHJva2UtbGluZWpvaW49J3JvdW5kJyBmaWxsPSdub25lJy8+CiAgPHBhdGggZD0nTTk0IDMyYTIyIDIyIDAgMSAxLTIgMzAnIHN0cm9rZT0nIzdCODc5NCcgc3Ryb2tlLXdpZHRoPSc0JyBzdHJva2UtbGluZWNhcD0ncm91bmQnIGZpbGw9J25vbmUnLz4KPC9zdmc+");
+}}
+
 .fs-swipe-copy {{
   display: flex;
   flex-direction: column;
@@ -314,22 +327,17 @@ def _css_append():
 
 .btn-disagree,
 .btn-pass,
-.btn-like {{
+.btn-like,
+.btn-back {{
   order: 1;
   flex: 1 1 calc(33.333% - 10px);
   max-width: 176px;
 }}
 
 .btn-back {{
-  order: 2;
-  flex: 0 0 90px;
-  min-height: 46px !important;
-  border-radius: 999px !important;
-  margin-top: 4px;
-  font-size: 12px !important;
-  padding: 6px 12px !important;
-  flex-direction: row !important;
-  gap: 6px !important;
+  background: rgba(255, 255, 255, 0.90) !important;
+  border-color: #D1DEE8 !important;
+  color: #0B3A52 !important;
 }}
 
 .btn-disagree {{
@@ -471,7 +479,7 @@ def _build_patched_frontend_dir(package_root: Path):
     if not source_frontend.exists():
         return None
 
-    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v19"
+    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v20"
     target_frontend = base_temp / "frontend"
 
     if not target_frontend.exists():
