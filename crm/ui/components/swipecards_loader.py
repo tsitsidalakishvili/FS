@@ -5,7 +5,7 @@ import tempfile
 import streamlit.components.v1 as components
 
 
-_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V14 */"
+_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V15 */"
 
 
 def _replace_all(content, replacements):
@@ -267,24 +267,24 @@ def _css_append():
 }}
 
 .fs-swipe-icon {{
-  width: 34px;
-  height: 24px;
-  flex: 0 0 34px;
+  width: 52px;
+  height: 34px;
+  flex: 0 0 52px;
   background-repeat: no-repeat;
   background-size: contain;
   background-position: center;
 }}
 
 .fs-left {{
-  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxMjAgNzInPjxnIGZpbGw9J25vbmUnIHN0cm9rZT0nIzBCM0E1Micgc3Ryb2tlLXdpZHRoPSc1JyBzdHJva2UtbGluZWNhcD0ncm91bmQnIHN0cm9rZS1saW5lam9pbj0ncm91bmQnPjxwYXRoIGQ9J002NCA1OFYyNGMwLTQgMy03IDctN3M3IDMgNyA3djE4Jy8+PHBhdGggZD0nTTcxIDU4SDQ3Yy03IDAtMTItNS0xMi0xMlYzM2MwLTQgMy03IDctN3M3IDMgNyA3djcnLz48Y2lyY2xlIGN4PSc2NCcgY3k9JzE4JyByPSc4Jy8+PHBhdGggZD0nTTI0IDE4bC0xMCA4IDEwIDgnLz48cGF0aCBkPSdNMzggMThsLTEwIDggMTAgOCcvPjwvZz48L3N2Zz4=");
+  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxNDAgOTAnPgogIDxyZWN0IHdpZHRoPScxNDAnIGhlaWdodD0nOTAnIGZpbGw9J25vbmUnLz4KICA8ZyBmaWxsPScjMEEwQTBBJz4KICAgIDxwYXRoIGQ9J003NCA3N1YyOGMwLTUgNC05IDktOXM5IDQgOSA5djIwbDkgMmM3IDIgMTIgOCAxMiAxNnYxMUg3NHonLz4KICAgIDxyZWN0IHg9JzQxJyB5PSc0Nycgd2lkdGg9JzI4JyBoZWlnaHQ9JzMwJyByeD0nMTQnLz4KICAgIDxjaXJjbGUgY3g9JzgyJyBjeT0nMTgnIHI9JzEwJy8+CiAgPC9nPgogIDxnIGZpbGw9JyM5Q0EzQUYnPgogICAgPHBhdGggZD0nTTI2IDIyTDE0IDMybDEyIDEwaDlMMjMgMzJsMTItMTB6Jy8+CiAgICA8cGF0aCBkPSdNNDQgMjJMMzIgMzJsMTIgMTBoOUw0MSAzMmwxMi0xMHonLz4KICA8L2c+Cjwvc3ZnPg==");
 }}
 
 .fs-right {{
-  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxMjAgNzInPjxnIGZpbGw9J25vbmUnIHN0cm9rZT0nIzBCM0E1Micgc3Ryb2tlLXdpZHRoPSc1JyBzdHJva2UtbGluZWNhcD0ncm91bmQnIHN0cm9rZS1saW5lam9pbj0ncm91bmQnPjxwYXRoIGQ9J001NiA1OFYyNGMwLTQtMy03LTctN3MtNyAzLTcgN3YxOCcvPjxwYXRoIGQ9J000OSA1OGgyNGM3IDAgMTItNSAxMi0xMlYzM2MwLTQtMy03LTctN3MtNyAzLTcgN3Y3Jy8+PGNpcmNsZSBjeD0nNTYnIGN5PScxOCcgcj0nOCcvPjxwYXRoIGQ9J004MiAxOGwxMCA4LTEwIDgnLz48cGF0aCBkPSdNNjggMThsMTAgOC0xMCA4Jy8+PC9nPjwvc3ZnPg==");
+  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxNDAgOTAnPgogIDxyZWN0IHdpZHRoPScxNDAnIGhlaWdodD0nOTAnIGZpbGw9J25vbmUnLz4KICA8ZyBmaWxsPScjMEEwQTBBJz4KICAgIDxwYXRoIGQ9J002NiA3N1YyOGMwLTUtNC05LTktOXMtOSA0LTkgOXYyMGwtOSAyYy03IDItMTIgOC0xMiAxNnYxMWgzOXonLz4KICAgIDxyZWN0IHg9JzcxJyB5PSc0Nycgd2lkdGg9JzI4JyBoZWlnaHQ9JzMwJyByeD0nMTQnLz4KICAgIDxjaXJjbGUgY3g9JzU4JyBjeT0nMTgnIHI9JzEwJy8+CiAgPC9nPgogIDxnIGZpbGw9JyM5Q0EzQUYnPgogICAgPHBhdGggZD0nTTExNCAyMmwxMiAxMC0xMiAxMGgtOWwxMi0xMC0xMi0xMHonLz4KICAgIDxwYXRoIGQ9J005NiAyMmwxMiAxMC0xMiAxMGgtOWwxMi0xMC0xMi0xMHonLz4KICA8L2c+Cjwvc3ZnPg==");
 }}
 
 .fs-down {{
-  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxMjAgNzInPjxnIGZpbGw9J25vbmUnIHN0cm9rZT0nIzBCM0E1Micgc3Ryb2tlLXdpZHRoPSc1JyBzdHJva2UtbGluZWNhcD0ncm91bmQnIHN0cm9rZS1saW5lam9pbj0ncm91bmQnPjxwYXRoIGQ9J002MyAxNnYyN2MwIDctNSAxMi0xMiAxMkgzN2MtNCAwLTctMy03LTdzMy03IDctN2g3Jy8+PHBhdGggZD0nTTYzIDIzYzAtNCAzLTcgNy03czcgMyA3IDd2MjAnLz48Y2lyY2xlIGN4PSc2MycgY3k9JzEyJyByPSc4Jy8+PHBhdGggZD0nTTE2IDM0bDggMTAgOC0xMCcvPjxwYXRoIGQ9J00xNiA0OGw4IDEwIDgtMTAnLz48L2c+PC9zdmc+");
+  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxNDAgOTAnPgogIDxyZWN0IHdpZHRoPScxNDAnIGhlaWdodD0nOTAnIGZpbGw9J25vbmUnLz4KICA8ZyBmaWxsPScjMEEwQTBBJz4KICAgIDxwYXRoIGQ9J003MiAxMHYzM2MwIDEwLTggMTgtMTggMThIMzhjLTUgMC05LTQtOS05czQtOSA5LTloOVYyM2MwLTUgNC05IDktOXM5IDQgOSA5djIwYzAtNCA0LTggOC04czggNCA4IDhWMTB6Jy8+CiAgICA8Y2lyY2xlIGN4PSc1NicgY3k9JzEyJyByPSc5Jy8+CiAgPC9nPgogIDxnIGZpbGw9JyM5Q0EzQUYnPgogICAgPHBhdGggZD0nTTE0IDQwbDEwIDEyIDEwLTEyaC04bC0yIDMtMi0zeicvPgogICAgPHBhdGggZD0nTTE0IDU2bDEwIDEyIDEwLTEyaC04bC0yIDMtMi0zeicvPgogIDwvZz4KPC9zdmc+");
 }}
 
 .fs-swipe-copy {{
@@ -336,9 +336,9 @@ def _css_append():
 
 .action-indicator .fs-swipe-icon {{
   filter: brightness(0) invert(1);
-  width: 26px;
-  height: 18px;
-  flex: 0 0 26px;
+  width: 42px;
+  height: 28px;
+  flex: 0 0 42px;
 }}
 
 .fs-ind-copy {{
@@ -416,7 +416,7 @@ def _build_patched_frontend_dir(package_root: Path):
     if not source_frontend.exists():
         return None
 
-    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v14"
+    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v15"
     target_frontend = base_temp / "frontend"
 
     if not target_frontend.exists():
