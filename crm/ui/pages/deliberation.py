@@ -149,8 +149,8 @@ def _build_swipe_card_image(comment, idx, total, compact=False):
     )
     footer_text = html.escape(footer)
 
-    panel_y = 210 if compact else 230
-    panel_h = 860 if compact else 680
+    panel_y = 150 if compact else 165
+    panel_h = 510 if compact else 420
     text_block_h = ((len(question_lines) - 1) * line_height) + font_size
     start_y = int(panel_y + max(74, (panel_h - text_block_h) / 2) + (font_size * 0.82))
     line_elements = []
@@ -162,25 +162,23 @@ def _build_swipe_card_image(comment, idx, total, compact=False):
         )
     lines_svg = "".join(line_elements)
     subtitle_svg = (
-        f"<text x='64' y='152' font-size='24' fill='#D8ECF7'>{subtitle}</text>"
-        if not compact
-        else ""
+        f"<text x='54' y='124' font-size='18' fill='#D8ECF7'>{subtitle}</text>"
+        if compact
+        else f"<text x='54' y='130' font-size='20' fill='#D8ECF7'>{subtitle}</text>"
     )
     footer_svg = (
-        "<rect x='32' y='944' width='656' height='144' rx='26' fill='url(#footerGrad)'/>"
-        "<line x1='360' y1='968' x2='360' y2='1062' stroke='#4F8DA8' stroke-width='2'/>"
-        "<text x='64' y='996' font-size='26' font-weight='700' fill='#FFFFFF'>DISLIKE</text>"
-        "<text x='64' y='1032' font-size='21' fill='#D8ECF7'>SWIPE LEFT</text>"
-        "<text x='414' y='996' font-size='26' font-weight='700' fill='#FFFFFF'>LIKE</text>"
-        "<text x='414' y='1032' font-size='21' fill='#D8ECF7'>SWIPE RIGHT</text>"
-        "<text x='258' y='1072' font-size='20' fill='#D8ECF7'>PASS  •  SWIPE DOWN</text>"
-        f"<text x='64' y='1082' font-size='18' fill='#D8ECF7'>{footer_text}</text>"
+        "<rect x='32' y='598' width='656' height='92' rx='24' fill='url(#footerGrad)'/>"
+        "<line x1='360' y1='612' x2='360' y2='678' stroke='#4F8DA8' stroke-width='2'/>"
+        "<text x='56' y='632' font-size='20' font-weight='700' fill='#FFFFFF'>DISLIKE · SWIPE LEFT</text>"
+        "<text x='392' y='632' font-size='20' font-weight='700' fill='#FFFFFF'>LIKE · SWIPE RIGHT</text>"
+        "<text x='56' y='666' font-size='16' fill='#D8ECF7'>PASS · SWIPE DOWN</text>"
+        f"<text x='340' y='666' font-size='14' fill='#D8ECF7'>{footer_text}</text>"
         if not compact
         else ""
     )
 
     svg = (
-        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 720 1120'>"
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 720 720'>"
         "<defs>"
         "<linearGradient id='bgGrad' x1='0%' y1='0%' x2='100%' y2='100%'>"
         "<stop offset='0%' stop-color='#0B3A52'/>"
@@ -200,12 +198,12 @@ def _build_swipe_card_image(comment, idx, total, compact=False):
         "<stop offset='100%' stop-color='#0A2D3D'/>"
         "</linearGradient>"
         "</defs>"
-        "<rect width='720' height='1120' rx='40' fill='url(#bgGrad)'/>"
-        "<circle cx='640' cy='110' r='120' fill='#FFFFFF' opacity='0.10'/>"
-        "<circle cx='90' cy='1060' r='170' fill='#FFFFFF' opacity='0.08'/>"
-        "<rect x='20' y='20' width='680' height='1080' rx='36' fill='#FFFFFF' opacity='0.16'/>"
-        "<rect x='32' y='32' width='656' height='170' rx='26' fill='url(#headerGrad)'/>"
-        f"<text x='64' y='102' font-size='36' font-weight='700' fill='#FFFFFF'>{title}</text>"
+        "<rect width='720' height='720' rx='38' fill='url(#bgGrad)'/>"
+        "<circle cx='640' cy='90' r='98' fill='#FFFFFF' opacity='0.10'/>"
+        "<circle cx='86' cy='658' r='120' fill='#FFFFFF' opacity='0.08'/>"
+        "<rect x='20' y='20' width='680' height='680' rx='34' fill='#FFFFFF' opacity='0.16'/>"
+        "<rect x='32' y='32' width='656' height='104' rx='22' fill='url(#headerGrad)'/>"
+        f"<text x='54' y='98' font-size='32' font-weight='700' fill='#FFFFFF'>{title}</text>"
         f"{subtitle_svg}"
         f"<rect x='32' y='{panel_y}' width='656' height='{panel_h}' rx='34' fill='url(#questionGrad)' stroke='#A9D2E6' stroke-width='3'/>"
         f"{lines_svg}"

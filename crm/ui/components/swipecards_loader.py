@@ -5,7 +5,7 @@ import tempfile
 import streamlit.components.v1 as components
 
 
-_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V12 */"
+_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V13 */"
 
 
 def _replace_all(content, replacements):
@@ -377,7 +377,16 @@ def _css_append():
 
 /* Avoid top/bottom clipping of tall card images on mobile */
 .cards-stack {{
-  height: min(78vh, 640px) !important;
+  width: min(92vw, 520px) !important;
+  height: min(92vw, 520px) !important;
+  max-width: 520px !important;
+  max-height: 520px !important;
+  margin: 0 auto 8px auto !important;
+}}
+
+.swipe-card {{
+  width: 100% !important;
+  height: 100% !important;
 }}
 
 .swipe-card .card-image {{
@@ -393,7 +402,10 @@ def _css_append():
 
 @media (max-width: 480px) {{
   .cards-stack {{
-    height: min(74vh, 620px) !important;
+    width: min(94vw, 440px) !important;
+    height: min(94vw, 440px) !important;
+    max-width: 440px !important;
+    max-height: 440px !important;
   }}
 }}
 """
@@ -404,7 +416,7 @@ def _build_patched_frontend_dir(package_root: Path):
     if not source_frontend.exists():
         return None
 
-    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v12"
+    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v13"
     target_frontend = base_temp / "frontend"
 
     if not target_frontend.exists():
