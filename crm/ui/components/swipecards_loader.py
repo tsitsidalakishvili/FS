@@ -5,7 +5,7 @@ import tempfile
 import streamlit.components.v1 as components
 
 
-_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V15 */"
+_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V16 */"
 
 
 def _replace_all(content, replacements):
@@ -250,11 +250,11 @@ def _css_append():
 
 .action-btn {{
   width: auto !important;
-  min-width: 78px;
-  min-height: 58px !important;
+  min-width: 120px;
+  min-height: 88px !important;
   height: auto !important;
   border-radius: 999px !important;
-  padding: 6px 12px;
+  padding: 10px 14px;
   font-size: 12px !important;
   line-height: 1.15 !important;
   text-align: left !important;
@@ -263,13 +263,15 @@ def _css_append():
   align-items: center !important;
   justify-content: center !important;
   gap: 8px !important;
+  overflow: visible !important;
   letter-spacing: 0.03em;
 }}
 
 .fs-swipe-icon {{
-  width: 52px;
-  height: 34px;
-  flex: 0 0 52px;
+  width: 68px;
+  height: 44px;
+  flex: 0 0 68px;
+  display: inline-block;
   background-repeat: no-repeat;
   background-size: contain;
   background-position: center;
@@ -295,11 +297,11 @@ def _css_append():
 }}
 
 .fs-swipe-copy b {{
-  font-size: 11px;
+  font-size: 12px;
 }}
 
 .fs-swipe-copy small {{
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.04em;
 }}
 
@@ -312,7 +314,7 @@ def _css_append():
 
 .btn-back {{
   order: 2;
-  flex: 0 0 70px;
+  flex: 0 0 88px;
   margin-top: 2px;
 }}
 
@@ -416,7 +418,7 @@ def _build_patched_frontend_dir(package_root: Path):
     if not source_frontend.exists():
         return None
 
-    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v15"
+    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v16"
     target_frontend = base_temp / "frontend"
 
     if not target_frontend.exists():
