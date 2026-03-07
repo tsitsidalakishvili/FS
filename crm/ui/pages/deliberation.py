@@ -477,8 +477,8 @@ def _render_questionnaire_comment_form(convo_id, headers):
     st.markdown(
         """
         <div class="fs-questionnaire-note">
-          <h4>Add anonymous comment</h4>
-          <p>Optional. No registration required.</p>
+          <h4>Add comment</h4>
+          <p>No registration required.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -608,7 +608,7 @@ def render_deliberation(public_only: bool):
             focus_key = f"delib_questionnaire_focus_comment_{convo_id}"
             pinned_focus_comment_id = st.session_state.get(focus_key)
             resolved_focus_comment_id = pinned_focus_comment_id or current_comment_id
-            with st.expander("Anonymous participant comments (optional Like / Dislike)", expanded=False):
+            with st.expander("Comments", expanded=False):
                 _render_questionnaire_like_dislike_buttons(
                     comments,
                     convo_id,
