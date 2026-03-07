@@ -140,7 +140,7 @@ def _build_swipe_card_image(comment, idx, total, compact=False):
     line_height = typography["line_height"]
 
     title = html.escape(f"Question {idx + 1} / {total}")
-    subtitle = html.escape("DISLIKE · SWIPE LEFT   •   LIKE · SWIPE RIGHT   •   PASS · SWIPE DOWN")
+    subtitle = html.escape("👍 AGREE · SWIPE RIGHT   •   👎 DISAGREE · SWIPE LEFT   •   ⏭ PASS · SWIPE DOWN")
     footer = (
         "Reactions: "
         f"👍 {_safe_int(comment.get('agree_count', 0))}   "
@@ -169,9 +169,9 @@ def _build_swipe_card_image(comment, idx, total, compact=False):
     footer_svg = (
         "<rect x='32' y='598' width='656' height='92' rx='24' fill='url(#footerGrad)'/>"
         "<line x1='360' y1='612' x2='360' y2='678' stroke='#4F8DA8' stroke-width='2'/>"
-        "<text x='56' y='632' font-size='20' font-weight='700' fill='#FFFFFF'>DISLIKE · SWIPE LEFT</text>"
-        "<text x='392' y='632' font-size='20' font-weight='700' fill='#FFFFFF'>LIKE · SWIPE RIGHT</text>"
-        "<text x='56' y='666' font-size='16' fill='#D8ECF7'>PASS · SWIPE DOWN</text>"
+        "<text x='56' y='632' font-size='20' font-weight='700' fill='#FFFFFF'>👎 DISAGREE · SWIPE LEFT</text>"
+        "<text x='392' y='632' font-size='20' font-weight='700' fill='#FFFFFF'>👍 AGREE · SWIPE RIGHT</text>"
+        "<text x='56' y='666' font-size='16' fill='#D8ECF7'>⏭ PASS · SWIPE DOWN</text>"
         f"<text x='340' y='666' font-size='14' fill='#D8ECF7'>{footer_text}</text>"
         if not compact
         else ""
@@ -380,9 +380,9 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
     if not compact:
         st.progress((total_swiped / len(comments)) if comments else 0.0)
         hint_cols = st.columns(3)
-        hint_cols[0].markdown("**DISLIKE**  \nSWIPE LEFT")
-        hint_cols[1].markdown("**LIKE**  \nSWIPE RIGHT")
-        hint_cols[2].markdown("**PASS**  \nSWIPE DOWN")
+        hint_cols[0].markdown("**👍 AGREE**  \nSWIPE RIGHT")
+        hint_cols[1].markdown("**👎 DISAGREE**  \nSWIPE LEFT")
+        hint_cols[2].markdown("**⏭ PASS**  \nSWIPE DOWN")
         st.caption("Each card shows one question/comment only.")
         st.caption(f"{total_swiped}/{len(comments)} reactions recorded")
 
