@@ -11,7 +11,14 @@ CONSTRAINTS = [
     "CREATE CONSTRAINT dataset_id IF NOT EXISTS FOR (n:Dataset) REQUIRE n.id IS UNIQUE",
 ]
 
+INDEXES = [
+    "CREATE FULLTEXT INDEX dd_person_search IF NOT EXISTS FOR (n:Person) ON EACH [n.full_name, n.aliases]",
+    "CREATE FULLTEXT INDEX dd_company_search IF NOT EXISTS FOR (n:Company) ON EACH [n.name, n.aliases]",
+]
+
 
 def initialize_schema(client: Neo4jClient) -> None:
     for statement in CONSTRAINTS:
+        client.run_write(statement)
+    for statement in INDEXES:
         client.run_write(statement)

@@ -139,3 +139,13 @@ Set these in `.env` (local) or Streamlit secrets (cloud):
 SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/XXX/YYY/ZZZ"
 SLACK_USERNAME = "Freedom Square CRM"
 ```
+
+## Due Diligence tab integration
+The CRM **Due Diligence** tab now has:
+- **How it works**: workflow-style architecture + block connection timeline
+- **Actual app**: launch/embed the dedicated DD app
+
+Set this in `.env` or Streamlit secrets to connect the external DD app:
+```toml
+DUE_DILIGENCE_APP_URL = "https://your-dd-app.example"
+```

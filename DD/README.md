@@ -23,6 +23,11 @@ Local-first relationship intelligence platform built with Streamlit and Neo4j.
 
 - `python -m app.scripts.run_weekly`
 
+Phase 1 behavior:
+- Weekly monitoring now creates `(:Person|:Company)-[:MENTIONED_IN]->(:NewsArticle)` links.
+- Entity search uses Neo4j fulltext indexes (created by `init_db`).
+- Ingestion writes stamp source + ingestion timestamp metadata on nodes/relationships.
+
 ## Schedule weekly job (Windows)
 
 1. Update paths in `schedule_weekly.ps1`.

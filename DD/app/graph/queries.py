@@ -1,14 +1,43 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from app.graph.neo4j import Neo4jClient
 
 
 ALLOWED_ENTITY_LABELS = {"Person", "Company"}
+LUCENE_SPECIAL_CHARS_RE = re.compile(r'[+\-!(){}\[\]^"~*?:\\/]|&&|\|\|')
 
 
 def search_entities(client: Neo4jClient, term: str, limit: int = 25) -> list[dict[str, Any]]:
+    clean_term = (term or "").strip()
+    if not clean_term:
+        return []
+
+    fulltext_query = _build_fulltext_query(clean_term)
+    if fulltext_query:
+        try:
+            rows = client.run(
+                """
+                CALL {
+                    CALL db.index.fulltext.queryNodes("dd_person_search", $query) YIELD node, score
+                    RETURN node AS entity, "Person" AS label, score
+                    UNION ALL
+                    CALL db.index.fulltext.queryNodes("dd_company_search", $query) YIELD node, score
+                    RETURN node AS entity, "Company" AS label, score
+                }
+                RETURN entity, label, score
+                ORDER BY score DESC
+                LIMIT $limit
+                """,
+                {"query": fulltext_query, "limit": limit},
+            )
+            return _map_entity_rows(rows)
+        except Exception:
+            # Fallback keeps search usable until schema/indexes are initialized.
+            pass
+
     query = """
     CALL {
         MATCH (p:Person)
@@ -23,7 +52,40 @@ def search_entities(client: Neo4jClient, term: str, limit: int = 25) -> list[dic
     RETURN entity, label
     LIMIT $limit
     """
-    rows = client.run(query, {"term": term.lower(), "limit": limit})
+    rows = client.run(query, {"term": clean_term.lower(), "limit": limit})
+    return _map_entity_rows(rows)
+
+
+def list_tracked_entities(client: Neo4jClient, limit: int = 100) -> list[dict[str, Any]]:
+    rows = client.run(
+        """
+        CALL {
+            MATCH (p:Person)
+            RETURN "Person" AS label, p.id AS id, coalesce(p.full_name, p.name) AS name
+            UNION ALL
+            MATCH (c:Company)
+            RETURN "Company" AS label, c.id AS id, coalesce(c.name, c.full_name) AS name
+        }
+        WITH label, id, name
+        WHERE id IS NOT NULL AND name IS NOT NULL AND trim(name) <> ""
+        RETURN label, id, name
+        ORDER BY toLower(name) ASC
+        LIMIT $limit
+        """,
+        {"limit": limit},
+    )
+    return [{"label": row["label"], "id": row["id"], "name": row["name"]} for row in rows]
+
+
+def _build_fulltext_query(term: str) -> str:
+    cleaned = LUCENE_SPECIAL_CHARS_RE.sub(" ", term)
+    tokens = [token.strip().lower() for token in cleaned.split() if token.strip()]
+    if not tokens:
+        return ""
+    return " AND ".join(f"{token}*" for token in tokens)
+
+
+def _map_entity_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     results = []
     for row in rows:
         entity = row["entity"]
