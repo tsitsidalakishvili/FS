@@ -68,17 +68,18 @@ def _render_architecture_card(title: str, concept: str, outcome: str, tone: str 
         <div style="
             border: 1px solid {palette['border']};
             background: {palette['bg']};
-            border-radius: 12px;
-            padding: 12px 14px;
-            margin: 4px 0;
+            border-radius: 10px;
+            padding: 8px 10px;
+            margin: 0;
+            min-height: 132px;
         ">
-            <div style="font-size: 16px; font-weight: 700; color: {palette['title']}; margin-bottom: 6px;">
+            <div style="font-size: 14px; font-weight: 700; color: {palette['title']}; margin-bottom: 4px;">
                 {title}
             </div>
-            <div style="font-size: 14px; margin-bottom: 4px;">
+            <div style="font-size: 12px; margin-bottom: 3px;">
                 <b>Concept:</b> {concept}
             </div>
-            <div style="font-size: 14px;">
+            <div style="font-size: 12px;">
                 <b>Outcome:</b> {outcome}
             </div>
         </div>
@@ -89,9 +90,10 @@ def _render_architecture_card(title: str, concept: str, outcome: str, tone: str 
 
 def _render_workflow_architecture() -> None:
     st.markdown("### Workflow architecture")
-    st.caption("Two intake paths feed one due diligence pipeline.")
+    st.caption("Compact architecture map: entry -> analysis -> decisions")
 
-    entry_cols = st.columns(2)
+    st.markdown("#### Entry sources")
+    entry_cols = st.columns(3, gap="small")
     with entry_cols[0]:
         _render_architecture_card(
             "CRM Context",
@@ -106,58 +108,73 @@ def _render_workflow_architecture() -> None:
             "Direct intake for competitor analysis and monitoring.",
             tone="entry",
         )
-
-    st.markdown("<div style='text-align:center;font-size:24px;'>↓</div>", unsafe_allow_html=True)
-
-    steps = [
-        (
+    with entry_cols[2]:
+        _render_architecture_card(
             "1) Start Point",
-            "Normalize intake path and choose subject.",
-            "One decision context for downstream checks.",
-        ),
+            "Normalize intake path and choose the target subject.",
+            "Single investigation context for downstream checks.",
+            tone="default",
+        )
+
+    st.caption("Flow: CRM Context / Competitor Lead -> Start Point")
+
+    st.markdown("#### Analysis pipeline")
+    analysis_cols = st.columns(4, gap="small")
+    analysis_cards = [
         (
             "2) Entity Resolution",
             "Match or create canonical IDs to avoid duplicates.",
             "Trusted subject identity in the graph.",
+            "default",
         ),
         (
             "3) Enrichment",
-            "Pull and connect external evidence (Wikidata/OpenSanctions/News).",
+            "Pull external evidence from Wikidata, OpenSanctions, and News.",
             "Broader relationship graph with source-backed facts.",
+            "default",
         ),
         (
             "4) Neo4j Graph",
             "Store nodes and relationships with provenance metadata.",
             "Queryable graph state for risk and reporting.",
+            "default",
         ),
         (
             "5) Risk View",
-            "Run 2-hop exposure analysis over direct + indirect ties.",
+            "Run 2-hop exposure analysis over direct and indirect ties.",
             "Prioritized risk signals for analyst decisions.",
+            "default",
         ),
-        (
+    ]
+    for col, (title, concept, outcome, tone) in zip(analysis_cols, analysis_cards):
+        with col:
+            _render_architecture_card(title, concept, outcome, tone=tone)
+    st.caption("Flow: Entity Resolution -> Enrichment -> Neo4j Graph -> Risk View")
+
+    st.markdown("#### Decision and operations")
+    decision_cols = st.columns(3, gap="small")
+    with decision_cols[0]:
+        _render_architecture_card(
             "6) Report",
             "Summarize findings with evidence and recommendations.",
             "Decision-ready PDF for internal sharing.",
-        ),
-        (
+            tone="default",
+        )
+    with decision_cols[1]:
+        _render_architecture_card(
             "7) CRM Actions",
             "Convert findings into follow-up, escalation, or monitoring tasks.",
             "Accountable operational next steps.",
-        ),
-    ]
-    for idx, (title, concept, outcome) in enumerate(steps):
-        _render_architecture_card(title, concept, outcome, tone="default")
-        if idx < len(steps) - 1:
-            st.markdown("<div style='text-align:center;font-size:22px;'>↓</div>", unsafe_allow_html=True)
-
-    st.markdown("### Continuous loop")
-    _render_architecture_card(
-        "Weekly Monitoring",
-        "Refresh media mentions and update existing entities continuously.",
-        "Risk posture stays current between manual investigations.",
-        tone="monitor",
-    )
+            tone="default",
+        )
+    with decision_cols[2]:
+        _render_architecture_card(
+            "Weekly Monitoring",
+            "Refresh media mentions and update existing entities continuously.",
+            "Risk posture stays current between manual investigations.",
+            tone="monitor",
+        )
+    st.caption("Flow: Report -> CRM Actions, with Weekly Monitoring feeding new signals.")
 
 
 def _render_competitor_watchlist() -> tuple[str, str]:
