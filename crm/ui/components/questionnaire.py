@@ -278,6 +278,28 @@ def render_questionnaire_block(kind, show_expander=True):
                 send_button_label="Send deliberation link to WhatsApp group",
                 append_link_by_default=False,
             )
+            with st.expander("Admin link sharing (optional)", expanded=False):
+                admin_message = (
+                    f"Freedom Square deliberation admin preview ({label})\n\n"
+                    "Configure / moderate / reports with this internal link:\n"
+                    + admin_link
+                )
+                admin_message_key = f"questionnaire_admin_message_{kind}"
+                st.text_area(
+                    "Admin message to send",
+                    value=admin_message,
+                    height=120,
+                    key=admin_message_key,
+                )
+                render_whatsapp_group_link_sender(
+                    key_prefix=f"delib_questionnaire_admin_share_{kind}",
+                    source="deliberation_questionnaire_admin_share",
+                    link=admin_link,
+                    default_message=st.session_state.get(admin_message_key, admin_message),
+                    title="Send admin preview link to WhatsApp group",
+                    send_button_label="Send admin preview link to WhatsApp group",
+                    append_link_by_default=False,
+                )
 
             comments = delib_api_get(
                 f"/conversations/{convo_id}/comments?status=approved", show_error=False
