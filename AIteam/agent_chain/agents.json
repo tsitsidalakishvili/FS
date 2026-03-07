@@ -5,9 +5,9 @@
       "prompt": "prompts/Supervisor.md",
       "temperature": 0.2
     },
-    "CampaignOpsExpert": {
-      "display_name": "Campaign Operations (CampaignOpsExpert)",
-      "prompt": "prompts/CampaignOpsExpert.md",
+    "StreamlitEngineer": {
+      "display_name": "Legacy Flow Mapper (StreamlitEngineer)",
+      "prompt": "prompts/StreamlitEngineer.md",
       "temperature": 0.2
     },
     "ProductManager": {
@@ -15,9 +15,19 @@
       "prompt": "prompts/ProductManager.md",
       "temperature": 0.2
     },
-    "Neo4jArchitect": {
-      "display_name": "Graph Architect (Neo4jArchitect)",
-      "prompt": "prompts/Neo4jArchitect.md",
+    "CampaignOpsExpert": {
+      "display_name": "Campaign Operations (CampaignOpsExpert)",
+      "prompt": "prompts/CampaignOpsExpert.md",
+      "temperature": 0.2
+    },
+    "SolutionArchitect": {
+      "display_name": "System Architect (SolutionArchitect)",
+      "prompt": "prompts/SolutionArchitect.md",
+      "temperature": 0.2
+    },
+    "Neo4jDBEngineer": {
+      "display_name": "Graph DB Engineer (Neo4jDBEngineer)",
+      "prompt": "prompts/Neo4jDBEngineer.md",
       "temperature": 0.2
     },
     "BackendEngineer": {
@@ -25,9 +35,14 @@
       "prompt": "prompts/BackendEngineer.md",
       "temperature": 0.2
     },
-    "StreamlitEngineer": {
-      "display_name": "Streamlit Engineer (StreamlitEngineer)",
-      "prompt": "prompts/StreamlitEngineer.md",
+    "FrontendEngineer": {
+      "display_name": "Frontend Engineer (FrontendEngineer)",
+      "prompt": "prompts/FrontendEngineer.md",
+      "temperature": 0.2
+    },
+    "PlatformDevOpsEngineer": {
+      "display_name": "Platform & DevOps (PlatformDevOpsEngineer)",
+      "prompt": "prompts/PlatformDevOpsEngineer.md",
       "temperature": 0.2
     },
     "PrivacyCompliance": {
@@ -40,19 +55,9 @@
       "prompt": "prompts/SecurityReviewer.md",
       "temperature": 0.2
     },
-    "QAReviewer": {
-      "display_name": "QA / Testing (QAReviewer)",
-      "prompt": "prompts/QAReviewer.md",
-      "temperature": 0.2
-    },
-    "IntegrationsEngineer": {
-      "display_name": "Integrations (IntegrationsEngineer)",
-      "prompt": "prompts/IntegrationsEngineer.md",
-      "temperature": 0.2
-    },
-    "DeploymentEngineer": {
-      "display_name": "Deployments (DeploymentEngineer)",
-      "prompt": "prompts/DeploymentEngineer.md",
+    "QAReleaseReviewer": {
+      "display_name": "QA & Release (QAReleaseReviewer)",
+      "prompt": "prompts/QAReleaseReviewer.md",
       "temperature": 0.2
     },
     "ExecutorEngineer": {
@@ -63,44 +68,52 @@
   },
   "kickoff_pipeline": [
     {
+      "agent": "StreamlitEngineer",
+      "message": "Kickoff: map the existing Streamlit app behavior into a legacy flow inventory and parity matrix for migration to Next.js + FastAPI."
+    },
+    {
       "agent": "ProductManager",
-      "message": "Kickoff: propose the product direction to evolve the existing Streamlit CRM into a campaign operations platform (political mobilization) with clear user personas, jobs-to-be-done, and a prioritized roadmap."
+      "message": "Kickoff: define migration scope, priorities, release slices, and testable acceptance criteria based on the legacy flow map."
     },
     {
       "agent": "CampaignOpsExpert",
-      "message": "Kickoff: outline campaign operations workflows this app should support (field, organizing, volunteer management, events, comms, fundraising) and translate them into concrete features and data needs."
+      "message": "Kickoff: validate product workflows against real organizer/operator operations and identify edge cases and fallback paths."
     },
     {
-      "agent": "Neo4jArchitect",
-      "message": "Kickoff: propose a Neo4j graph model for campaign operations (people, org units, events, outreach, relationships, tags, activities) and point out how it fits the existing repo's Neo4j usage."
+      "agent": "SolutionArchitect",
+      "message": "Kickoff: design the target architecture for Next.js frontend, FastAPI backend, Neo4j DBMS, Redis workers, CI/CD, and observability."
     },
     {
-      "agent": "BackendEngineer",
-      "message": "Kickoff: propose backend/API boundaries (including the existing deliberation FastAPI service) and what new endpoints/services we might need; include deployment considerations."
-    },
-    {
-      "agent": "StreamlitEngineer",
-      "message": "Kickoff: propose a UX and information architecture for campaign ops within Streamlit (views, navigation, key dashboards) that complements the existing `app.py`."
-    },
-    {
-      "agent": "PrivacyCompliance",
-      "message": "Kickoff: identify privacy/compliance requirements for a campaign CRM (PII, consent, retention, access control) and immediate mitigations/guardrails."
+      "agent": "Neo4jDBEngineer",
+      "message": "Kickoff: define graph domain model, constraints/indexes, and critical Cypher query patterns for production usage."
     },
     {
       "agent": "SecurityReviewer",
-      "message": "Kickoff: identify top security risks in this repo/app and how to mitigate them (secrets, auth, injection, safe code changes)."
+      "message": "Kickoff: perform pre-implementation security review for architecture and data model; provide prioritized remediation requirements."
     },
     {
-      "agent": "QAReviewer",
-      "message": "Kickoff: propose a testing strategy and acceptance criteria for the first milestones."
+      "agent": "PrivacyCompliance",
+      "message": "Kickoff: define data minimization, consent, retention, access, and auditability guardrails for the migration plan."
     },
     {
-      "agent": "IntegrationsEngineer",
-      "message": "Kickoff: propose integrations (Slack, email, CSV import/export, analytics) and how to implement them safely."
+      "agent": "BackendEngineer",
+      "message": "Kickoff: propose contract-first API boundaries and FastAPI implementation plan with Neo4j repository layer and Redis worker interfaces."
+    },
+    {
+      "agent": "FrontendEngineer",
+      "message": "Kickoff: propose Next.js (TypeScript + Tailwind) frontend architecture and critical UX states aligned with backend contracts."
+    },
+    {
+      "agent": "PlatformDevOpsEngineer",
+      "message": "Kickoff: define Docker/CI-CD/runtime plan with Sentry, health checks, and rollback procedures for reliable production delivery."
+    },
+    {
+      "agent": "QAReleaseReviewer",
+      "message": "Kickoff: define end-to-end QA and release gating strategy across API, UI, workers, and regression coverage."
     },
     {
       "agent": "Supervisor",
-      "message": "Kickoff: consolidate all kickoff inputs into a clear `kickoff_summary.md` and a prioritized backlog (short, medium, long), including risks and next steps."
+      "message": "Kickoff: consolidate all outputs into a bounded plan, gate status matrix, and prioritized implementation backlog."
     }
   ]
 }
