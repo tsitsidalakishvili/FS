@@ -5,7 +5,7 @@ import tempfile
 import streamlit.components.v1 as components
 
 
-_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V16 */"
+_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V17 */"
 
 
 def _replace_all(content, replacements):
@@ -19,58 +19,58 @@ def _js_replacements():
     return [
         (
             '<button class="action-btn btn-pass" onclick="swipeCards.swipeLeft()" disabled>❌</button>',
-            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()" disabled><span class="fs-swipe-icon fs-left" aria-hidden="true"></span><span class="fs-swipe-copy"><b>👎 DISAGREE</b><small>SWIPE LEFT</small></span></button>',
+            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()" disabled><span class="fs-swipe-icon fs-left" aria-hidden="true"></span><span class="fs-swipe-copy"><b>DISAGREE</b><small>SWIPE LEFT</small></span></button>',
         ),
         (
             '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()" disabled>DISAGREE</button>',
-            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()" disabled><span class="fs-swipe-icon fs-left" aria-hidden="true"></span><span class="fs-swipe-copy"><b>👎 DISAGREE</b><small>SWIPE LEFT</small></span></button>',
+            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()" disabled><span class="fs-swipe-icon fs-left" aria-hidden="true"></span><span class="fs-swipe-copy"><b>DISAGREE</b><small>SWIPE LEFT</small></span></button>',
         ),
         (
             '<button class="action-btn btn-pass" onclick="swipeCards.swipeLeft()">❌</button>',
-            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()"><span class="fs-swipe-icon fs-left" aria-hidden="true"></span><span class="fs-swipe-copy"><b>👎 DISAGREE</b><small>SWIPE LEFT</small></span></button>',
+            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()"><span class="fs-swipe-icon fs-left" aria-hidden="true"></span><span class="fs-swipe-copy"><b>DISAGREE</b><small>SWIPE LEFT</small></span></button>',
         ),
         (
             '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()">DISAGREE</button>',
-            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()"><span class="fs-swipe-icon fs-left" aria-hidden="true"></span><span class="fs-swipe-copy"><b>👎 DISAGREE</b><small>SWIPE LEFT</small></span></button>',
+            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()"><span class="fs-swipe-icon fs-left" aria-hidden="true"></span><span class="fs-swipe-copy"><b>DISAGREE</b><small>SWIPE LEFT</small></span></button>',
         ),
         (
             '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>✔️</button>',
-            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled><span class="fs-swipe-icon fs-right" aria-hidden="true"></span><span class="fs-swipe-copy"><b>👍 AGREE</b><small>SWIPE RIGHT</small></span></button>',
+            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled><span class="fs-swipe-icon fs-right" aria-hidden="true"></span><span class="fs-swipe-copy"><b>AGREE</b><small>SWIPE RIGHT</small></span></button>',
         ),
         (
             '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>AGREE</button>',
-            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled><span class="fs-swipe-icon fs-right" aria-hidden="true"></span><span class="fs-swipe-copy"><b>👍 AGREE</b><small>SWIPE RIGHT</small></span></button>',
+            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled><span class="fs-swipe-icon fs-right" aria-hidden="true"></span><span class="fs-swipe-copy"><b>AGREE</b><small>SWIPE RIGHT</small></span></button>',
         ),
         (
             '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()">✔️</button>',
-            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()"><span class="fs-swipe-icon fs-right" aria-hidden="true"></span><span class="fs-swipe-copy"><b>👍 AGREE</b><small>SWIPE RIGHT</small></span></button>',
+            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()"><span class="fs-swipe-icon fs-right" aria-hidden="true"></span><span class="fs-swipe-copy"><b>AGREE</b><small>SWIPE RIGHT</small></span></button>',
         ),
         (
             '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()">AGREE</button>',
-            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()"><span class="fs-swipe-icon fs-right" aria-hidden="true"></span><span class="fs-swipe-copy"><b>👍 AGREE</b><small>SWIPE RIGHT</small></span></button>',
+            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()"><span class="fs-swipe-icon fs-right" aria-hidden="true"></span><span class="fs-swipe-copy"><b>AGREE</b><small>SWIPE RIGHT</small></span></button>',
         ),
         (
             '<button class="action-btn btn-back" onclick="swipeCards.goBack()">',
-            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()"><span class="fs-swipe-icon fs-down" aria-hidden="true"></span><span class="fs-swipe-copy"><b>⏭ PASS</b><small>SWIPE DOWN</small></span></button>\n'
+            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()"><span class="fs-swipe-icon fs-down" aria-hidden="true"></span><span class="fs-swipe-copy"><b>PASS</b><small>SWIPE DOWN</small></span></button>\n'
             '          <button class="action-btn btn-back" onclick="swipeCards.goBack()">',
         ),
         (
             '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">PASS</button>',
-            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()"><span class="fs-swipe-icon fs-down" aria-hidden="true"></span><span class="fs-swipe-copy"><b>⏭ PASS</b><small>SWIPE DOWN</small></span></button>',
+            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()"><span class="fs-swipe-icon fs-down" aria-hidden="true"></span><span class="fs-swipe-copy"><b>PASS</b><small>SWIPE DOWN</small></span></button>',
         ),
         (
             '<div class="action-indicator like">✔️</div>\n          <div class="action-indicator pass">❌</div>',
-            '<div class="action-indicator like"><span class="fs-swipe-icon fs-right"></span><span class="fs-ind-copy"><b>👍 AGREE</b><small>SWIPE RIGHT</small></span></div>\n'
-            '          <div class="action-indicator pass"><span class="fs-swipe-icon fs-left"></span><span class="fs-ind-copy"><b>👎 DISAGREE</b><small>SWIPE LEFT</small></span></div>\n'
-            '          <div class="action-indicator down"><span class="fs-swipe-icon fs-down"></span><span class="fs-ind-copy"><b>⏭ PASS</b><small>SWIPE DOWN</small></span></div>',
+            '<div class="action-indicator like"><span class="fs-swipe-icon fs-right"></span><span class="fs-ind-copy"><b>AGREE</b><small>SWIPE RIGHT</small></span></div>\n'
+            '          <div class="action-indicator pass"><span class="fs-swipe-icon fs-left"></span><span class="fs-ind-copy"><b>DISAGREE</b><small>SWIPE LEFT</small></span></div>\n'
+            '          <div class="action-indicator down"><span class="fs-swipe-icon fs-down"></span><span class="fs-ind-copy"><b>PASS</b><small>SWIPE DOWN</small></span></div>',
         ),
         (
             '<div class="action-indicator like">AGREE</div>\n'
             '          <div class="action-indicator pass">DISAGREE</div>\n'
             '          <div class="action-indicator down">PASS</div>',
-            '<div class="action-indicator like"><span class="fs-swipe-icon fs-right"></span><span class="fs-ind-copy"><b>👍 AGREE</b><small>SWIPE RIGHT</small></span></div>\n'
-            '          <div class="action-indicator pass"><span class="fs-swipe-icon fs-left"></span><span class="fs-ind-copy"><b>👎 DISAGREE</b><small>SWIPE LEFT</small></span></div>\n'
-            '          <div class="action-indicator down"><span class="fs-swipe-icon fs-down"></span><span class="fs-ind-copy"><b>⏭ PASS</b><small>SWIPE DOWN</small></span></div>',
+            '<div class="action-indicator like"><span class="fs-swipe-icon fs-right"></span><span class="fs-ind-copy"><b>AGREE</b><small>SWIPE RIGHT</small></span></div>\n'
+            '          <div class="action-indicator pass"><span class="fs-swipe-icon fs-left"></span><span class="fs-ind-copy"><b>DISAGREE</b><small>SWIPE LEFT</small></span></div>\n'
+            '          <div class="action-indicator down"><span class="fs-swipe-icon fs-down"></span><span class="fs-ind-copy"><b>PASS</b><small>SWIPE DOWN</small></span></div>',
         ),
         (
             "          const likeIndicator = topCard.querySelector('.action-indicator.like');\n"
@@ -240,37 +240,40 @@ def _css_append():
 
 .action-buttons {{
   width: 100% !important;
-  max-width: 420px;
+  max-width: 560px;
   display: flex !important;
   flex-wrap: wrap !important;
   justify-content: center !important;
   align-items: center !important;
-  gap: 8px;
+  gap: 10px;
 }}
 
 .action-btn {{
-  width: auto !important;
-  min-width: 120px;
-  min-height: 88px !important;
+  width: 100% !important;
+  min-width: 0;
+  min-height: 124px !important;
   height: auto !important;
-  border-radius: 999px !important;
-  padding: 10px 14px;
-  font-size: 12px !important;
+  border-radius: 20px !important;
+  border: 1.5px solid #B8CFDD !important;
+  box-shadow: 0 8px 20px rgba(11, 58, 82, 0.12) !important;
+  padding: 10px 10px 12px;
+  font-size: 13px !important;
   line-height: 1.15 !important;
-  text-align: left !important;
+  text-align: center !important;
   white-space: normal !important;
   display: flex !important;
+  flex-direction: column !important;
   align-items: center !important;
-  justify-content: center !important;
-  gap: 8px !important;
-  overflow: visible !important;
-  letter-spacing: 0.03em;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  overflow: hidden !important;
+  letter-spacing: 0.02em;
 }}
 
 .fs-swipe-icon {{
-  width: 68px;
-  height: 44px;
-  flex: 0 0 68px;
+  width: 78px;
+  height: 52px;
+  flex: 0 0 78px;
   display: inline-block;
   background-repeat: no-repeat;
   background-size: contain;
@@ -292,16 +295,18 @@ def _css_append():
 .fs-swipe-copy {{
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   line-height: 1.05;
 }}
 
 .fs-swipe-copy b {{
-  font-size: 12px;
+  font-size: 13px;
+  letter-spacing: 0.03em;
 }}
 
 .fs-swipe-copy small {{
   font-size: 11px;
+  font-weight: 600;
   letter-spacing: 0.04em;
 }}
 
@@ -309,38 +314,58 @@ def _css_append():
 .btn-pass,
 .btn-like {{
   order: 1;
-  flex: 1 1 30%;
+  flex: 1 1 calc(33.333% - 10px);
+  max-width: 176px;
 }}
 
 .btn-back {{
   order: 2;
-  flex: 0 0 88px;
-  margin-top: 2px;
+  flex: 0 0 90px;
+  min-height: 46px !important;
+  border-radius: 999px !important;
+  margin-top: 4px;
+  font-size: 12px !important;
+  padding: 6px 12px !important;
+  flex-direction: row !important;
+  gap: 6px !important;
 }}
 
 .btn-disagree {{
-  background: var(--btn-pass-bg, #FFFFFF);
-  color: var(--btn-pass-fg, #0B3A52);
+  background: #FDF0F2 !important;
+  border-color: #E7A9B4 !important;
+  color: #692332 !important;
+}}
+
+.btn-like {{
+  background: #EEF9F1 !important;
+  border-color: #94D3AB !important;
+  color: #184B2A !important;
+}}
+
+.btn-pass {{
+  background: #EEF5FA !important;
+  border-color: #B5CFDF !important;
+  color: #17455F !important;
 }}
 
 .action-indicator {{
-  font-size: 14px !important;
+  font-size: 13px !important;
   line-height: 1.25 !important;
   text-align: center !important;
-  padding: 7px 10px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.25);
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(8, 23, 34, 0.78);
   color: #fff !important;
   display: flex !important;
   align-items: center !important;
-  gap: 8px !important;
+  gap: 10px !important;
 }}
 
 .action-indicator .fs-swipe-icon {{
   filter: brightness(0) invert(1);
-  width: 42px;
-  height: 28px;
-  flex: 0 0 42px;
+  width: 52px;
+  height: 34px;
+  flex: 0 0 52px;
 }}
 
 .fs-ind-copy {{
@@ -351,11 +376,13 @@ def _css_append():
 }}
 
 .fs-ind-copy b {{
-  font-size: 11px;
+  font-size: 12px;
+  letter-spacing: 0.03em;
 }}
 
 .fs-ind-copy small {{
-  font-size: 9px;
+  font-size: 10px;
+  font-weight: 600;
   letter-spacing: 0.04em;
 }}
 
@@ -403,6 +430,29 @@ def _css_append():
 }}
 
 @media (max-width: 480px) {{
+  .action-buttons {{
+    gap: 8px;
+  }}
+
+  .action-btn {{
+    min-height: 112px !important;
+    padding: 9px 8px 10px;
+  }}
+
+  .fs-swipe-icon {{
+    width: 66px;
+    height: 44px;
+    flex: 0 0 66px;
+  }}
+
+  .fs-swipe-copy b {{
+    font-size: 12px;
+  }}
+
+  .fs-swipe-copy small {{
+    font-size: 10px;
+  }}
+
   .cards-stack {{
     width: min(94vw, 440px) !important;
     height: min(94vw, 440px) !important;
@@ -418,7 +468,7 @@ def _build_patched_frontend_dir(package_root: Path):
     if not source_frontend.exists():
         return None
 
-    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v16"
+    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v17"
     target_frontend = base_temp / "frontend"
 
     if not target_frontend.exists():
