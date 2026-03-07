@@ -116,74 +116,6 @@ def _render_competitor_watchlist() -> tuple[str, str]:
     return "", ""
 
 
-def _render_workflow_buttons() -> None:
-    st.markdown("### Workflow steps (icons + buttons)")
-    steps = [
-        {
-            "id": "start",
-            "label": "1) Start Point",
-            "icon": "🚦",
-            "detail": "Investigation can start from CRM context OR a competitor lead.",
-            "timing": "At intake",
-        },
-        {
-            "id": "resolve",
-            "label": "2) Entity Resolution",
-            "icon": "🧩",
-            "detail": "Maps person/company to canonical graph ID and avoids duplicate nodes.",
-            "timing": "Before enrichment or risk analysis",
-        },
-        {
-            "id": "enrich",
-            "label": "3) Enrichment",
-            "icon": "🔎",
-            "detail": "Pulls Wikidata/OpenSanctions/News and stores source-linked entities and edges.",
-            "timing": "On analyst action",
-        },
-        {
-            "id": "weekly",
-            "label": "4) Weekly Monitoring",
-            "icon": "🗓️",
-            "detail": "Refreshes recent news and creates MENTIONED_IN links for tracked entities.",
-            "timing": "Scheduled weekly job",
-        },
-        {
-            "id": "risk",
-            "label": "5) Risk View",
-            "icon": "⚠️",
-            "detail": "Runs network queries (including 2-hop risky neighbors) over current graph state.",
-            "timing": "When analyst opens Risk view",
-        },
-        {
-            "id": "report",
-            "label": "6) Report & Actions",
-            "icon": "📄",
-            "detail": "Generates evidence-backed report and drives CRM follow-up actions.",
-            "timing": "When analyst exports report",
-        },
-    ]
-
-    selected_id = st.session_state.get("dd_workflow_selected_step")
-    for i in range(0, len(steps), 3):
-        cols = st.columns(3)
-        for col, step in zip(cols, steps[i : i + 3]):
-            with col:
-                if st.button(
-                    f"{step['icon']} {step['label']}",
-                    key=f"dd_step_btn_{step['id']}",
-                    use_container_width=True,
-                ):
-                    st.session_state["dd_workflow_selected_step"] = step["id"]
-                    selected_id = step["id"]
-
-    selected = next((step for step in steps if step["id"] == selected_id), steps[0])
-    st.info(
-        f"{selected['icon']} **{selected['label']}**\n\n"
-        f"- **When:** {selected['timing']}\n"
-        f"- **What happens:** {selected['detail']}"
-    )
-
-
 def render_due_diligence_page():
     st.subheader("Due Diligence")
     how_it_works_tab, actual_app_tab = st.tabs(["How it works", "Actual app"])
@@ -239,32 +171,6 @@ def render_due_diligence_page():
             st.graphviz_chart(dot, use_container_width=True)
         except Exception:
             st.code(dot, language="dot")
-
-        _render_workflow_buttons()
-
-        st.markdown("### Phase 1 implementation status")
-        status_cols = st.columns(3)
-        with status_cols[0]:
-            st.button(
-                "✅ Weekly links ready",
-                key="dd_phase1_weekly",
-                use_container_width=True,
-                disabled=True,
-            )
-        with status_cols[1]:
-            st.button(
-                "✅ Fulltext search ready",
-                key="dd_phase1_search",
-                use_container_width=True,
-                disabled=True,
-            )
-        with status_cols[2]:
-            st.button(
-                "✅ Ingestion metadata ready",
-                key="dd_phase1_metadata",
-                use_container_width=True,
-                disabled=True,
-            )
 
     with actual_app_tab:
         st.markdown("### Actual app")
