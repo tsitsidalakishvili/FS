@@ -5,7 +5,7 @@ import tempfile
 import streamlit.components.v1 as components
 
 
-_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V9 */"
+_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V10 */"
 
 
 def _replace_all(content, replacements):
@@ -19,58 +19,58 @@ def _js_replacements():
     return [
         (
             '<button class="action-btn btn-pass" onclick="swipeCards.swipeLeft()" disabled>❌</button>',
-            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()" disabled>👈 SWIPE LEFT · AGREE</button>',
+            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()" disabled>🫲 AGREE<br/>👈 SWIPE LEFT</button>',
         ),
         (
             '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()" disabled>DISAGREE</button>',
-            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()" disabled>👈 SWIPE LEFT · AGREE</button>',
+            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()" disabled>🫲 AGREE<br/>👈 SWIPE LEFT</button>',
         ),
         (
             '<button class="action-btn btn-pass" onclick="swipeCards.swipeLeft()">❌</button>',
-            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()">👈 SWIPE LEFT · AGREE</button>',
+            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()">🫲 AGREE<br/>👈 SWIPE LEFT</button>',
         ),
         (
             '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()">DISAGREE</button>',
-            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()">👈 SWIPE LEFT · AGREE</button>',
+            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()">🫲 AGREE<br/>👈 SWIPE LEFT</button>',
         ),
         (
             '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>✔️</button>',
-            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>👉 SWIPE RIGHT · DISAGREE</button>',
+            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>🫱 DISAGREE<br/>👉 SWIPE RIGHT</button>',
         ),
         (
             '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>AGREE</button>',
-            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>👉 SWIPE RIGHT · DISAGREE</button>',
+            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>🫱 DISAGREE<br/>👉 SWIPE RIGHT</button>',
         ),
         (
             '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()">✔️</button>',
-            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()">👉 SWIPE RIGHT · DISAGREE</button>',
+            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()">🫱 DISAGREE<br/>👉 SWIPE RIGHT</button>',
         ),
         (
             '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()">AGREE</button>',
-            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()">👉 SWIPE RIGHT · DISAGREE</button>',
+            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()">🫱 DISAGREE<br/>👉 SWIPE RIGHT</button>',
         ),
         (
             '<button class="action-btn btn-back" onclick="swipeCards.goBack()">',
-            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">👇 SWIPE DOWN · PASS</button>\n'
+            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">🫳 PASS<br/>👇 SWIPE DOWN</button>\n'
             '          <button class="action-btn btn-back" onclick="swipeCards.goBack()">',
         ),
         (
             '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">PASS</button>',
-            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">👇 SWIPE DOWN · PASS</button>',
+            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">🫳 PASS<br/>👇 SWIPE DOWN</button>',
         ),
         (
             '<div class="action-indicator like">✔️</div>\n          <div class="action-indicator pass">❌</div>',
-            '<div class="action-indicator like">👉 RIGHT = DISAGREE</div>\n'
-            '          <div class="action-indicator pass">👈 LEFT = AGREE</div>\n'
-            '          <div class="action-indicator down">👇 DOWN = PASS</div>',
+            '<div class="action-indicator like">🫱 DISAGREE<br/>👉 SWIPE RIGHT</div>\n'
+            '          <div class="action-indicator pass">🫲 AGREE<br/>👈 SWIPE LEFT</div>\n'
+            '          <div class="action-indicator down">🫳 PASS<br/>👇 SWIPE DOWN</div>',
         ),
         (
             '<div class="action-indicator like">AGREE</div>\n'
             '          <div class="action-indicator pass">DISAGREE</div>\n'
             '          <div class="action-indicator down">PASS</div>',
-            '<div class="action-indicator like">👉 RIGHT = DISAGREE</div>\n'
-            '          <div class="action-indicator pass">👈 LEFT = AGREE</div>\n'
-            '          <div class="action-indicator down">👇 DOWN = PASS</div>',
+            '<div class="action-indicator like">🫱 DISAGREE<br/>👉 SWIPE RIGHT</div>\n'
+            '          <div class="action-indicator pass">🫲 AGREE<br/>👈 SWIPE LEFT</div>\n'
+            '          <div class="action-indicator down">🫳 PASS<br/>👇 SWIPE DOWN</div>',
         ),
         (
             "          const likeIndicator = topCard.querySelector('.action-indicator.like');\n"
@@ -251,10 +251,14 @@ def _css_append():
 .action-btn {{
   width: auto !important;
   min-width: 78px;
-  height: 44px !important;
+  min-height: 58px !important;
+  height: auto !important;
   border-radius: 999px !important;
-  padding: 0 14px;
+  padding: 6px 12px;
   font-size: 12px !important;
+  line-height: 1.15 !important;
+  text-align: center !important;
+  white-space: normal !important;
   letter-spacing: 0.03em;
 }}
 
@@ -277,8 +281,10 @@ def _css_append():
 }}
 
 .action-indicator {{
-  font-size: 20px !important;
-  padding: 6px 10px;
+  font-size: 14px !important;
+  line-height: 1.25 !important;
+  text-align: center !important;
+  padding: 7px 10px;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.25);
   color: #fff !important;
@@ -331,7 +337,7 @@ def _build_patched_frontend_dir(package_root: Path):
     if not source_frontend.exists():
         return None
 
-    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v9"
+    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v10"
     target_frontend = base_temp / "frontend"
 
     if not target_frontend.exists():
