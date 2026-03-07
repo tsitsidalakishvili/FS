@@ -1,7 +1,98 @@
 import streamlit as st
 import streamlit.components.v1 as components
+from urllib.parse import quote_plus, urlencode
 
-from crm.config import get_config
+from crm.config import FEEDBACK_EMAIL_TO, get_config
+
+
+def _link_button(label: str, url: str) -> None:
+    if not url:
+        return
+    try:
+        st.link_button(label, url, use_container_width=True)
+    except Exception:
+        st.markdown(f"[{label}]({url})")
+
+
+def _build_gmail_compose_url(*, to_email: str, subject: str, body: str) -> str:
+    params = {
+        "view": "cm",
+        "fs": "1",
+        "su": subject,
+        "body": body,
+    }
+    to_value = str(to_email or "").strip()
+    if to_value:
+        params["to"] = to_value
+    return "https://mail.google.com/mail/?" + urlencode(params, quote_via=quote_plus)
+
+
+def _render_workflow_buttons() -> None:
+    st.markdown("### Workflow steps (icons + buttons)")
+    steps = [
+        {
+            "id": "crm",
+            "label": "1) CRM Context",
+            "icon": "👤",
+            "detail": "Starts when organizer opens DD from a profile/task/event context.",
+            "timing": "When DD tab opens",
+        },
+        {
+            "id": "resolve",
+            "label": "2) Entity Resolution",
+            "icon": "🧩",
+            "detail": "Maps person/company to canonical graph ID and avoids duplicate nodes.",
+            "timing": "Before enrichment or risk analysis",
+        },
+        {
+            "id": "enrich",
+            "label": "3) Enrichment",
+            "icon": "🔎",
+            "detail": "Pulls Wikidata/OpenSanctions/News and stores source-linked entities and edges.",
+            "timing": "On analyst action",
+        },
+        {
+            "id": "weekly",
+            "label": "4) Weekly Monitoring",
+            "icon": "🗓️",
+            "detail": "Refreshes recent news and creates MENTIONED_IN links for tracked entities.",
+            "timing": "Scheduled weekly job",
+        },
+        {
+            "id": "risk",
+            "label": "5) Risk View",
+            "icon": "⚠️",
+            "detail": "Runs network queries (including 2-hop risky neighbors) over current graph state.",
+            "timing": "When analyst opens Risk view",
+        },
+        {
+            "id": "report",
+            "label": "6) Report & Actions",
+            "icon": "📄",
+            "detail": "Generates evidence-backed report and drives CRM follow-up actions.",
+            "timing": "When analyst exports report",
+        },
+    ]
+
+    selected_id = st.session_state.get("dd_workflow_selected_step")
+    for i in range(0, len(steps), 3):
+        cols = st.columns(3)
+        for col, step in zip(cols, steps[i : i + 3]):
+            with col:
+                if st.button(
+                    f"{step['icon']} {step['label']}",
+                    key=f"dd_step_btn_{step['id']}",
+                    use_container_width=True,
+                ):
+                    st.session_state["dd_workflow_selected_step"] = step["id"]
+                    selected_id = step["id"]
+
+    selected = next((step for step in steps if step["id"] == selected_id), steps[0])
+    st.info(
+        f"{selected['icon']} **{selected['label']}**\n\n"
+        f"- **When:** {selected['timing']}\n"
+        f"- **What happens:** {selected['detail']}"
+    )
 
 
 def render_due_diligence_page():
@@ -41,42 +132,31 @@ def render_due_diligence_page():
         except Exception:
             st.code(dot, language="dot")
 
-        st.markdown("### How and when blocks connect")
-        st.dataframe(
-            [
-                {
-                    "Trigger": "User opens Due Diligence tab",
-                    "Connected blocks": "CRM Context -> Entity Resolution",
-                    "Output": "Known person/company context loaded for checks",
-                },
-                {
-                    "Trigger": "User clicks enrichment actions",
-                    "Connected blocks": "Entity Resolution -> Enrichment -> Graph",
-                    "Output": "External-source entities, relationships, and evidence",
-                },
-                {
-                    "Trigger": "Weekly scheduler runs",
-                    "Connected blocks": "Weekly Monitoring -> Graph",
-                    "Output": "Fresh NewsArticle nodes + MENTIONED_IN links",
-                },
-                {
-                    "Trigger": "Risk analysis requested",
-                    "Connected blocks": "Graph -> Risk View",
-                    "Output": "2-hop risk neighborhood and red-flag entities",
-                },
-                {
-                    "Trigger": "Report generated",
-                    "Connected blocks": "Graph -> Report -> CRM Actions",
-                    "Output": "Evidence summary + follow-up/escalation tasks",
-                },
-            ],
-            use_container_width=True,
-        )
+        _render_workflow_buttons()
 
         st.markdown("### Phase 1 implementation status")
-        st.success("Completed: Weekly monitoring now links entities to news with MENTIONED_IN.")
-        st.success("Completed: Search now uses Neo4j fulltext indexes for Person/Company.")
-        st.success("Completed: Entity and relationship writes now stamp source + ingestion timestamps.")
+        status_cols = st.columns(3)
+        with status_cols[0]:
+            st.button(
+                "✅ Weekly links ready",
+                key="dd_phase1_weekly",
+                use_container_width=True,
+                disabled=True,
+            )
+        with status_cols[1]:
+            st.button(
+                "✅ Fulltext search ready",
+                key="dd_phase1_search",
+                use_container_width=True,
+                disabled=True,
+            )
+        with status_cols[2]:
+            st.button(
+                "✅ Ingestion metadata ready",
+                key="dd_phase1_metadata",
+                use_container_width=True,
+                disabled=True,
+            )
 
     with actual_app_tab:
         st.markdown("### Actual app")
@@ -92,7 +172,27 @@ def render_due_diligence_page():
         if app_url:
             st.success("External Due Diligence app is configured.")
             st.text_input("Configured app URL", value=app_url, key="dd_app_url_preview")
-            st.markdown(f"[Open Due Diligence app in new tab]({app_url})")
+            action_cols = st.columns(3)
+            with action_cols[0]:
+                _link_button("🚀 Open DD app", app_url)
+            with action_cols[1]:
+                if st.button("🖼️ Toggle embed", key="dd_embed_toggle", use_container_width=True):
+                    st.session_state["dd_embed_external_app"] = not bool(
+                        st.session_state.get("dd_embed_external_app")
+                    )
+            with action_cols[2]:
+                to_email = st.text_input(
+                    "Gmail to",
+                    value=str(FEEDBACK_EMAIL_TO or "").strip(),
+                    key="dd_gmail_to",
+                    help="Optional recipient for Gmail compose action.",
+                )
+                gmail_url = _build_gmail_compose_url(
+                    to_email=to_email,
+                    subject="Due Diligence app link",
+                    body=f"Please review the Due Diligence app:\n{app_url}",
+                )
+                _link_button("✉️ Open in Gmail", gmail_url)
             with st.expander("Open app inside this tab", expanded=False):
                 if st.checkbox("Embed external DD app", key="dd_embed_external_app"):
                     components.iframe(app_url, height=900, scrolling=True)
