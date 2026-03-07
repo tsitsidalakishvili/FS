@@ -39,3 +39,20 @@ Phase 1 behavior:
 - News ingestion uses NewsAPI if `NEWS_API_KEY` is set.
 - OpenSanctions enrichment requires `OPENSANCTIONS_API_KEY` (get a key from OpenSanctions).
 - The current UI includes placeholders for enrichment and reporting.
+
+## OpenSanctions for Georgia context
+
+The DD app now auto-discovers and prioritizes Georgia-relevant OpenSanctions datasets from the live API catalog.
+
+Core Georgia datasets:
+- `ge_declarations` — Georgia Public Official Asset Declarations
+- `ge_ot_list` — Georgian Otkhozoria–Tatunashvili List
+- `ext_ge_company_registry` — Georgian Company Registry
+
+Context datasets (broader risk context):
+- `wd_peps`
+- `sanctions`
+
+In the app (Enrichment panel), use:
+- **Dataset preset** selector (Georgia-focused)
+- **Run Georgia sweep (core datasets)** to import all core Georgia datasets for the selected subject in one pass.

@@ -25,6 +25,7 @@ from app.ingestion.models import Entity, IngestionBatch, Relationship
 from app.ingestion.news import fetch_news_articles
 from app.ingestion.opensanctions import (
     fetch_opensanctions_match,
+    get_georgia_dataset_profiles,
     fetch_opensanctions_search,
 )
 from app.ingestion.wikidata import fetch_wikidata
@@ -209,14 +210,108 @@ with col_right:
             st.caption("No risky nodes within 2 hops.")
 
         st.subheader("Enrichment")
-        opensanctions_dataset = st.text_input(
-            "OpenSanctions dataset",
-            value=settings.opensanctions_dataset,
-            help="Common values: default, sanctions, peps, crime",
-        )
         opensanctions_mode = st.selectbox(
             "OpenSanctions mode", ["Search", "Match"], index=0
         )
+        opensanctions_dataset = settings.opensanctions_dataset
+        georgia_profiles: list[dict[str, object]] = []
+        georgia_catalog_error = None
+        try:
+            georgia_profiles = get_georgia_dataset_profiles(settings.opensanctions_api_key)
+        except Exception as exc:
+            georgia_catalog_error = str(exc)
+
+        if georgia_profiles:
+            st.markdown("##### OpenSanctions presets (Georgia context)")
+            preset_labels = []
+            label_to_dataset: dict[str, str] = {}
+            for item in georgia_profiles:
+                name = str(item.get("name") or "").strip()
+                title = str(item.get("title") or name).strip()
+                group = str(item.get("group") or "")
+                entities = int(item.get("entity_count") or 0)
+                if not name:
+                    continue
+                label = f"{name} — {title} [{group}] ({entities:,})"
+                preset_labels.append(label)
+                label_to_dataset[label] = name
+
+            dataset_names = list(label_to_dataset.values())
+            custom_label = "Custom dataset (manual)"
+            options = preset_labels + [custom_label]
+            if opensanctions_dataset in dataset_names:
+                default_index = dataset_names.index(opensanctions_dataset)
+            else:
+                try:
+                    default_index = dataset_names.index("ge_declarations")
+                except ValueError:
+                    default_index = len(options) - 1
+
+            selected_preset = st.selectbox(
+                "Dataset preset",
+                options=options,
+                index=default_index,
+                help="Georgia core datasets are prioritized for local political due diligence.",
+            )
+            if selected_preset != custom_label:
+                opensanctions_dataset = label_to_dataset[selected_preset]
+            else:
+                opensanctions_dataset = st.text_input(
+                    "OpenSanctions dataset",
+                    value=settings.opensanctions_dataset,
+                    help="Examples: default, sanctions, wd_peps, ge_declarations, ge_ot_list",
+                ).strip() or settings.opensanctions_dataset
+
+            with st.expander("Georgia dataset snapshot (from OpenSanctions catalog)", expanded=False):
+                st.dataframe(georgia_profiles, use_container_width=True)
+        else:
+            if georgia_catalog_error:
+                st.caption(f"Could not load OpenSanctions catalog: {georgia_catalog_error}")
+            opensanctions_dataset = st.text_input(
+                "OpenSanctions dataset",
+                value=settings.opensanctions_dataset,
+                help="Common values: default, sanctions, wd_peps, ge_declarations, ge_ot_list",
+            )
+
+        def _run_opensanctions_enrichment(dataset_name: str):
+            _, entity = safe_neo4j_call(
+                "Load entity", get_entity, {}, client, selected["label"], selected["id"]
+            )
+            entity = entity or {}
+            matches: list[dict[str, object]] = []
+            if opensanctions_mode == "Match":
+                properties: dict[str, list[str]] = {"name": [selected["name"]]}
+                aliases = entity.get("aliases") or []
+                if isinstance(aliases, list) and aliases:
+                    properties["name"].extend([str(alias) for alias in aliases])
+                birth_date = entity.get("birth_date")
+                if birth_date:
+                    properties["birthDate"] = [str(birth_date)]
+                nationality = entity.get("nationality")
+                if nationality:
+                    properties["nationality"] = [str(nationality)]
+
+                schema = "Person" if selected["label"] == "Person" else "Company"
+                batch, matches = fetch_opensanctions_match(
+                    selected["name"],
+                    api_key=settings.opensanctions_api_key,
+                    dataset=dataset_name,
+                    schema=schema,
+                    properties=properties,
+                    target_label=selected["label"],
+                    target_id=selected["id"],
+                )
+            else:
+                batch, matches = fetch_opensanctions_search(
+                    selected["name"],
+                    api_key=settings.opensanctions_api_key,
+                    dataset=dataset_name,
+                    target_label=selected["label"],
+                    target_id=selected["id"],
+                )
+            ok, _ = safe_neo4j_call("OpenSanctions enrichment", apply_batch, None, client, batch)
+            return ok, batch, matches
+
         if st.button("Enrich from Wikidata"):
             try:
                 batch = fetch_wikidata(
@@ -237,50 +332,52 @@ with col_right:
             if not settings.opensanctions_api_key:
                 st.error("Set OPENSANCTIONS_API_KEY in .env to use OpenSanctions.")
             else:
-                _, entity = safe_neo4j_call(
-                    "Load entity", get_entity, {}, client, selected["label"], selected["id"]
-                )
-                entity = entity or {}
-                matches: list[dict[str, object]] = []
-                if opensanctions_mode == "Match":
-                    properties: dict[str, list[str]] = {"name": [selected["name"]]}
-                    aliases = entity.get("aliases") or []
-                    if isinstance(aliases, list) and aliases:
-                        properties["name"].extend([str(alias) for alias in aliases])
-                    birth_date = entity.get("birth_date")
-                    if birth_date:
-                        properties["birthDate"] = [str(birth_date)]
-                    nationality = entity.get("nationality")
-                    if nationality:
-                        properties["nationality"] = [str(nationality)]
-
-                    schema = "Person" if selected["label"] == "Person" else "Company"
-                    batch, matches = fetch_opensanctions_match(
-                        selected["name"],
-                        api_key=settings.opensanctions_api_key,
-                        dataset=opensanctions_dataset,
-                        schema=schema,
-                        properties=properties,
-                        target_label=selected["label"],
-                        target_id=selected["id"],
-                    )
-                else:
-                    batch, matches = fetch_opensanctions_search(
-                        selected["name"],
-                        api_key=settings.opensanctions_api_key,
-                        dataset=opensanctions_dataset,
-                        target_label=selected["label"],
-                        target_id=selected["id"],
-                    )
-
-                ok, _ = safe_neo4j_call(
-                    "OpenSanctions enrichment", apply_batch, None, client, batch
-                )
+                ok, _, matches = _run_opensanctions_enrichment(opensanctions_dataset)
                 if ok:
-                    st.success("OpenSanctions enrichment applied.")
+                    st.success(f"OpenSanctions enrichment applied (dataset: {opensanctions_dataset}).")
                 if matches:
                     st.caption("OpenSanctions matches (top results)")
                     st.dataframe(matches, use_container_width=True)
+        if st.button("Run Georgia sweep (core datasets)"):
+            if not settings.opensanctions_api_key:
+                st.error("Set OPENSANCTIONS_API_KEY in .env to use OpenSanctions.")
+            else:
+                sweep_datasets = [
+                    str(item.get("name") or "").strip()
+                    for item in georgia_profiles
+                    if str(item.get("group") or "") == "Georgia core"
+                ]
+                sweep_datasets = [name for name in sweep_datasets if name]
+                if not sweep_datasets:
+                    sweep_datasets = ["ge_declarations", "ge_ot_list", "ext_ge_company_registry"]
+                run_rows = []
+                for dataset_name in sweep_datasets:
+                    try:
+                        ok, batch, matches = _run_opensanctions_enrichment(dataset_name)
+                        run_rows.append(
+                            {
+                                "dataset": dataset_name,
+                                "ok": bool(ok),
+                                "entities": len(batch.entities),
+                                "relationships": len(batch.relationships),
+                                "matches": len(matches),
+                            }
+                        )
+                    except Exception as exc:
+                        run_rows.append(
+                            {
+                                "dataset": dataset_name,
+                                "ok": False,
+                                "entities": 0,
+                                "relationships": 0,
+                                "matches": 0,
+                                "error": str(exc),
+                            }
+                        )
+                st.caption("Georgia sweep results")
+                st.dataframe(run_rows, use_container_width=True)
+                ok_count = sum(1 for row in run_rows if row.get("ok"))
+                st.success(f"Georgia sweep completed: {ok_count}/{len(run_rows)} datasets applied.")
 
         if st.button("Fetch Recent News"):
             batch = fetch_news_articles(settings.news_api_key, selected["name"])

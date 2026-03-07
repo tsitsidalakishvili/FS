@@ -13,6 +13,8 @@ COMPANY_SCHEMAS = {"Company", "Organization", "LegalEntity"}
 OPENSANCTIONS_SOURCE_ID = "source:opensanctions"
 OPENSANCTIONS_SOURCE_NAME = "OpenSanctions"
 DATASET_ID_PREFIX = "opensanctions:dataset:"
+GEORGIA_CORE_DATASETS = {"ge_declarations", "ge_ot_list", "ext_ge_company_registry"}
+GEORGIA_CONTEXT_DATASETS = {"wd_peps", "sanctions"}
 
 
 def fetch_opensanctions_search(
@@ -348,3 +350,53 @@ def _unique_entities(entities: list[Entity]) -> list[Entity]:
 def fetch_opensanctions(entity_name: str) -> IngestionBatch:
     # Placeholder for OpenSanctions integration.
     return IngestionBatch(source="opensanctions", entities=[], relationships=[])
+
+
+def fetch_catalog(api_key: str | None = None) -> dict[str, Any]:
+    session = _build_session(api_key) if api_key else requests.Session()
+    response = session.get(f"{OPENSANCTIONS_API}/catalog", timeout=20)
+    response.raise_for_status()
+    data: dict[str, Any] = response.json()
+    return data
+
+
+def get_georgia_dataset_profiles(api_key: str | None = None) -> list[dict[str, Any]]:
+    catalog = fetch_catalog(api_key)
+    rows: list[dict[str, Any]] = []
+    for dataset in catalog.get("datasets") or []:
+        if not isinstance(dataset, dict):
+            continue
+        name = str(dataset.get("name") or "").strip()
+        if not name:
+            continue
+        tags = [str(tag) for tag in (dataset.get("tags") or [])]
+        if (
+            name in GEORGIA_CORE_DATASETS
+            or name in GEORGIA_CONTEXT_DATASETS
+            or name.startswith("ge_")
+            or "target.ge" in tags
+        ):
+            rows.append(
+                {
+                    "name": name,
+                    "title": dataset.get("title") or name,
+                    "summary": dataset.get("summary") or "",
+                    "entity_count": dataset.get("entity_count") or 0,
+                    "last_export": dataset.get("last_export"),
+                    "tags": tags,
+                    "group": (
+                        "Georgia core"
+                        if name in GEORGIA_CORE_DATASETS or name.startswith("ge_") or "target.ge" in tags
+                        else "Global context"
+                    ),
+                }
+            )
+    rank = {
+        "ge_declarations": 1,
+        "ge_ot_list": 2,
+        "ext_ge_company_registry": 3,
+        "wd_peps": 4,
+        "sanctions": 5,
+    }
+    rows.sort(key=lambda row: (rank.get(row["name"], 999), -int(row.get("entity_count") or 0)))
+    return rows
