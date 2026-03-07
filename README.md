@@ -38,6 +38,27 @@ python -m streamlit run app.py --server.address 0.0.0.0 --server.port 8506
 
 Open: `http://localhost:8506`
 
+## Production rewrite slice (new backend, Neo4j)
+
+The rewrite now includes a separate backend scaffold in `crm_backend/` (FastAPI, Neo4j-first).
+
+Run:
+
+```bash
+python3 -m uvicorn crm_backend.app.main:app --reload --host 0.0.0.0 --port 8020
+```
+
+Core slice endpoints:
+- `GET /api/v1/healthz`
+- People: `GET/POST/PATCH /api/v1/people...`
+- Tasks: `GET/POST/PATCH /api/v1/tasks...`
+- Events: `POST/GET /api/v1/events...`
+- Token-bound public registration: `POST /api/v1/public/registrations`
+
+Notes:
+- Internal endpoints are deny-by-default and require `x-actor-id` + `x-actor-role`.
+- Public registration payload is registration-scoped and rejects extra fields (for example `eventId`).
+
 ## Agent Chain Console (multi-agent dev console)
 The console orchestrates specialist agents over a shared run state (blackboard), keeps run history, and can optionally apply safe code changes and run git automation.
 
