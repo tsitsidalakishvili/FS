@@ -212,16 +212,16 @@ def render_due_diligence_page():
             penwidth=1.6
           ];
 
-          CRMContext [label="CRM Context\\nProfile / Task / Event"];
-          CompetitorLead [label="Competitor Lead\\nPerson or Company", fillcolor="#FFF5EB", color="#B96A1D"];
-          StartPoint [label="1. Start Point\\nChoose intake source", shape=diamond, fillcolor="#EEF4FF"];
-          EntityResolution [label="2. Entity Resolution\\nPerson/Company ID"];
-          Enrichment [label="3. Enrichment\\nWikidata / OpenSanctions / News"];
-          GraphStore [label="4. Neo4j Graph\\nwith source + ingested_at"];
-          RiskView [label="5. Risk View\\n2-hop risk checks"];
-          Report [label="6. Report\\nEvidence-backed PDF"];
-          ActionBacklog [label="7. CRM Actions\\nFollow-up / Escalation"];
-          WeeklyMonitor [label="Weekly Monitoring\\nrefresh news links", fillcolor="#EEF7EE", color="#2C7A4B"];
+          CRMContext [label="CRM Context\\nProfile / Task / Event\\nWhat it does: provides campaign context"];
+          CompetitorLead [label="Competitor Lead\\nPerson or Company\\nWhat it does: starts direct investigation", fillcolor="#FFF5EB", color="#B96A1D"];
+          StartPoint [label="1. Start Point\\nChoose intake source\\nWhat it does: picks subject path", shape=diamond, fillcolor="#EEF4FF"];
+          EntityResolution [label="2. Entity Resolution\\nPerson/Company ID\\nWhat it does: finds or creates canonical entity"];
+          Enrichment [label="3. Enrichment\\nWikidata / OpenSanctions / News\\nWhat it does: imports evidence and links"];
+          GraphStore [label="4. Neo4j Graph\\nsource + ingested_at\\nWhat it does: stores connected intelligence"];
+          RiskView [label="5. Risk View\\n2-hop risk checks\\nWhat it does: surfaces risky neighbors and flags"];
+          Report [label="6. Report\\nEvidence-backed PDF\\nWhat it does: summarizes findings for decisions"];
+          ActionBacklog [label="7. CRM Actions\\nFollow-up / Escalation\\nWhat it does: creates next operational steps"];
+          WeeklyMonitor [label="Weekly Monitoring\\nrefresh news links\\nWhat it does: updates ongoing signals", fillcolor="#EEF7EE", color="#2C7A4B"];
 
           CRMContext -> StartPoint [label="from CRM"];
           CompetitorLead -> StartPoint [label="direct intake"];
