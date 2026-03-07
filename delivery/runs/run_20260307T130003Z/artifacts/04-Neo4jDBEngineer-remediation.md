@@ -1,3 +1,18 @@
+# Stage 4 Rerun — Neo4jDBEngineer Remediation
+
+## DB-level remediations
+- Token-bound public registration Cypher resolves event from token only.
+- Replay defense via `TokenUse` uniqueness (`jti`).
+- Public write path restricted to `Registration` updates; canonical `Person` mutation blocked.
+- Mandatory write context fields for authZ/audit correlation.
+- Retention/anonymization + DSAR Cypher operations defined.
+- Integrity-check query pack for daily controls.
+
+## Implementation guardrails
+- Public registration repository must not accept caller-provided `eventId`.
+- Atomic transaction couples token validation, registration upsert, token consume, audit append.
+
+Neo4jDBEngineer Remediation: COMPLETE
 # Stage 4 — Neo4jDBEngineer Route-Back Remediation
 
 ## Scope

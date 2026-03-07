@@ -1,3 +1,21 @@
+# Stage 2 Rerun — ProductManager Remediation
+
+## Security-driven AC updates (blocking)
+1. Public registration must be token-bound; invalid/expired token rejects request.
+2. Public flow cannot mutate canonical `Person` profile fields.
+3. Internal routes must have explicit deny-by-default authN/authZ matrix.
+4. PII retention + DSAR policy must be documented before implementation.
+5. All write paths must emit immutable audit records with actor, action, outcome, request IDs.
+
+## Scope clarifications
+- In scope: requirements/contracts to close security blockers.
+- Out of scope: advanced RBAC tiers, multi-tenant redesign, non-Increment-1 domains.
+
+## Definition of done (updated)
+- Pre-implementation requires approved contract docs for token enforcement, data boundaries,
+  auth matrix, and retention/DSAR policy.
+
+ProductManager Remediation: COMPLETE
 # Stage 2 — ProductManager Route-Back Remediation
 
 ## Updated acceptance criteria (blocking security/privacy items)

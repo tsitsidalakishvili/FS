@@ -1,3 +1,18 @@
+# Stage 3 Rerun — SolutionArchitect Remediation
+
+## Concrete controls added
+- Token-bound registration sequence enforced server-side (no eventId from client).
+- Public/canonical data boundary with strict schema allowlist and hard-fail policy guards.
+- Deny-by-default internal authZ matrix shape and policy decision logging.
+- Retention + DSAR services and lifecycle responsibilities defined.
+- Immutable audit requirements and observability controls specified.
+
+## NFR updates
+- 100% public registration writes require token validation.
+- 0 tolerated canonical `Person` mutation from public context.
+- 100% route authorization coverage with default deny.
+
+SolutionArchitect Remediation: COMPLETE
 # Stage 3 — SolutionArchitect Route-Back Remediation
 
 ## Security blocker to architecture-control mapping
