@@ -1,0 +1,20 @@
+{
+  "scope": "Increment 1 rewrite bootstrap (backend-first)",
+  "approved_after_pre_gates": true,
+  "files": [
+    "crm_backend/__init__.py",
+    "crm_backend/app/__init__.py",
+    "crm_backend/app/auth.py",
+    "crm_backend/app/main.py",
+    "crm_backend/app/repository.py",
+    "crm_backend/app/schemas.py",
+    "crm_backend/tests/test_api_slice.py",
+    "README.md"
+  ],
+  "constraints": [
+    "Neo4j remains DBMS for production data path",
+    "Public registration is token-bound",
+    "No canonical Person mutation from public payload schema",
+    "Deny-by-default for internal endpoints"
+  ]
+}

@@ -55,6 +55,11 @@
       "prompt": "prompts/DeploymentEngineer.md",
       "temperature": 0.2
     },
+    "EnvSetupEngineer": {
+      "display_name": "Environment Setup (EnvSetupEngineer)",
+      "prompt": "prompts/EnvSetupEngineer.md",
+      "temperature": 0.2
+    },
     "ExecutorEngineer": {
       "display_name": "Executor (Code Changes) (ExecutorEngineer)",
       "prompt": "prompts/ExecutorEngineer.md",
@@ -97,6 +102,10 @@
     {
       "agent": "IntegrationsEngineer",
       "message": "Kickoff: propose integrations (Slack, email, CSV import/export, analytics) and how to implement them safely."
+    },
+    {
+      "agent": "EnvSetupEngineer",
+      "message": "Kickoff: assess the repo's runtime/tooling dependencies and propose a reproducible cloud-agent environment baseline (base image + startup script + verification checks) so future runs avoid repeated setup."
     },
     {
       "agent": "Supervisor",
