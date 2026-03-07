@@ -6,3 +6,9 @@ pydantic
 numpy
 pandas
 scikit-learn
+sqlalchemy
+alembic
+redis
+pytest
+fakeredis
+httpx
