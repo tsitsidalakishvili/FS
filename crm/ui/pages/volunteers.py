@@ -7,7 +7,6 @@ from crm.analytics.people import load_supporter_summary
 
 def render_volunteers_page():
     st.subheader("Volunteers")
-    st.caption("Identify high‑engagement supporters and available skills.")
 
     df = load_supporter_summary()
     if df.empty:

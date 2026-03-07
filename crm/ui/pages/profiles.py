@@ -45,9 +45,6 @@ def _clear_profile_form_state():
 
 def render_profiles_tab():
     st.subheader("Profiles")
-    st.caption(
-        "Search and open a person profile. New feature; existing Supporter/Member forms remain unchanged."
-    )
 
     with st.form("profiles_search_form"):
         query_input = st.text_input("Search by Name or Email", key="profiles_search")

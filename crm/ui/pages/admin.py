@@ -245,7 +245,6 @@ def _render_delete_whatsapp_groups():
 
 def render_admin_page():
     st.subheader("Admin")
-    st.caption("Configuration and system status.")
 
     st.markdown("### System status")
     db_status = "Connected" if neo4j_db.driver is not None else "Not connected"

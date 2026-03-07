@@ -147,7 +147,6 @@ def render_event_registration_page(event_id=None, event_key=None):
 
 def render_events_page():
     st.subheader("Events")
-    st.caption("Create and track campaign events.")
 
     events_df = list_events()
     status_df = (

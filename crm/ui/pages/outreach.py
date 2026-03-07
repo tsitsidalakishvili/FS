@@ -473,7 +473,6 @@ def _render_whatsapp_group_chats():
 
 def render_outreach_page():
     st.subheader("Outreach")
-    st.caption("Choose outreach target type: segments or individuals.")
     target_mode = st.radio(
         "Outreach target",
         ["Segments", "Individuals"],

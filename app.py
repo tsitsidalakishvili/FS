@@ -66,6 +66,19 @@ st.markdown(
   width: 18px !important;
   height: 18px !important;
 }
+/* Compact page rhythm to reduce long-sheet feeling */
+h1, h2, h3, h4 {
+  margin-top: 0.2rem !important;
+  margin-bottom: 0.35rem !important;
+}
+div[data-testid="stCaptionContainer"] {
+  margin-top: -0.12rem !important;
+  margin-bottom: 0.22rem !important;
+}
+.block-container hr {
+  margin-top: 0.65rem !important;
+  margin-bottom: 0.65rem !important;
+}
 </style>
 """,
     unsafe_allow_html=True,
@@ -2142,9 +2155,6 @@ if nav_choice == "People":
     if section == "Profile":
         render_profiles_tab_page()
         st.stop()
-    st.caption(
-        "Directory page for supporter/member records. Use dedicated Tasks, Outreach, and Map pages for operations."
-    )
     group_view = st.radio(
         "View",
         ["Supporters", "Members"],
@@ -2154,7 +2164,6 @@ if nav_choice == "People":
     )
 
     if group_view == "Supporters":
-        st.subheader("Supporters")
         form_col = st.container()
         with form_col:
             if "supporter_address_results" not in st.session_state:
@@ -2492,7 +2501,6 @@ if nav_choice == "People":
         render_import_export_section_ui("supporters", "Supporter", "Supporter")
 
     else:
-        st.subheader("Members")
         form_col, list_col = st.columns([1, 2])
         with form_col:
             st.markdown("**Search address**")

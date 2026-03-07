@@ -17,7 +17,6 @@ from crm.ui.components.table_utils import render_table_with_export
 
 def render_tasks_tab():
     st.subheader("Tasks / Follow-ups")
-    st.caption("Track follow-ups as tasks linked to people. This is a new feature and does not change existing tabs.")
 
     filter_cols = st.columns([1, 1, 1, 1])
     with filter_cols[0]:

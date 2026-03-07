@@ -9,7 +9,6 @@ from crm.db.neo4j import run_query
 
 def render_dashboard_page():
     st.subheader("Dashboard")
-    st.caption("Today’s priorities, key totals, and quick actions.")
 
     df_summary = load_supporter_summary()
     if df_summary.empty:
@@ -47,7 +46,7 @@ def render_dashboard_page():
             )
             st.dataframe(task_df, use_container_width=True)
 
-    st.markdown("### Snapshot charts")
+    st.markdown("#### Snapshot charts")
     chart_cols = st.columns(3)
 
     group_counts = (

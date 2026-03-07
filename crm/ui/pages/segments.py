@@ -13,10 +13,6 @@ from crm.ui.components.table_utils import render_table_with_export
 
 def render_segments_tab():
     st.subheader("Segments")
-    st.caption(
-        "Save common filters as segments and re-run them. "
-        "Segments = “Who should we work with?” (CRM list-building)."
-    )
 
     st.markdown("#### Create / update segment")
     form_cols = st.columns(2)

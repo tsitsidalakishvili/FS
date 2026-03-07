@@ -6,7 +6,6 @@ from crm.ui.components.import_export import render_import_export_section
 
 def render_data_page():
     st.subheader("Data")
-    st.caption("Imports, exports, and data health checks.")
 
     df = load_supporter_summary()
     if df.empty:

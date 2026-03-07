@@ -617,9 +617,6 @@ def render_deliberation(public_only: bool):
 
     st.subheader("Deliberation")
     st.caption("Anonymous comments + votes, consensus analysis, and clustering.")
-    st.caption(
-        "Deliberation = “What do groups of people think?” (insight/clustering from votes)."
-    )
     convo_options = {c["topic"]: c["id"] for c in conversations} if conversations else {}
     selected_title = st.selectbox(
         "Select conversation",
