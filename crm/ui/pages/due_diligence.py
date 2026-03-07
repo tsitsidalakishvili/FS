@@ -90,91 +90,93 @@ def _render_architecture_card(title: str, concept: str, outcome: str, tone: str 
 
 def _render_workflow_architecture() -> None:
     st.markdown("### Workflow architecture")
-    st.caption("Compact architecture map: entry -> analysis -> decisions")
+    st.caption("Draw.io style process map")
+    html = """
+    <div style="width:100%; background:#ffffff; border:1px solid #E2E8F0; border-radius:12px; padding:8px;">
+      <svg viewBox="0 0 1280 760" width="100%" height="740" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748B"></path>
+          </marker>
+          <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+            <feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="#CBD5E1" flood-opacity="0.9"/>
+          </filter>
+        </defs>
 
-    st.markdown("#### Entry sources")
-    entry_cols = st.columns(3, gap="small")
-    with entry_cols[0]:
-        _render_architecture_card(
-            "CRM Context",
-            "Investigation starts from profile, task, or event context.",
-            "Scope is tied to campaign operations and known entities.",
-            tone="default",
-        )
-    with entry_cols[1]:
-        _render_architecture_card(
-            "Competitor Lead",
-            "Investigation starts from a person/company outside normal CRM entry points.",
-            "Direct intake for competitor analysis and monitoring.",
-            tone="entry",
-        )
-    with entry_cols[2]:
-        _render_architecture_card(
-            "1) Start Point",
-            "Normalize intake path and choose the target subject.",
-            "Single investigation context for downstream checks.",
-            tone="default",
-        )
+        <rect x="20" y="18" width="1240" height="724" rx="12" fill="#F8FAFC" stroke="#E2E8F0"/>
 
-    st.caption("Flow: CRM Context / Competitor Lead -> Start Point")
+        <!-- Entry row -->
+        <rect x="50" y="55" width="260" height="120" rx="10" fill="#EFF6FF" stroke="#93C5FD" filter="url(#shadow)"/>
+        <text x="66" y="82" font-size="16" font-weight="700" fill="#1E3A8A">CRM Context</text>
+        <text x="66" y="104" font-size="13" fill="#334155">Profile / Task / Event trigger</text>
+        <text x="66" y="124" font-size="13" fill="#334155">Outcome: scoped investigation</text>
 
-    st.markdown("#### Analysis pipeline")
-    analysis_cols = st.columns(4, gap="small")
-    analysis_cards = [
-        (
-            "2) Entity Resolution",
-            "Match or create canonical IDs to avoid duplicates.",
-            "Trusted subject identity in the graph.",
-            "default",
-        ),
-        (
-            "3) Enrichment",
-            "Pull external evidence from Wikidata, OpenSanctions, and News.",
-            "Broader relationship graph with source-backed facts.",
-            "default",
-        ),
-        (
-            "4) Neo4j Graph",
-            "Store nodes and relationships with provenance metadata.",
-            "Queryable graph state for risk and reporting.",
-            "default",
-        ),
-        (
-            "5) Risk View",
-            "Run 2-hop exposure analysis over direct and indirect ties.",
-            "Prioritized risk signals for analyst decisions.",
-            "default",
-        ),
-    ]
-    for col, (title, concept, outcome, tone) in zip(analysis_cols, analysis_cards):
-        with col:
-            _render_architecture_card(title, concept, outcome, tone=tone)
-    st.caption("Flow: Entity Resolution -> Enrichment -> Neo4j Graph -> Risk View")
+        <rect x="350" y="55" width="260" height="120" rx="10" fill="#FFF7ED" stroke="#FDBA74" filter="url(#shadow)"/>
+        <text x="366" y="82" font-size="16" font-weight="700" fill="#9A3412">Competitor Lead</text>
+        <text x="366" y="104" font-size="13" fill="#7C2D12">External person/company trigger</text>
+        <text x="366" y="124" font-size="13" fill="#7C2D12">Outcome: direct intake subject</text>
 
-    st.markdown("#### Decision and operations")
-    decision_cols = st.columns(3, gap="small")
-    with decision_cols[0]:
-        _render_architecture_card(
-            "6) Report",
-            "Summarize findings with evidence and recommendations.",
-            "Decision-ready PDF for internal sharing.",
-            tone="default",
-        )
-    with decision_cols[1]:
-        _render_architecture_card(
-            "7) CRM Actions",
-            "Convert findings into follow-up, escalation, or monitoring tasks.",
-            "Accountable operational next steps.",
-            tone="default",
-        )
-    with decision_cols[2]:
-        _render_architecture_card(
-            "Weekly Monitoring",
-            "Refresh media mentions and update existing entities continuously.",
-            "Risk posture stays current between manual investigations.",
-            tone="monitor",
-        )
-    st.caption("Flow: Report -> CRM Actions, with Weekly Monitoring feeding new signals.")
+        <rect x="680" y="55" width="280" height="120" rx="10" fill="#EEF2FF" stroke="#A5B4FC" filter="url(#shadow)"/>
+        <text x="696" y="82" font-size="16" font-weight="700" fill="#312E81">1) Start Point</text>
+        <text x="696" y="104" font-size="13" fill="#3730A3">Normalize entry path</text>
+        <text x="696" y="124" font-size="13" fill="#3730A3">Outcome: one investigation context</text>
+
+        <!-- Analysis row -->
+        <rect x="50" y="245" width="280" height="130" rx="10" fill="#F8FAFF" stroke="#9FB8E8" filter="url(#shadow)"/>
+        <text x="66" y="272" font-size="16" font-weight="700" fill="#1E3A8A">2) Entity Resolution</text>
+        <text x="66" y="295" font-size="13" fill="#334155">Match / create canonical IDs</text>
+        <text x="66" y="315" font-size="13" fill="#334155">Outcome: deduplicated subject</text>
+
+        <rect x="360" y="245" width="280" height="130" rx="10" fill="#F8FAFF" stroke="#9FB8E8" filter="url(#shadow)"/>
+        <text x="376" y="272" font-size="16" font-weight="700" fill="#1E3A8A">3) Enrichment</text>
+        <text x="376" y="295" font-size="13" fill="#334155">Wikidata / OpenSanctions / News</text>
+        <text x="376" y="315" font-size="13" fill="#334155">Outcome: source-linked facts</text>
+
+        <rect x="670" y="245" width="280" height="130" rx="10" fill="#F8FAFF" stroke="#9FB8E8" filter="url(#shadow)"/>
+        <text x="686" y="272" font-size="16" font-weight="700" fill="#1E3A8A">4) Neo4j Graph</text>
+        <text x="686" y="295" font-size="13" fill="#334155">Nodes + relationships + provenance</text>
+        <text x="686" y="315" font-size="13" fill="#334155">Outcome: queryable network state</text>
+
+        <rect x="980" y="245" width="250" height="130" rx="10" fill="#F8FAFF" stroke="#9FB8E8" filter="url(#shadow)"/>
+        <text x="996" y="272" font-size="16" font-weight="700" fill="#1E3A8A">5) Risk View</text>
+        <text x="996" y="295" font-size="13" fill="#334155">2-hop exposure checks</text>
+        <text x="996" y="315" font-size="13" fill="#334155">Outcome: prioritized risk signals</text>
+
+        <!-- Decisions row -->
+        <rect x="250" y="465" width="280" height="130" rx="10" fill="#F8FAFF" stroke="#9FB8E8" filter="url(#shadow)"/>
+        <text x="266" y="492" font-size="16" font-weight="700" fill="#1E3A8A">6) Report</text>
+        <text x="266" y="515" font-size="13" fill="#334155">Evidence-backed findings summary</text>
+        <text x="266" y="535" font-size="13" fill="#334155">Outcome: decision-ready PDF</text>
+
+        <rect x="560" y="465" width="280" height="130" rx="10" fill="#F8FAFF" stroke="#9FB8E8" filter="url(#shadow)"/>
+        <text x="576" y="492" font-size="16" font-weight="700" fill="#1E3A8A">7) CRM Actions</text>
+        <text x="576" y="515" font-size="13" fill="#334155">Follow-up / escalate / monitor</text>
+        <text x="576" y="535" font-size="13" fill="#334155">Outcome: accountable next steps</text>
+
+        <rect x="870" y="465" width="360" height="130" rx="10" fill="#ECFDF3" stroke="#86EFAC" filter="url(#shadow)"/>
+        <text x="886" y="492" font-size="16" font-weight="700" fill="#166534">Weekly Monitoring</text>
+        <text x="886" y="515" font-size="13" fill="#14532D">Refresh mentions and new media signals</text>
+        <text x="886" y="535" font-size="13" fill="#14532D">Outcome: continuously updated risk posture</text>
+
+        <!-- Connectors -->
+        <path d="M 310 115 L 680 115" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+        <path d="M 610 115 L 680 115" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+        <path d="M 820 175 L 820 235 L 190 235 L 190 245" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+        <path d="M 330 310 L 360 310" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+        <path d="M 640 310 L 670 310" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+        <path d="M 950 310 L 980 310" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+        <path d="M 1105 375 L 1105 430 L 390 430 L 390 465" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+        <path d="M 530 530 L 560 530" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+        <path d="M 1050 465 L 1050 390 L 810 390 L 810 375" stroke="#16A34A" stroke-width="2.2" fill="none" marker-end="url(#arrow)"/>
+
+        <!-- Labels -->
+        <text x="700" y="33" font-size="14" fill="#475569" text-anchor="middle">ENTRY</text>
+        <text x="640" y="223" font-size="14" fill="#475569" text-anchor="middle">ANALYSIS</text>
+        <text x="640" y="443" font-size="14" fill="#475569" text-anchor="middle">DECISIONS & OPERATIONS</text>
+      </svg>
+    </div>
+    """
+    components.html(html, height=770, scrolling=False)
 
 
 def _render_competitor_watchlist() -> tuple[str, str]:
