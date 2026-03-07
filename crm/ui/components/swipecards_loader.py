@@ -5,7 +5,7 @@ import tempfile
 import streamlit.components.v1 as components
 
 
-_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V18 */"
+_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V19 */"
 
 
 def _replace_all(content, replacements):
@@ -254,10 +254,12 @@ def _css_append():
   min-height: 124px !important;
   height: auto !important;
   border-radius: 20px !important;
-  border: 1.5px solid #B8CFDD !important;
+  border: 1.5px solid #D1DEE8 !important;
+  background: rgba(255, 255, 255, 0.90) !important;
+  color: #0B3A52 !important;
   box-shadow: 0 8px 20px rgba(11, 58, 82, 0.12) !important;
   padding: 10px 10px 12px;
-  font-size: 13px !important;
+  font-size: 14px !important;
   line-height: 1.15 !important;
   text-align: center !important;
   white-space: normal !important;
@@ -300,12 +302,12 @@ def _css_append():
 }}
 
 .fs-swipe-copy b {{
-  font-size: 13px;
+  font-size: 14px;
   letter-spacing: 0.03em;
 }}
 
 .fs-swipe-copy small {{
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
 }}
@@ -331,31 +333,32 @@ def _css_append():
 }}
 
 .btn-disagree {{
-  background: #FDF0F2 !important;
-  border-color: #E7A9B4 !important;
-  color: #692332 !important;
+  background: rgba(255, 255, 255, 0.90) !important;
+  border-color: #D1DEE8 !important;
+  color: #0B3A52 !important;
 }}
 
 .btn-like {{
-  background: #EEF9F1 !important;
-  border-color: #94D3AB !important;
-  color: #184B2A !important;
+  background: rgba(255, 255, 255, 0.90) !important;
+  border-color: #D1DEE8 !important;
+  color: #0B3A52 !important;
 }}
 
 .btn-pass {{
-  background: #EEF5FA !important;
-  border-color: #B5CFDF !important;
-  color: #17455F !important;
+  background: rgba(255, 255, 255, 0.90) !important;
+  border-color: #D1DEE8 !important;
+  color: #0B3A52 !important;
 }}
 
 .action-indicator {{
-  font-size: 13px !important;
+  font-size: 14px !important;
   line-height: 1.25 !important;
   text-align: center !important;
   padding: 10px 12px;
   border-radius: 14px;
-  background: rgba(8, 23, 34, 0.78);
-  color: #fff !important;
+  border: 1px solid rgba(209, 222, 232, 0.95);
+  background: rgba(255, 255, 255, 0.88);
+  color: #0B3A52 !important;
   display: flex !important;
   align-items: center !important;
   gap: 10px !important;
@@ -376,24 +379,24 @@ def _css_append():
 }}
 
 .fs-ind-copy b {{
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 0.03em;
 }}
 
 .fs-ind-copy small {{
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
 }}
 
 .action-indicator.like {{
   right: 16px;
-  color: #fff !important;
+  color: #0B3A52 !important;
 }}
 
 .action-indicator.pass {{
   left: 16px;
-  color: #fff !important;
+  color: #0B3A52 !important;
 }}
 
 .action-indicator.down {{
@@ -401,7 +404,7 @@ def _css_append():
   transform: translate(-50%, 0);
   bottom: 16px;
   top: auto;
-  color: #fff !important;
+  color: #0B3A52 !important;
 }}
 
 /* Avoid top/bottom clipping of tall card images on mobile */
@@ -446,11 +449,11 @@ def _css_append():
   }}
 
   .fs-swipe-copy b {{
-    font-size: 12px;
+    font-size: 13px;
   }}
 
   .fs-swipe-copy small {{
-    font-size: 10px;
+    font-size: 11px;
   }}
 
   .cards-stack {{
@@ -468,7 +471,7 @@ def _build_patched_frontend_dir(package_root: Path):
     if not source_frontend.exists():
         return None
 
-    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v18"
+    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v19"
     target_frontend = base_temp / "frontend"
 
     if not target_frontend.exists():
