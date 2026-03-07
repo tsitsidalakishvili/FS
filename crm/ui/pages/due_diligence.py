@@ -194,34 +194,34 @@ def render_due_diligence_page():
         digraph DDWorkflow {
           rankdir=TB;
           splines=ortho;
-          graph [bgcolor="white", pad="0.5", nodesep="0.65", ranksep="0.9"];
+          graph [bgcolor="white", pad="0.25", nodesep="0.35", ranksep="0.45"];
           node [
             shape=box,
             style="rounded,filled",
             fillcolor="#F4F8FB",
             color="#2E5B7A",
             fontname="Helvetica",
-            fontsize=18,
+            fontsize=23,
             penwidth=1.8,
-            margin="0.20,0.18"
+            margin="0.12,0.10"
           ];
           edge [
             color="#4A6A85",
             fontname="Helvetica",
-            fontsize=13,
+            fontsize=15,
             penwidth=1.6
           ];
 
-          CRMContext [label="CRM Context\\nProfile / Task / Event\\nWhat it does: provides campaign context"];
-          CompetitorLead [label="Competitor Lead\\nPerson or Company\\nWhat it does: starts direct investigation", fillcolor="#FFF5EB", color="#B96A1D"];
-          StartPoint [label="1. Start Point\\nChoose intake source\\nWhat it does: picks subject path", shape=diamond, fillcolor="#EEF4FF"];
-          EntityResolution [label="2. Entity Resolution\\nPerson/Company ID\\nWhat it does: finds or creates canonical entity"];
-          Enrichment [label="3. Enrichment\\nWikidata / OpenSanctions / News\\nWhat it does: imports evidence and links"];
-          GraphStore [label="4. Neo4j Graph\\nsource + ingested_at\\nWhat it does: stores connected intelligence"];
-          RiskView [label="5. Risk View\\n2-hop risk checks\\nWhat it does: surfaces risky neighbors and flags"];
-          Report [label="6. Report\\nEvidence-backed PDF\\nWhat it does: summarizes findings for decisions"];
-          ActionBacklog [label="7. CRM Actions\\nFollow-up / Escalation\\nWhat it does: creates next operational steps"];
-          WeeklyMonitor [label="Weekly Monitoring\\nrefresh news links\\nWhat it does: updates ongoing signals", fillcolor="#EEF7EE", color="#2C7A4B"];
+          CRMContext [label="CRM Context\\nProfile / Task / Event\\nDoes: provide context"];
+          CompetitorLead [label="Competitor Lead\\nPerson / Company\\nDoes: direct intake", fillcolor="#FFF5EB", color="#B96A1D"];
+          StartPoint [label="1) Start Point\\nChoose source\\nDoes: pick subject", shape=diamond, fillcolor="#EEF4FF"];
+          EntityResolution [label="2) Entity Resolution\\nMatch / create ID\\nDoes: deduplicate"];
+          Enrichment [label="3) Enrichment\\nWikidata / OpenSanctions / News\\nDoes: add evidence links"];
+          GraphStore [label="4) Neo4j Graph\\nsource + ingested_at\\nDoes: store network"];
+          RiskView [label="5) Risk View\\n2-hop checks\\nDoes: show risky neighbors"];
+          Report [label="6) Report\\nEvidence PDF\\nDoes: decision summary"];
+          ActionBacklog [label="7) CRM Actions\\nFollow-up / Escalate\\nDoes: next step"];
+          WeeklyMonitor [label="Weekly Monitoring\\nRefresh signals\\nDoes: keep graph current", fillcolor="#EEF7EE", color="#2C7A4B"];
 
           CRMContext -> StartPoint [label="from CRM"];
           CompetitorLead -> StartPoint [label="direct intake"];
