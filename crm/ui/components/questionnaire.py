@@ -5,6 +5,7 @@ from urllib.parse import urlencode
 import streamlit as st
 
 from crm.clients.deliberation import delib_api_get, render_delib_api_unavailable
+from crm.ui.components.whatsapp_share import render_whatsapp_group_link_sender
 
 FORMS_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "forms")
@@ -158,6 +159,19 @@ def render_survey_block(kind):
         height=120,
         key=f"survey_message_{kind}",
     )
+    survey_message_key = f"survey_message_{kind}"
+    render_whatsapp_group_link_sender(
+        key_prefix=f"survey_share_{kind}",
+        source=f"survey_share_{kind}",
+        link=link,
+        default_message=st.session_state.get(
+            survey_message_key,
+            _build_message(template, link),
+        ),
+        title="Send survey link to WhatsApp group",
+        send_button_label="Send survey link to WhatsApp group",
+        append_link_by_default=False,
+    )
     st.markdown("**Preview**")
     for section in template.get("sections", []):
         st.markdown(f"- {section.get('title','Section')}")
@@ -253,6 +267,16 @@ def render_questionnaire_block(kind, show_expander=True):
                 value=message,
                 height=120,
                 key=f"questionnaire_message_{kind}",
+            )
+            message_key = f"questionnaire_message_{kind}"
+            render_whatsapp_group_link_sender(
+                key_prefix=f"delib_questionnaire_share_{kind}",
+                source="deliberation_questionnaire_share",
+                link=public_link,
+                default_message=st.session_state.get(message_key, message),
+                title="Send deliberation link to WhatsApp group",
+                send_button_label="Send deliberation link to WhatsApp group",
+                append_link_by_default=False,
             )
 
             comments = delib_api_get(

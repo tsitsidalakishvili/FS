@@ -16,6 +16,7 @@ from crm.data.events import (
     register_person_to_event,
 )
 from crm.ui.components.table_utils import render_table_with_export
+from crm.ui.components.whatsapp_share import render_whatsapp_group_link_sender
 
 
 def _split_full_name(full_name):
@@ -316,6 +317,21 @@ def render_events_page():
                     ),
                     height=120,
                     key="events_share_link_message",
+                )
+                render_whatsapp_group_link_sender(
+                    key_prefix=f"events_share_link_{selected_event_id}",
+                    source="events_registration_share",
+                    link=public_link,
+                    default_message=st.session_state.get(
+                        "events_share_link_message",
+                        (
+                            f"Event registration: {selected_event_label}\n\n"
+                            f"Please register using this link:\n{public_link}"
+                        ),
+                    ),
+                    title="Send event registration link to WhatsApp group",
+                    send_button_label="Send event link to WhatsApp group",
+                    append_link_by_default=False,
                 )
 
         with st.expander("Event registration form", expanded=True):
