@@ -5,7 +5,7 @@ import tempfile
 import streamlit.components.v1 as components
 
 
-_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V21 */"
+_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V22 */"
 
 
 def _replace_all(content, replacements):
@@ -52,7 +52,7 @@ def _js_replacements():
         (
             '<button class="action-btn btn-back" onclick="swipeCards.goBack()">',
             '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()"><span class="fs-swipe-icon fs-down" aria-hidden="true"></span><span class="fs-swipe-copy"><b>PASS</b><small>SWIPE DOWN</small></span></button>\n'
-            '          <button class="action-btn btn-back" onclick="swipeCards.goBack()">',
+            '          ',
         ),
         (
             '<button class="action-btn btn-back" onclick="swipeCards.goBack()">\n'
@@ -61,7 +61,7 @@ def _js_replacements():
             '              <path d="M2 14L4 12.5L6 14" stroke="#FFA500" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>\n'
             '            </svg>\n'
             '          </button>',
-            '<button class="action-btn btn-back" onclick="swipeCards.goBack()"><span class="fs-swipe-icon fs-back" aria-hidden="true"></span><span class="fs-swipe-copy"><b>BACK</b><small>UNDO LAST</small></span></button>',
+            '',
         ),
         (
             '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">PASS</button>',
@@ -327,17 +327,14 @@ def _css_append():
 
 .btn-disagree,
 .btn-pass,
-.btn-like,
-.btn-back {{
+.btn-like {{
   order: 1;
   flex: 1 1 calc(33.333% - 10px);
   max-width: 176px;
 }}
 
 .btn-back {{
-  background: rgba(255, 255, 255, 0.90) !important;
-  border-color: #D1DEE8 !important;
-  color: #0B3A52 !important;
+  display: none !important;
 }}
 
 .btn-disagree {{
@@ -480,7 +477,7 @@ def _build_patched_frontend_dir(package_root: Path):
     if not source_frontend.exists():
         return None
 
-    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v21"
+    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v22"
     target_frontend = base_temp / "frontend"
 
     if not target_frontend.exists():
