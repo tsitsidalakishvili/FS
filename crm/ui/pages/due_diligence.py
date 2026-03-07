@@ -144,16 +144,16 @@ def render_due_diligence_page():
             penwidth=1.6
           ];
 
-          CRMContext [label="CRM Context\\nProfile / Task / Event\\nDoes: provide context"];
-          CompetitorLead [label="Competitor Lead\\nPerson / Company\\nDoes: direct intake", fillcolor="#FFF5EB", color="#B96A1D"];
-          StartPoint [label="1) Start Point\\nChoose source\\nDoes: pick subject", shape=diamond, fillcolor="#EEF4FF"];
-          EntityResolution [label="2) Entity Resolution\\nMatch / create ID\\nDoes: deduplicate"];
-          Enrichment [label="3) Enrichment\\nWikidata / OpenSanctions / News\\nDoes: add evidence links"];
-          GraphStore [label="4) Neo4j Graph\\nsource + ingested_at\\nDoes: store network"];
-          RiskView [label="5) Risk View\\n2-hop checks\\nDoes: show risky neighbors"];
-          Report [label="6) Report\\nEvidence PDF\\nDoes: decision summary"];
-          ActionBacklog [label="7) CRM Actions\\nFollow-up / Escalate\\nDoes: next step"];
-          WeeklyMonitor [label="Weekly Monitoring\\nRefresh signals\\nDoes: keep graph current", fillcolor="#EEF7EE", color="#2C7A4B"];
+          CRMContext [label="CRM Context\\nProfile / Task / Event\\nConcept: business reason for investigation\\nOutcome: investigation scope", margin="0.13,0.12"];
+          CompetitorLead [label="Competitor Lead\\nPerson / Company\\nConcept: external trigger outside CRM record\\nOutcome: direct intake subject", fillcolor="#FFF5EB", color="#B96A1D", margin="0.13,0.12"];
+          StartPoint [label="1) Start Point\\nChoose source and subject\\nConcept: normalize entry path\\nOutcome: one intake decision", shape=diamond, fillcolor="#EEF4FF", margin="0.13,0.12"];
+          EntityResolution [label="2) Entity Resolution\\nMatch / create canonical ID\\nConcept: single source of truth\\nOutcome: deduplicated entity", margin="0.13,0.12"];
+          Enrichment [label="3) Enrichment\\nWikidata / OpenSanctions / News\\nConcept: expand evidence graph\\nOutcome: new facts + linked sources", margin="0.13,0.12"];
+          GraphStore [label="4) Neo4j Graph\\nStore nodes and relationships\\nConcept: provenance-first intelligence\\nOutcome: queryable network state", margin="0.13,0.12"];
+          RiskView [label="5) Risk View\\n2-hop exposure checks\\nConcept: evaluate direct + indirect risk\\nOutcome: prioritized risk signals", margin="0.13,0.12"];
+          Report [label="6) Report\\nEvidence-backed decision brief\\nConcept: explainable recommendations\\nOutcome: shareable PDF summary", margin="0.13,0.12"];
+          ActionBacklog [label="7) CRM Actions\\nFollow-up / Escalate / Monitor\\nConcept: convert insight to operations\\nOutcome: accountable next steps", margin="0.13,0.12"];
+          WeeklyMonitor [label="Weekly Monitoring\\nRefresh media and mentions\\nConcept: continuous risk detection\\nOutcome: updated risk posture", fillcolor="#EEF7EE", color="#2C7A4B", margin="0.13,0.12"];
 
           CRMContext -> StartPoint [label="from CRM"];
           CompetitorLead -> StartPoint [label="direct intake"];
