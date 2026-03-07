@@ -123,7 +123,7 @@ def _render_workflow_buttons() -> None:
             "id": "start",
             "label": "1) Start Point",
             "icon": "🚦",
-            "detail": "Investigation can start from CRM context OR a rival/competitor lead.",
+            "detail": "Investigation can start from CRM context OR a competitor lead.",
             "timing": "At intake",
         },
         {
@@ -213,7 +213,7 @@ def render_due_diligence_page():
           ];
 
           CRMContext [label="CRM Context\\nProfile / Task / Event"];
-          RivalLead [label="Rival / Competitor Lead\\nPerson or Company", fillcolor="#FFF5EB", color="#B96A1D"];
+          CompetitorLead [label="Competitor Lead\\nPerson or Company", fillcolor="#FFF5EB", color="#B96A1D"];
           StartPoint [label="1. Start Point\\nChoose intake source", shape=diamond, fillcolor="#EEF4FF"];
           EntityResolution [label="2. Entity Resolution\\nPerson/Company ID"];
           Enrichment [label="3. Enrichment\\nWikidata / OpenSanctions / News"];
@@ -224,7 +224,7 @@ def render_due_diligence_page():
           WeeklyMonitor [label="Weekly Monitoring\\nrefresh news links", fillcolor="#EEF7EE", color="#2C7A4B"];
 
           CRMContext -> StartPoint [label="from CRM"];
-          RivalLead -> StartPoint [label="direct intake"];
+          CompetitorLead -> StartPoint [label="direct intake"];
           StartPoint -> EntityResolution [label="subject selected"];
           EntityResolution -> Enrichment [label="run checks"];
           EntityResolution -> GraphStore [label="entity exists"];
@@ -275,7 +275,7 @@ def render_due_diligence_page():
         st.markdown("#### Investigation start point")
         start_mode = st.radio(
             "Start from",
-            ["CRM context", "Rival person", "Rival company", "Competitor watchlist"],
+            ["CRM context", "Competitor person", "Competitor company", "Competitor watchlist"],
             horizontal=True,
             key="dd_start_mode",
         )
@@ -292,18 +292,18 @@ def render_due_diligence_page():
                 ["Person", "Company"],
                 key="dd_start_crm_subject_type",
             )
-        elif start_mode == "Rival person":
+        elif start_mode == "Competitor person":
             subject_name = st.text_input(
-                "Rival person name",
-                key="dd_start_rival_person",
-                help="Investigate a rival individual directly without opening a CRM profile first.",
+                "Competitor person name",
+                key="dd_start_competitor_person",
+                help="Investigate a competitor individual directly without opening a CRM profile first.",
             ).strip()
             subject_type = "Person"
-        elif start_mode == "Rival company":
+        elif start_mode == "Competitor company":
             subject_name = st.text_input(
-                "Rival company name",
-                key="dd_start_rival_company",
-                help="Investigate a rival organization directly.",
+                "Competitor company name",
+                key="dd_start_competitor_company",
+                help="Investigate a competitor organization directly.",
             ).strip()
             subject_type = "Company"
         else:
