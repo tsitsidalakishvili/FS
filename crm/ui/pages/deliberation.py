@@ -140,7 +140,7 @@ def _build_swipe_card_image(comment, idx, total, compact=False):
     line_height = typography["line_height"]
 
     title = html.escape(f"Question {idx + 1} / {total}")
-    subtitle = html.escape("👉 Swipe right   •   👈 Swipe left   •   👇 Swipe down")
+    subtitle = html.escape("👈 Swipe left = Agree   •   👉 Swipe right = Disagree   •   👇 Swipe down = Pass")
     footer = (
         "Reactions: "
         f"👍 {_safe_int(comment.get('agree_count', 0))}   "
@@ -169,8 +169,8 @@ def _build_swipe_card_image(comment, idx, total, compact=False):
     footer_svg = (
         "<rect x='32' y='944' width='656' height='144' rx='26' fill='url(#footerGrad)'/>"
         "<line x1='360' y1='968' x2='360' y2='1062' stroke='#4F8DA8' stroke-width='2'/>"
-        "<text x='64' y='1000' font-size='30' font-weight='700' fill='#FFFFFF'>⬅ Disagree</text>"
-        "<text x='478' y='1000' font-size='30' font-weight='700' fill='#FFFFFF'>Agree ➡</text>"
+        "<text x='64' y='1000' font-size='30' font-weight='700' fill='#FFFFFF'>⬅ Agree</text>"
+        "<text x='434' y='1000' font-size='30' font-weight='700' fill='#FFFFFF'>Disagree ➡</text>"
         f"<text x='64' y='1048' font-size='22' fill='#D8ECF7'>{footer_text}</text>"
         if not compact
         else ""
@@ -378,7 +378,7 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
 
     if not compact:
         st.progress((total_swiped / len(comments)) if comments else 0.0)
-        st.caption("👉 Swipe right   •   👈 Swipe left   •   👇 Swipe down")
+        st.caption("👈 Swipe left = Agree   •   👉 Swipe right = Disagree   •   👇 Swipe down = Pass")
         st.caption("Each card shows one question/comment only.")
         st.caption(f"{total_swiped}/{len(comments)} reactions recorded")
 
@@ -390,9 +390,9 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
             if not isinstance(idx, int) or idx < 0 or idx >= len(comments):
                 continue
             if action == "right":
-                choice = 1
-            elif action == "left":
                 choice = -1
+            elif action == "left":
+                choice = 1
             elif action == "down":
                 choice = 0
             else:

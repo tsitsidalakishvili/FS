@@ -5,7 +5,7 @@ import tempfile
 import streamlit.components.v1 as components
 
 
-_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V8 */"
+_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V9 */"
 
 
 def _replace_all(content, replacements):
@@ -19,58 +19,58 @@ def _js_replacements():
     return [
         (
             '<button class="action-btn btn-pass" onclick="swipeCards.swipeLeft()" disabled>❌</button>',
-            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()" disabled>👈 SWIPE LEFT</button>',
+            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()" disabled>👈 SWIPE LEFT · AGREE</button>',
         ),
         (
             '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()" disabled>DISAGREE</button>',
-            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()" disabled>👈 SWIPE LEFT</button>',
+            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()" disabled>👈 SWIPE LEFT · AGREE</button>',
         ),
         (
             '<button class="action-btn btn-pass" onclick="swipeCards.swipeLeft()">❌</button>',
-            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()">👈 SWIPE LEFT</button>',
+            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()">👈 SWIPE LEFT · AGREE</button>',
         ),
         (
             '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()">DISAGREE</button>',
-            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()">👈 SWIPE LEFT</button>',
+            '<button class="action-btn btn-disagree" onclick="swipeCards.swipeLeft()">👈 SWIPE LEFT · AGREE</button>',
         ),
         (
             '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>✔️</button>',
-            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>👉 SWIPE RIGHT</button>',
+            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>👉 SWIPE RIGHT · DISAGREE</button>',
         ),
         (
             '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>AGREE</button>',
-            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>👉 SWIPE RIGHT</button>',
+            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>👉 SWIPE RIGHT · DISAGREE</button>',
         ),
         (
             '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()">✔️</button>',
-            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()">👉 SWIPE RIGHT</button>',
+            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()">👉 SWIPE RIGHT · DISAGREE</button>',
         ),
         (
             '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()">AGREE</button>',
-            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()">👉 SWIPE RIGHT</button>',
+            '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()">👉 SWIPE RIGHT · DISAGREE</button>',
         ),
         (
             '<button class="action-btn btn-back" onclick="swipeCards.goBack()">',
-            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">👇 SWIPE DOWN</button>\n'
+            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">👇 SWIPE DOWN · PASS</button>\n'
             '          <button class="action-btn btn-back" onclick="swipeCards.goBack()">',
         ),
         (
             '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">PASS</button>',
-            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">👇 SWIPE DOWN</button>',
+            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">👇 SWIPE DOWN · PASS</button>',
         ),
         (
             '<div class="action-indicator like">✔️</div>\n          <div class="action-indicator pass">❌</div>',
-            '<div class="action-indicator like">👉 SWIPE RIGHT</div>\n'
-            '          <div class="action-indicator pass">👈 SWIPE LEFT</div>\n'
-            '          <div class="action-indicator down">👇 SWIPE DOWN</div>',
+            '<div class="action-indicator like">👉 RIGHT = DISAGREE</div>\n'
+            '          <div class="action-indicator pass">👈 LEFT = AGREE</div>\n'
+            '          <div class="action-indicator down">👇 DOWN = PASS</div>',
         ),
         (
             '<div class="action-indicator like">AGREE</div>\n'
             '          <div class="action-indicator pass">DISAGREE</div>\n'
             '          <div class="action-indicator down">PASS</div>',
-            '<div class="action-indicator like">👉 SWIPE RIGHT</div>\n'
-            '          <div class="action-indicator pass">👈 SWIPE LEFT</div>\n'
-            '          <div class="action-indicator down">👇 SWIPE DOWN</div>',
+            '<div class="action-indicator like">👉 RIGHT = DISAGREE</div>\n'
+            '          <div class="action-indicator pass">👈 LEFT = AGREE</div>\n'
+            '          <div class="action-indicator down">👇 DOWN = PASS</div>',
         ),
         (
             "          const likeIndicator = topCard.querySelector('.action-indicator.like');\n"
@@ -331,7 +331,7 @@ def _build_patched_frontend_dir(package_root: Path):
     if not source_frontend.exists():
         return None
 
-    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v8"
+    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v9"
     target_frontend = base_temp / "frontend"
 
     if not target_frontend.exists():
