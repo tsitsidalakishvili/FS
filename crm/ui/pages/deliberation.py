@@ -140,7 +140,7 @@ def _build_swipe_card_image(comment, idx, total, compact=False):
     line_height = typography["line_height"]
 
     title = html.escape(f"Question {idx + 1} / {total}")
-    subtitle = html.escape("Swipe right = agree   •   Swipe left = disagree   •   Swipe down = pass")
+    subtitle = html.escape("👉 Swipe right   •   👈 Swipe left   •   👇 Swipe down")
     footer = (
         "Reactions: "
         f"👍 {_safe_int(comment.get('agree_count', 0))}   "
@@ -348,12 +348,12 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
         show_border=False,
         last_card_message="You have reviewed all statements.",
         colors={
-            "like_bg": "#167CA7",
-            "like_fg": "#FFFFFF",
-            "pass_bg": "#0D435C",
-            "pass_fg": "#FFFFFF",
-            "back_bg": "#4D6B7A",
-            "back_fg": "#FFFFFF",
+            "like_bg": "#FFFFFF",
+            "like_fg": "#0B3A52",
+            "pass_bg": "#FFFFFF",
+            "pass_fg": "#0B3A52",
+            "back_bg": "#FFFFFF",
+            "back_fg": "#0B3A52",
             "btn_border": "#CFE2EC",
             "card_bg": "#FFFFFF",
             "background_color": "#F8FCFF",
@@ -378,7 +378,7 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
 
     if not compact:
         st.progress((total_swiped / len(comments)) if comments else 0.0)
-        st.caption("Swipe right = Agree, swipe left = Disagree, swipe down = Pass.")
+        st.caption("👉 Swipe right   •   👈 Swipe left   •   👇 Swipe down")
         st.caption("Each card shows one question/comment only.")
         st.caption(f"{total_swiped}/{len(comments)} reactions recorded")
 
