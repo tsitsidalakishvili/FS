@@ -59,6 +59,28 @@ Notes:
 - Internal endpoints are deny-by-default and require `x-actor-id` + `x-actor-role`.
 - Public registration payload is registration-scoped and rejects extra fields (for example `eventId`).
 
+### Frontend rewrite slice (React + Vite)
+
+Run:
+
+```bash
+cd frontend
+npm install
+npm run dev -- --host 0.0.0.0 --port 5173
+```
+
+Open: `http://localhost:5173`
+
+Optional frontend env:
+
+```bash
+cd frontend
+cp .env.example .env
+```
+
+Set API base URL if needed:
+- `VITE_API_BASE_URL=http://localhost:8020/api/v1`
+
 ## Agent Chain Console (multi-agent dev console)
 The console orchestrates specialist agents over a shared run state (blackboard), keeps run history, and can optionally apply safe code changes and run git automation.
 
