@@ -56,6 +56,110 @@ def _append_query_params(url: str, params: dict[str, str]) -> str:
     )
 
 
+def _render_architecture_card(title: str, concept: str, outcome: str, tone: str = "default") -> None:
+    palettes = {
+        "default": {"bg": "#F8FAFF", "border": "#9FB8E8", "title": "#1E3A8A"},
+        "entry": {"bg": "#FFF7ED", "border": "#FDBA74", "title": "#9A3412"},
+        "monitor": {"bg": "#ECFDF3", "border": "#86EFAC", "title": "#166534"},
+    }
+    palette = palettes.get(tone, palettes["default"])
+    st.markdown(
+        f"""
+        <div style="
+            border: 1px solid {palette['border']};
+            background: {palette['bg']};
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin: 4px 0;
+        ">
+            <div style="font-size: 16px; font-weight: 700; color: {palette['title']}; margin-bottom: 6px;">
+                {title}
+            </div>
+            <div style="font-size: 14px; margin-bottom: 4px;">
+                <b>Concept:</b> {concept}
+            </div>
+            <div style="font-size: 14px;">
+                <b>Outcome:</b> {outcome}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_workflow_architecture() -> None:
+    st.markdown("### Workflow architecture")
+    st.caption("Two intake paths feed one due diligence pipeline.")
+
+    entry_cols = st.columns(2)
+    with entry_cols[0]:
+        _render_architecture_card(
+            "CRM Context",
+            "Investigation starts from profile, task, or event context.",
+            "Scope is tied to campaign operations and known entities.",
+            tone="default",
+        )
+    with entry_cols[1]:
+        _render_architecture_card(
+            "Competitor Lead",
+            "Investigation starts from a person/company outside normal CRM entry points.",
+            "Direct intake for competitor analysis and monitoring.",
+            tone="entry",
+        )
+
+    st.markdown("<div style='text-align:center;font-size:24px;'>↓</div>", unsafe_allow_html=True)
+
+    steps = [
+        (
+            "1) Start Point",
+            "Normalize intake path and choose subject.",
+            "One decision context for downstream checks.",
+        ),
+        (
+            "2) Entity Resolution",
+            "Match or create canonical IDs to avoid duplicates.",
+            "Trusted subject identity in the graph.",
+        ),
+        (
+            "3) Enrichment",
+            "Pull and connect external evidence (Wikidata/OpenSanctions/News).",
+            "Broader relationship graph with source-backed facts.",
+        ),
+        (
+            "4) Neo4j Graph",
+            "Store nodes and relationships with provenance metadata.",
+            "Queryable graph state for risk and reporting.",
+        ),
+        (
+            "5) Risk View",
+            "Run 2-hop exposure analysis over direct + indirect ties.",
+            "Prioritized risk signals for analyst decisions.",
+        ),
+        (
+            "6) Report",
+            "Summarize findings with evidence and recommendations.",
+            "Decision-ready PDF for internal sharing.",
+        ),
+        (
+            "7) CRM Actions",
+            "Convert findings into follow-up, escalation, or monitoring tasks.",
+            "Accountable operational next steps.",
+        ),
+    ]
+    for idx, (title, concept, outcome) in enumerate(steps):
+        _render_architecture_card(title, concept, outcome, tone="default")
+        if idx < len(steps) - 1:
+            st.markdown("<div style='text-align:center;font-size:22px;'>↓</div>", unsafe_allow_html=True)
+
+    st.markdown("### Continuous loop")
+    _render_architecture_card(
+        "Weekly Monitoring",
+        "Refresh media mentions and update existing entities continuously.",
+        "Risk posture stays current between manual investigations.",
+        tone="monitor",
+    )
+
+
 def _render_competitor_watchlist() -> tuple[str, str]:
     st.markdown("#### Competitor watchlist")
     with st.form("dd_competitor_form", clear_on_submit=True):
@@ -121,56 +225,7 @@ def render_due_diligence_page():
     how_it_works_tab, actual_app_tab = st.tabs(["How it works", "Actual app"])
 
     with how_it_works_tab:
-        st.markdown("### Workflow architecture")
-        dot = """
-        digraph DDWorkflow {
-          rankdir=TB;
-          splines=ortho;
-          graph [bgcolor="white", pad="0.25", nodesep="0.35", ranksep="0.45"];
-          node [
-            shape=box,
-            style="rounded,filled",
-            fillcolor="#F4F8FB",
-            color="#2E5B7A",
-            fontname="Helvetica",
-            fontsize=23,
-            penwidth=1.8,
-            margin="0.12,0.10"
-          ];
-          edge [
-            color="#4A6A85",
-            fontname="Helvetica",
-            fontsize=15,
-            penwidth=1.6
-          ];
-
-          CRMContext [label="CRM Context\\nProfile / Task / Event\\nConcept: business reason for investigation\\nOutcome: investigation scope", margin="0.13,0.12"];
-          CompetitorLead [label="Competitor Lead\\nPerson / Company\\nConcept: external trigger outside CRM record\\nOutcome: direct intake subject", fillcolor="#FFF5EB", color="#B96A1D", margin="0.13,0.12"];
-          StartPoint [label="1) Start Point\\nChoose source and subject\\nConcept: normalize entry path\\nOutcome: one intake decision", shape=diamond, fillcolor="#EEF4FF", margin="0.13,0.12"];
-          EntityResolution [label="2) Entity Resolution\\nMatch / create canonical ID\\nConcept: single source of truth\\nOutcome: deduplicated entity", margin="0.13,0.12"];
-          Enrichment [label="3) Enrichment\\nWikidata / OpenSanctions / News\\nConcept: expand evidence graph\\nOutcome: new facts + linked sources", margin="0.13,0.12"];
-          GraphStore [label="4) Neo4j Graph\\nStore nodes and relationships\\nConcept: provenance-first intelligence\\nOutcome: queryable network state", margin="0.13,0.12"];
-          RiskView [label="5) Risk View\\n2-hop exposure checks\\nConcept: evaluate direct + indirect risk\\nOutcome: prioritized risk signals", margin="0.13,0.12"];
-          Report [label="6) Report\\nEvidence-backed decision brief\\nConcept: explainable recommendations\\nOutcome: shareable PDF summary", margin="0.13,0.12"];
-          ActionBacklog [label="7) CRM Actions\\nFollow-up / Escalate / Monitor\\nConcept: convert insight to operations\\nOutcome: accountable next steps", margin="0.13,0.12"];
-          WeeklyMonitor [label="Weekly Monitoring\\nRefresh media and mentions\\nConcept: continuous risk detection\\nOutcome: updated risk posture", fillcolor="#EEF7EE", color="#2C7A4B", margin="0.13,0.12"];
-
-          CRMContext -> StartPoint [label="from CRM"];
-          CompetitorLead -> StartPoint [label="direct intake"];
-          StartPoint -> EntityResolution [label="subject selected"];
-          EntityResolution -> Enrichment [label="run checks"];
-          EntityResolution -> GraphStore [label="entity exists"];
-          Enrichment -> GraphStore [label="new entities + links"];
-          GraphStore -> RiskView [label="query"];
-          RiskView -> Report [label="export"];
-          Report -> ActionBacklog [label="next steps"];
-          WeeklyMonitor -> GraphStore [label="scheduled update"];
-        }
-        """
-        try:
-            st.graphviz_chart(dot, use_container_width=True)
-        except Exception:
-            st.code(dot, language="dot")
+        _render_workflow_architecture()
 
     with actual_app_tab:
         st.markdown("### Actual app")
