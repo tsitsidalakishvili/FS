@@ -5,7 +5,7 @@ import tempfile
 import streamlit.components.v1 as components
 
 
-_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V22 */"
+_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V23 */"
 
 
 def _replace_all(content, replacements):
@@ -50,18 +50,16 @@ def _js_replacements():
             '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()"><span class="fs-swipe-icon fs-right" aria-hidden="true"></span><span class="fs-swipe-copy"><b>AGREE</b><small>SWIPE RIGHT</small></span></button>',
         ),
         (
-            '<button class="action-btn btn-back" onclick="swipeCards.goBack()">',
-            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()"><span class="fs-swipe-icon fs-down" aria-hidden="true"></span><span class="fs-swipe-copy"><b>PASS</b><small>SWIPE DOWN</small></span></button>\n'
-            '          ',
-        ),
-        (
-            '<button class="action-btn btn-back" onclick="swipeCards.goBack()">\n'
+            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">PASS</button>\n'
+            '          <button class="action-btn btn-back" onclick="swipeCards.goBack()">\n'
             '            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n'
             '              <path d="M12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21C8.5 21 5.5 18.5 4 15.5" stroke="#FFA500" stroke-width="2.5" stroke-linecap="round" fill="none"/>\n'
             '              <path d="M2 14L4 12.5L6 14" stroke="#FFA500" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>\n'
             '            </svg>\n'
-            '          </button>',
-            '',
+            '          </button>\n'
+            '          <button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>AGREE</button>',
+            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()"><span class="fs-swipe-icon fs-down" aria-hidden="true"></span><span class="fs-swipe-copy"><b>PASS</b><small>SWIPE DOWN</small></span></button>\n'
+            '          <button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>AGREE</button>',
         ),
         (
             '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">PASS</button>',
@@ -254,13 +252,13 @@ def _css_append():
   flex-wrap: wrap !important;
   justify-content: center !important;
   align-items: center !important;
-  gap: 10px;
+  gap: 8px;
 }}
 
 .action-btn {{
-  width: 100% !important;
+  width: auto !important;
   min-width: 0;
-  min-height: 124px !important;
+  min-height: 98px !important;
   height: auto !important;
   border-radius: 20px !important;
   border: 1.5px solid #D1DEE8 !important;
@@ -282,12 +280,12 @@ def _css_append():
 }}
 
 .fs-swipe-icon {{
-  width: 78px;
-  height: 52px;
-  flex: 0 0 78px;
+  width: 64px;
+  height: 40px;
+  flex: 0 0 64px;
   display: inline-block;
   background-repeat: no-repeat;
-  background-size: 138% auto;
+  background-size: 130% auto;
   background-position: center;
 }}
 
@@ -329,11 +327,16 @@ def _css_append():
 .btn-pass,
 .btn-like {{
   order: 1;
-  flex: 1 1 calc(33.333% - 10px);
-  max-width: 176px;
+  flex: 1 1 calc(33.333% - 8px);
+  max-width: 160px;
 }}
 
 .btn-back {{
+  display: none !important;
+}}
+
+/* Fallback in case upstream back icon remains as orphan SVG */
+.action-buttons > svg {{
   display: none !important;
 }}
 
@@ -371,10 +374,10 @@ def _css_append():
 
 .action-indicator .fs-swipe-icon {{
   filter: none;
-  width: 52px;
-  height: 34px;
-  flex: 0 0 52px;
-  background-size: 128% auto;
+  width: 46px;
+  height: 30px;
+  flex: 0 0 46px;
+  background-size: 122% auto;
 }}
 
 .fs-ind-copy {{
@@ -444,14 +447,14 @@ def _css_append():
   }}
 
   .action-btn {{
-    min-height: 112px !important;
+    min-height: 88px !important;
     padding: 9px 8px 10px;
   }}
 
   .fs-swipe-icon {{
-    width: 66px;
-    height: 44px;
-    flex: 0 0 66px;
+    width: 56px;
+    height: 35px;
+    flex: 0 0 56px;
   }}
 
   .fs-swipe-copy b {{
@@ -477,7 +480,7 @@ def _build_patched_frontend_dir(package_root: Path):
     if not source_frontend.exists():
         return None
 
-    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v22"
+    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v23"
     target_frontend = base_temp / "frontend"
 
     if not target_frontend.exists():
