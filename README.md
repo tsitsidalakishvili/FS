@@ -149,3 +149,21 @@ Set this in `.env` or Streamlit secrets to connect the external DD app:
 ```toml
 DUE_DILIGENCE_APP_URL = "https://your-dd-app.example"
 ```
+
+## Neo4j production migration bundle
+
+Production migration assets are in:
+- `neo4j/PRODUCTION_MIGRATION_PLAN.md`
+- `neo4j/CYPHER_QUERY_CATALOG.md`
+- `neo4j/cypher/*.cypher`
+- `scripts/neo4j_migration.py`
+- `scripts/neo4j_seed_from_csv.py`
+
+Typical run order:
+```bash
+python scripts/neo4j_migration.py --phase preflight
+python scripts/neo4j_migration.py --phase schema
+python scripts/neo4j_migration.py --phase migrate --migration-id <MIGRATION_ID>
+python scripts/neo4j_migration.py --phase seed --migration-id <MIGRATION_ID>
+python scripts/neo4j_migration.py --phase validate --migration-id <MIGRATION_ID>
+```
