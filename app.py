@@ -66,18 +66,76 @@ st.markdown(
   width: 18px !important;
   height: 18px !important;
 }
-/* Compact page rhythm to reduce long-sheet feeling */
-h1, h2, h3, h4 {
-  margin-top: 0.2rem !important;
-  margin-bottom: 0.35rem !important;
+/* Compact + colorful page rhythm */
+[data-testid="stAppViewContainer"] .main .block-container {
+  max-width: 100% !important;
+  padding-top: 0.55rem !important;
+  padding-bottom: 0.8rem !important;
+  padding-left: 0.85rem !important;
+  padding-right: 0.85rem !important;
+}
+[data-testid="stAppViewContainer"] .main .block-container h1,
+[data-testid="stAppViewContainer"] .main .block-container h2,
+[data-testid="stAppViewContainer"] .main .block-container h3,
+[data-testid="stAppViewContainer"] .main .block-container h4 {
+  margin-top: 0.14rem !important;
+  margin-bottom: 0.28rem !important;
+  line-height: 1.2 !important;
+}
+[data-testid="stAppViewContainer"] .main .block-container h1 {
+  color: #0B3A52 !important;
+}
+[data-testid="stAppViewContainer"] .main .block-container h2,
+[data-testid="stAppViewContainer"] .main .block-container h3 {
+  color: #0B3A52 !important;
+  padding: 0.36rem 0.62rem !important;
+  border-left: 4px solid #167CA7;
+  border-radius: 10px;
+  background: linear-gradient(
+    90deg,
+    rgba(22, 124, 167, 0.18) 0%,
+    rgba(22, 124, 167, 0.08) 60%,
+    rgba(22, 124, 167, 0.02) 100%
+  );
+}
+[data-testid="stAppViewContainer"] .main .block-container h4 {
+  color: #0B3A52 !important;
+  padding-left: 0.45rem !important;
+  border-left: 3px solid #6BB5D3;
 }
 div[data-testid="stCaptionContainer"] {
-  margin-top: -0.12rem !important;
-  margin-bottom: 0.22rem !important;
+  margin-top: -0.08rem !important;
+  margin-bottom: 0.16rem !important;
 }
 .block-container hr {
-  margin-top: 0.65rem !important;
-  margin-bottom: 0.65rem !important;
+  margin-top: 0.4rem !important;
+  margin-bottom: 0.4rem !important;
+}
+[data-testid="stHorizontalBlock"] {
+  gap: 0.65rem !important;
+}
+[data-testid="stVerticalBlock"] > div.element-container {
+  margin-bottom: 0.32rem !important;
+}
+[data-testid="stMetric"] {
+  border: 1px solid #D3E7F2;
+  border-radius: 10px;
+  padding: 0.35rem 0.45rem !important;
+  background: #F8FCFF;
+}
+[data-testid="stForm"],
+[data-testid="stExpander"] details {
+  border-radius: 12px !important;
+}
+@media (max-width: 768px) {
+  [data-testid="stAppViewContainer"] .main .block-container {
+    padding-left: 0.6rem !important;
+    padding-right: 0.6rem !important;
+    padding-top: 0.45rem !important;
+  }
+  [data-testid="stHorizontalBlock"] {
+    gap: 0.45rem !important;
+  }
 }
 </style>
 """,
