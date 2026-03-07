@@ -140,6 +140,13 @@ SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/XXX/YYY/ZZZ"
 SLACK_USERNAME = "Freedom Square CRM"
 ```
 
+## Feedback logging in Neo4j
+The sidebar Feedback widget now stores every submission in Neo4j (`:FeedbackEntry`) for product development documentation and history tracking.
+
+- Storage works even when SMTP email is not configured.
+- If SMTP is configured, the app also sends feedback by email.
+- Admin page shows recent stored feedback entries.
+
 ## Due Diligence tab integration
 The CRM **Due Diligence** tab now has:
 - **How it works**: workflow-style architecture + block connection timeline

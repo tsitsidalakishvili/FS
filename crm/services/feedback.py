@@ -12,6 +12,7 @@ from crm.config import (
     SMTP_USE_TLS,
     SMTP_USER,
 )
+from crm.data.feedback_logs import create_feedback_entry
 
 
 def _parse_int(value, default):
@@ -62,11 +63,12 @@ def send_feedback_email(name, email, message, page=None):
 
 def render_feedback_widget(page_label="App"):
     with st.sidebar.expander("Feedback", expanded=False):
-        st.caption("Send feedback directly to the team.")
-        if not feedback_email_configured():
-            st.info("Email feedback is not configured yet.")
-            st.caption("Set `FEEDBACK_EMAIL_TO` and SMTP settings in `.env` or Streamlit secrets.")
-            return
+        st.caption("Send feedback to the team. Feedback is stored in Neo4j for documentation.")
+        email_ready = feedback_email_configured()
+        st.caption(
+            f"Email delivery: {'enabled' if email_ready else 'not configured'} "
+            "(storage in Neo4j remains active)."
+        )
         with st.form("feedback_form", clear_on_submit=True):
             name = st.text_input("Name (optional)", key="feedback_name")
             email = st.text_input("Email (optional)", key="feedback_email")
@@ -76,13 +78,39 @@ def render_feedback_widget(page_label="App"):
             if not message.strip():
                 st.warning("Please enter a message.")
             else:
-                ok, error = send_feedback_email(
-                    name.strip(),
-                    email.strip(),
-                    message.strip(),
+                email_ok = False
+                email_error = None
+                email_status = "not_configured"
+                if email_ready:
+                    email_ok, email_error = send_feedback_email(
+                        name.strip(),
+                        email.strip(),
+                        message.strip(),
+                        page=page_label,
+                    )
+                    email_status = "sent" if email_ok else "failed"
+                save_ok = create_feedback_entry(
+                    name=name.strip(),
+                    email=email.strip(),
                     page=page_label,
+                    message=message.strip(),
+                    email_status=email_status,
+                    email_error=email_error or "",
                 )
-                if ok:
-                    st.success("Thanks! Your feedback was sent.")
+                if save_ok and email_status == "sent":
+                    st.success("Thanks! Feedback saved and emailed.")
+                elif save_ok and email_status == "failed":
+                    st.warning(
+                        "Feedback saved in Neo4j, but email delivery failed. "
+                        f"Error: {email_error}"
+                    )
+                elif save_ok:
+                    st.success("Thanks! Feedback saved in Neo4j.")
                 else:
-                    st.error(f"Could not send feedback: {error}")
+                    if email_status == "sent":
+                        st.warning(
+                            "Feedback email was sent, but saving to Neo4j failed. "
+                            "Check database connection."
+                        )
+                    else:
+                        st.error("Could not save feedback. Check Neo4j connection.")

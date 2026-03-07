@@ -13,6 +13,7 @@ from crm.config import (
     WHATSAPP_GROUP_WEBHOOK_URL,
 )
 from crm.data.events import delete_event, list_events
+from crm.data.feedback_logs import list_feedback_entries
 from crm.data.segments import delete_segment, list_segments
 from crm.data.tasks import delete_task, list_tasks
 from crm.data.whatsapp_groups import delete_whatsapp_group, list_whatsapp_groups
@@ -266,6 +267,13 @@ def render_admin_page():
     st.write(f"**Configured**: {'Yes' if feedback_email_configured() else 'No'}")
     st.write(f"**From**: {FEEDBACK_EMAIL_FROM or 'Not set'}")
     st.write(f"**To**: {FEEDBACK_EMAIL_TO or 'Not set'}")
+    feedback_df = list_feedback_entries(limit=250)
+    st.write(f"**Stored feedback entries (Neo4j)**: {len(feedback_df):,}")
+    with st.expander("View feedback log", expanded=False):
+        if feedback_df.empty:
+            st.caption("No feedback entries stored yet.")
+        else:
+            st.dataframe(feedback_df, use_container_width=True, height=260)
 
     st.markdown("### WhatsApp")
     st.write(f"**Group webhook configured**: {'Yes' if WHATSAPP_GROUP_WEBHOOK_URL else 'No'}")
