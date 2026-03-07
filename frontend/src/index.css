@@ -1,8 +1,8 @@
 :root {
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.4;
-  color: #0f172a;
-  background: #f8fafc;
+  color: #1f2937;
+  background: #f9fbff;
 }
 
 * {
@@ -12,6 +12,11 @@
 body {
   margin: 0;
   min-width: 320px;
+  background-color: #f9fbff;
+  background-image:
+    linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 
 #root {
@@ -20,6 +25,9 @@ body {
 
 .app-shell {
   min-height: 100vh;
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 0.9rem;
 }
 
 .topbar {
@@ -27,59 +35,137 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  padding: 0.8rem 1rem;
-  background: #0f172a;
-  color: #f8fafc;
+  flex-wrap: wrap;
+  padding: 0.9rem 1rem;
+  background: #ffffff;
+  border: 2px solid #6c8ebf;
+  border-radius: 10px;
+  box-shadow: 0 2px 0 #dce6f5;
 }
 
 .topbar h1 {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.1rem;
+}
+
+.subtitle {
+  margin: 0.2rem 0 0;
+  color: #4b5563;
+  font-size: 0.85rem;
 }
 
 .identity-form {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .identity-form input,
 .identity-form select {
   padding: 0.4rem 0.5rem;
   border-radius: 6px;
-  border: 1px solid #94a3b8;
+  border: 1px solid #6c8ebf;
+  background: #f8fbff;
   min-width: 150px;
 }
 
 .saved-pill {
-  background: #16a34a;
-  color: white;
+  background: #d5e8d4;
+  color: #2f5233;
   padding: 0.15rem 0.45rem;
-  border-radius: 999px;
+  border-radius: 5px;
   font-size: 0.8rem;
+  border: 1px solid #82b366;
+}
+
+.flow-strip {
+  margin-top: 0.8rem;
+  padding: 0.7rem;
+  border: 2px solid #6c8ebf;
+  border-radius: 10px;
+  background: #fff;
+  display: flex;
+  gap: 1.3rem;
+  align-items: center;
+  overflow-x: auto;
+}
+
+.flow-node {
+  position: relative;
+  min-width: 150px;
+  text-align: center;
+  padding: 0.5rem 0.7rem;
+  border: 2px solid #6c8ebf;
+  border-radius: 8px;
+  background: #dae8fc;
+  color: #1f3a66;
+  font-weight: 600;
+}
+
+.flow-node:not(:last-child)::after {
+  content: "→";
+  position: absolute;
+  right: -1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6c8ebf;
+  font-weight: 700;
 }
 
 .nav {
   display: flex;
-  gap: 1rem;
-  padding: 0.7rem 1rem;
-  background: #e2e8f0;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: 0.8rem;
+  padding: 0.7rem;
+  background: #fff;
+  border: 2px solid #6c8ebf;
+  border-radius: 10px;
 }
 
 .nav a {
+  position: relative;
   text-decoration: none;
-  color: #0f172a;
-  padding: 0.25rem 0.35rem;
-  border-radius: 4px;
+  color: #1f3a66;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid #6c8ebf;
+  background: #dae8fc;
+  font-weight: 600;
 }
 
 .nav a.active {
-  background: #0f172a;
+  background: #6c8ebf;
   color: #fff;
 }
 
 .content {
+  padding: 0.9rem 0;
+}
+
+.content > section,
+.public-section {
+  background: #fff;
+  border: 2px solid #6c8ebf;
+  border-radius: 10px;
+  box-shadow: 0 2px 0 #dce6f5;
   padding: 1rem;
+}
+
+h2 {
+  margin: -1rem -1rem 1rem;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 2px solid #6c8ebf;
+  background: #dae8fc;
+  color: #1f3a66;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+}
+
+h3,
+h4 {
+  color: #1f3a66;
 }
 
 .toolbar {
@@ -108,41 +194,80 @@ select,
 textarea,
 button {
   padding: 0.45rem 0.55rem;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #6c8ebf;
   border-radius: 6px;
   font: inherit;
+  background: #fff;
 }
 
 button {
-  background: #0f172a;
+  background: #6c8ebf;
   color: #fff;
   cursor: pointer;
   width: fit-content;
+  border: 1px solid #4a6da2;
+}
+
+button:hover {
+  background: #5d7eaf;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
+  background: #fff;
 }
 
 th,
 td {
-  border: 1px solid #cbd5e1;
+  border: 1px solid #b7cae8;
   padding: 0.45rem;
   text-align: left;
   vertical-align: top;
 }
 
+th {
+  background: #edf3fe;
+  color: #1f3a66;
+}
+
 .error {
-  color: #b91c1c;
+  color: #8a1c1c;
+  background: #f8cecc;
+  border: 1px solid #b85450;
+  border-radius: 6px;
+  padding: 0.5rem;
 }
 
 .success {
-  color: #166534;
+  color: #2f5233;
+  background: #d5e8d4;
+  border: 1px solid #82b366;
+  border-radius: 6px;
+  padding: 0.5rem;
 }
 
 .public-section {
-  max-width: 760px;
+  max-width: 860px;
   margin: 0 auto;
-  padding: 1rem;
+}
+
+code {
+  background: #edf3fe;
+  border: 1px solid #b7cae8;
+  border-radius: 5px;
+  padding: 0.25rem 0.4rem;
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .flow-node {
+    min-width: 130px;
+  }
+  .identity-form input,
+  .identity-form select {
+    min-width: 120px;
+  }
 }

@@ -4,6 +4,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { loadActorIdentity, saveActorIdentity } from '../authHeaders'
 
 const ALLOWED_ROLES = ['platform_admin', 'ops_coordinator', 'case_worker', 'read_only_auditor']
+const FLOW_STEPS = ['People', 'Tasks', 'Events', 'Public registration']
 
 export function AppLayout() {
   const initial = loadActorIdentity()
@@ -21,7 +22,10 @@ export function AppLayout() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <h1>CRM Rewrite Frontend</h1>
+        <div>
+          <h1>CRM Rewrite Frontend</h1>
+          <p className="subtitle">Diagram-style UI mode</p>
+        </div>
         <form className="identity-form" onSubmit={onSave}>
           <input
             value={actorId}
@@ -40,6 +44,13 @@ export function AppLayout() {
           {saved ? <span className="saved-pill">saved</span> : null}
         </form>
       </header>
+      <section className="flow-strip" aria-label="Main flow map">
+        {FLOW_STEPS.map((step) => (
+          <div key={step} className="flow-node">
+            {step}
+          </div>
+        ))}
+      </section>
       <nav className="nav">
         <NavLink to="/app/people">People</NavLink>
         <NavLink to="/app/tasks">Tasks</NavLink>
