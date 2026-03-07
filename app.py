@@ -34,6 +34,7 @@ from crm.ui.components.questionnaire import (
 from crm.ui.pages.admin import render_admin_page
 from crm.ui.pages import dashboard as dashboard_page
 from crm.ui.pages.deliberation import render_deliberation as render_deliberation_page
+from crm.ui.pages.due_diligence import render_due_diligence_page
 from crm.ui.pages.events import render_event_registration_page, render_events_page
 from crm.ui.pages.map import render_map_page
 from crm.ui.pages.outreach import render_outreach_page
@@ -1792,6 +1793,7 @@ nav_choice = st.sidebar.radio(
         "Outreach",
         "Map",
         "Events",
+        "Due Diligence",
         "Data",
         "Admin",
         "Deliberation",
@@ -1821,6 +1823,10 @@ if nav_choice == "Map":
 
 if nav_choice == "Events":
     render_events_page()
+    st.stop()
+
+if nav_choice == "Due Diligence":
+    render_due_diligence_page()
     st.stop()
 
 if nav_choice == "Data":
