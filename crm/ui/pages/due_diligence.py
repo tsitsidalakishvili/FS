@@ -103,32 +103,47 @@ def render_due_diligence_page():
         st.markdown("### Workflow architecture")
         dot = """
         digraph DDWorkflow {
-          rankdir=LR;
-          splines=true;
-          node [shape=box, style="rounded,filled", fillcolor="#F4F8FB", color="#2E5B7A", fontname="Helvetica"];
-          edge [color="#4A6A85", fontname="Helvetica", fontsize=10];
+          rankdir=TB;
+          splines=ortho;
+          graph [bgcolor="white", pad="0.5", nodesep="0.65", ranksep="0.9"];
+          node [
+            shape=box,
+            style="rounded,filled",
+            fillcolor="#F4F8FB",
+            color="#2E5B7A",
+            fontname="Helvetica",
+            fontsize=18,
+            penwidth=1.8,
+            margin="0.20,0.18"
+          ];
+          edge [
+            color="#4A6A85",
+            fontname="Helvetica",
+            fontsize=13,
+            penwidth=1.6
+          ];
 
-          CRMContext [label="CRM Context\\n(Profile / Task / Event)"];
-          EntityResolution [label="Entity Resolution\\n(Person/Company ID mapping)"];
-          Enrichment [label="On-demand Enrichment\\nWikidata / OpenSanctions / News"];
-          WeeklyMonitor [label="Weekly Monitoring\\nScheduled news refresh"];
-          GraphStore [label="Neo4j Graph\\nNodes + edges with\\nsource + ingested_at"];
-          RiskView [label="Risk View\\n2-hop risky neighbors"];
-          Report [label="PDF Report\\nEvidence-backed output"];
-          ActionBacklog [label="CRM Actions\\nFollow-up tasks / escalation"];
+          CRMContext [label="1. CRM Context\\nProfile / Task / Event"];
+          EntityResolution [label="2. Entity Resolution\\nPerson/Company ID"];
+          Enrichment [label="3. Enrichment\\nWikidata / OpenSanctions / News"];
+          GraphStore [label="4. Neo4j Graph\\nwith source + ingested_at"];
+          RiskView [label="5. Risk View\\n2-hop risk checks"];
+          Report [label="6. Report\\nEvidence-backed PDF"];
+          ActionBacklog [label="7. CRM Actions\\nFollow-up / Escalation"];
+          WeeklyMonitor [label="Weekly Monitoring\\nrefresh news links", fillcolor="#EEF7EE", color="#2C7A4B"];
 
-          CRMContext -> EntityResolution [label="when DD tab opens"];
-          EntityResolution -> Enrichment [label="analyst triggers checks"];
-          EntityResolution -> GraphStore [label="if entity exists"];
+          CRMContext -> EntityResolution [label="tab opened"];
+          EntityResolution -> Enrichment [label="run checks"];
+          EntityResolution -> GraphStore [label="entity exists"];
           Enrichment -> GraphStore [label="new entities + links"];
-          WeeklyMonitor -> GraphStore [label="weekly job\\nadds MENTIONED_IN"];
-          GraphStore -> RiskView [label="query time"];
-          RiskView -> Report [label="when exporting report"];
-          Report -> ActionBacklog [label="decision + next actions"];
+          GraphStore -> RiskView [label="query"];
+          RiskView -> Report [label="export"];
+          Report -> ActionBacklog [label="next steps"];
+          WeeklyMonitor -> GraphStore [label="scheduled update"];
         }
         """
         try:
-            st.graphviz_chart(dot)
+            st.graphviz_chart(dot, use_container_width=True)
         except Exception:
             st.code(dot, language="dot")
 
