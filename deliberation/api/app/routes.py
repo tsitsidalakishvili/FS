@@ -8,6 +8,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Header, HTTPException, Query
 
 from .analytics import compute_cluster_insights, compute_metrics, run_clustering
+from .cache import cache_delete, cache_get_json, cache_set_json, get_cache_ttl_seconds
 from .db import NEO4J_DATABASE, get_driver
 from .schemas import (
     ConversationDatasetImportRequest,
@@ -28,6 +29,7 @@ from .schemas import (
 router = APIRouter()
 
 ANON_SALT = os.getenv("ANON_SALT", "dev-salt")
+CONVERSATIONS_CACHE_KEY = "deliberation:conversations:list:v1"
 
 
 def _hash_participant(raw_id: str) -> str:
@@ -149,6 +151,10 @@ def _normalize_optional_timestamp(value) -> Optional[str]:
     return parsed.isoformat()
 
 
+def _invalidate_conversation_list_cache() -> None:
+    cache_delete(CONVERSATIONS_CACHE_KEY)
+
+
 @router.post("/conversations", response_model=ConversationOut)
 def create_conversation(payload: ConversationCreate):
     convo_id = str(uuid4())
@@ -184,6 +190,7 @@ def create_conversation(payload: ConversationCreate):
         if record is None:
             raise HTTPException(status_code=500, detail="Conversation creation failed")
         convo = _node_to_dict(record["c"])
+    _invalidate_conversation_list_cache()
     return _conversation_out(convo)
 
 
@@ -214,11 +221,15 @@ def update_conversation(conversation_id: str, payload: ConversationUpdate):
         record = records[0] if records else None
     if record is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    _invalidate_conversation_list_cache()
     return _conversation_out(_node_to_dict(record["c"]))
 
 
 @router.get("/conversations", response_model=List[ConversationOut])
 def list_conversations():
+    cached = cache_get_json(CONVERSATIONS_CACHE_KEY)
+    if cached is not None:
+        return cached
     driver = get_driver()
     query = "MATCH (c:Conversation) RETURN c ORDER BY c.createdAt DESC"
     with driver.session(database=NEO4J_DATABASE) as session:
@@ -227,6 +238,11 @@ def list_conversations():
     for record in records:
         convo = _node_to_dict(record["c"])
         conversations.append(_conversation_out(convo))
+    cache_set_json(
+        CONVERSATIONS_CACHE_KEY,
+        conversations,
+        ttl_seconds=get_cache_ttl_seconds(default=30),
+    )
     return conversations
 
 
@@ -283,6 +299,7 @@ def delete_conversation(conversation_id: str):
             DETACH DELETE p
             """,
         )
+    _invalidate_conversation_list_cache()
     return {"deleted": True, "conversation_id": conversation_id}
 
 

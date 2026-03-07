@@ -25,6 +25,7 @@ from crm.config import (
 from crm.db.neo4j import init_driver, run_query, run_write
 import crm.db.neo4j as neo4j_db
 from crm.services.feedback import render_feedback_widget
+from crm.observability import setup_streamlit_observability
 from crm.ui.components.import_export import (
     render_import_export_section as render_import_export_section_ui,
 )
@@ -52,6 +53,8 @@ except Exception:
     plt = None
     venn2 = None
     venn3 = None
+
+setup_streamlit_observability()
 
 st.set_page_config(page_title="Freedom Square CRM (Short)", layout="wide")
 

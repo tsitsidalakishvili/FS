@@ -15,3 +15,6 @@ pyvis
 fastapi>=0.103
 pydantic>=2,<3
 uvicorn
+redis>=5.0
+prometheus-client>=0.20
+sentry-sdk>=2.0

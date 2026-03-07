@@ -6,3 +6,6 @@ pydantic
 numpy
 pandas
 scikit-learn
+redis>=5.0
+prometheus-client>=0.20
+sentry-sdk>=2.0
