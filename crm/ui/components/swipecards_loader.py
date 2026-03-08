@@ -5,7 +5,7 @@ import tempfile
 import streamlit.components.v1 as components
 
 
-_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V23 */"
+_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V24 */"
 
 
 def _replace_all(content, replacements):
@@ -50,20 +50,26 @@ def _js_replacements():
             '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()"><span class="fs-swipe-icon fs-right" aria-hidden="true"></span><span class="fs-swipe-copy"><b>AGREE</b><small>SWIPE RIGHT</small></span></button>',
         ),
         (
-            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">PASS</button>\n'
-            '          <button class="action-btn btn-back" onclick="swipeCards.goBack()">\n'
+            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">PASS</button>',
+            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()"><span class="fs-swipe-icon fs-down" aria-hidden="true"></span><span class="fs-swipe-copy"><b>PASS</b><small>SWIPE DOWN</small></span></button>',
+        ),
+        (
+            '<button class="action-btn btn-back" onclick="swipeCards.goBack()">\n'
             '            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n'
             '              <path d="M12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21C8.5 21 5.5 18.5 4 15.5" stroke="#FFA500" stroke-width="2.5" stroke-linecap="round" fill="none"/>\n'
             '              <path d="M2 14L4 12.5L6 14" stroke="#FFA500" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>\n'
             '            </svg>\n'
-            '          </button>\n'
-            '          <button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>AGREE</button>',
-            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()"><span class="fs-swipe-icon fs-down" aria-hidden="true"></span><span class="fs-swipe-copy"><b>PASS</b><small>SWIPE DOWN</small></span></button>\n'
-            '          <button class="action-btn btn-like" onclick="swipeCards.swipeRight()" disabled>AGREE</button>',
+            '          </button>',
+            '',
         ),
         (
-            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">PASS</button>',
-            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()"><span class="fs-swipe-icon fs-down" aria-hidden="true"></span><span class="fs-swipe-copy"><b>PASS</b><small>SWIPE DOWN</small></span></button>',
+            '<button class="action-btn btn-back" onclick="swipeCards.goBack()">\n'
+            '          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n'
+            '            <path d="M12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21C8.5 21 5.5 18.5 4 15.5" stroke="#FFA500" stroke-width="2.5" stroke-linecap="round" fill="none"/>\n'
+            '            <path d="M2 16L4 13L6 16" stroke="#FFA500" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>\n'
+            '          </svg>\n'
+            '        </button>',
+            '',
         ),
         (
             '<div class="action-indicator like">✔️</div>\n          <div class="action-indicator pass">❌</div>',
@@ -480,7 +486,7 @@ def _build_patched_frontend_dir(package_root: Path):
     if not source_frontend.exists():
         return None
 
-    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v23"
+    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v24"
     target_frontend = base_temp / "frontend"
 
     if not target_frontend.exists():
