@@ -621,22 +621,77 @@ def render_deliberation(public_only: bool):
 
     st.subheader("Deliberation")
     st.caption("Anonymous comments + votes, consensus analysis, and clustering.")
-    convo_options = {c["topic"]: c["id"] for c in conversations} if conversations else {}
-    selected_title = st.selectbox(
-        "Select conversation",
-        [""] + list(convo_options.keys()),
-        key="delib_conversation_select",
-        help="Pick which deliberation conversation you want to participate in / analyze.",
-    )
-    if selected_title:
-        st.session_state["delib_conversation_id"] = convo_options[selected_title]
+    convo_lookup = {}
+    convo_options = {}
+    for convo in conversations:
+        convo_id = str(convo.get("id") or "").strip()
+        topic = str(convo.get("topic") or "").strip() or "Untitled conversation"
+        if not convo_id:
+            continue
+        label = topic
+        if label in convo_options:
+            label = f"{topic} [{convo_id[:8]}]"
+        convo_lookup[convo_id] = convo
+        convo_options[label] = convo_id
+
+    def _render_conversation_workspace() -> None:
+        st.markdown("### Conversation workspace")
+        selected_title = st.selectbox(
+            "Active conversation",
+            [""] + list(convo_options.keys()),
+            key="delib_conversation_select",
+            help="Pick the active conversation once, then continue in other tabs.",
+        )
+        if selected_title:
+            st.session_state["delib_conversation_id"] = convo_options[selected_title]
+
+        convo_id = str(st.session_state.get("delib_conversation_id") or "").strip()
+        convo = convo_lookup.get(convo_id)
+        if convo:
+            topic = str(convo.get("topic") or "Untitled conversation")
+            st.success(f"Active conversation: {topic}")
+            status_tokens = [
+                "Open" if convo.get("is_open", True) else "Closed",
+                (
+                    "Comments enabled"
+                    if convo.get("allow_comment_submission", True)
+                    else "Comments disabled"
+                ),
+                (
+                    "Moderation required"
+                    if convo.get("moderation_required", False)
+                    else "Moderation optional"
+                ),
+            ]
+            st.caption(" | ".join(status_tokens))
+            description = str(convo.get("description") or "").strip()
+            if description:
+                st.write(description)
+            if public_only:
+                st.caption("Continue in Participate and Reports tabs.")
+            else:
+                st.caption(
+                    "Continue in Configure, Participate, Moderate, and Monitor / Reports tabs."
+                )
+        elif conversations:
+            st.info("Select an active conversation to unlock participation and reports.")
+        elif public_only:
+            st.info("No conversations are available right now.")
+        else:
+            st.info("No conversations yet. Create one in Configure.")
 
     if public_only:
-        tab_participate, tab_reports = st.tabs(["Participate", "Reports"])
-    else:
-        tab_config, tab_participate, tab_moderate, tab_reports = st.tabs(
-            ["Configure", "Participate", "Moderate", "Monitor / Reports"]
+        tab_conversation, tab_participate, tab_reports = st.tabs(
+            ["Conversation", "Participate", "Reports"]
         )
+        with tab_conversation:
+            _render_conversation_workspace()
+    else:
+        tab_conversation, tab_config, tab_participate, tab_moderate, tab_reports = st.tabs(
+            ["Conversation", "Configure", "Participate", "Moderate", "Monitor / Reports"]
+        )
+        with tab_conversation:
+            _render_conversation_workspace()
 
         with tab_config:
             st.markdown("### Questionnaire templates (shareable)")
