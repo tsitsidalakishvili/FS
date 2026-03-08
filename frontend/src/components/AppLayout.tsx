@@ -4,7 +4,18 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { loadActorIdentity, saveActorIdentity } from '../authHeaders'
 
 const ALLOWED_ROLES = ['platform_admin', 'ops_coordinator', 'case_worker', 'read_only_auditor']
-const FLOW_STEPS = ['People', 'Tasks', 'Events', 'Public registration']
+const FLOW_STEPS = [
+  'Dashboard',
+  'People',
+  'Tasks',
+  'Outreach',
+  'Map',
+  'Events',
+  'Due Diligence',
+  'Data',
+  'Admin',
+  'Deliberation',
+]
 
 export function AppLayout() {
   const initial = loadActorIdentity()
@@ -52,9 +63,16 @@ export function AppLayout() {
         ))}
       </section>
       <nav className="nav">
+        <NavLink to="/app/dashboard">Dashboard</NavLink>
         <NavLink to="/app/people">People</NavLink>
         <NavLink to="/app/tasks">Tasks</NavLink>
+        <NavLink to="/app/outreach">Outreach</NavLink>
+        <NavLink to="/app/map">Map</NavLink>
         <NavLink to="/app/events">Events</NavLink>
+        <NavLink to="/app/due-diligence">Due Diligence</NavLink>
+        <NavLink to="/app/data">Data</NavLink>
+        <NavLink to="/app/admin">Admin</NavLink>
+        <NavLink to="/app/deliberation">Deliberation</NavLink>
         <NavLink to="/public/event-registration">Public registration</NavLink>
       </nav>
       <main className="content">

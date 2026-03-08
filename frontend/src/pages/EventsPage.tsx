@@ -1,24 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { ApiError, createEvent } from '../api'
+import { ApiError, createEvent, listEvents } from '../api'
 import type { Event } from '../types'
-
-const EVENT_CACHE_KEY = 'crm_frontend_events'
-
-function loadCachedEvents(): Event[] {
-  try {
-    const raw = localStorage.getItem(EVENT_CACHE_KEY)
-    if (!raw) return []
-    return JSON.parse(raw) as Event[]
-  } catch {
-    return []
-  }
-}
-
-function saveCachedEvents(events: Event[]): void {
-  localStorage.setItem(EVENT_CACHE_KEY, JSON.stringify(events.slice(0, 100)))
-}
 
 export function EventsPage() {
   const [eventKey, setEventKey] = useState('')
@@ -26,22 +10,35 @@ export function EventsPage() {
   const [published, setPublished] = useState(false)
   const [events, setEvents] = useState<Event[]>([])
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function load() {
+    setLoading(true)
+    setError('')
+    try {
+      const rows = await listEvents(250)
+      setEvents(rows)
+    } catch (err) {
+      const detail = err instanceof ApiError ? err.message : 'Event load failed'
+      setError(detail)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    setEvents(loadCachedEvents())
+    void load()
   }, [])
 
   async function onCreate(e: FormEvent) {
     e.preventDefault()
     setError('')
     try {
-      const event = await createEvent({ eventKey, name, published })
-      const next = [event, ...events.filter((item) => item.eventId !== event.eventId)]
-      setEvents(next)
-      saveCachedEvents(next)
+      await createEvent({ eventKey, name, published })
       setEventKey('')
       setName('')
       setPublished(false)
+      await load()
     } catch (err) {
       const detail = err instanceof ApiError ? err.message : 'Event create failed'
       setError(detail)
@@ -72,7 +69,13 @@ export function EventsPage() {
       </form>
       {error ? <p className="error">{error}</p> : null}
 
-      <h3>Recent events (local cache)</h3>
+      <div className="toolbar">
+        <button onClick={() => void load()} disabled={loading}>
+          {loading ? 'Refreshing...' : 'Refresh events'}
+        </button>
+      </div>
+
+      <h3>Events</h3>
       <table>
         <thead>
           <tr>
@@ -95,7 +98,7 @@ export function EventsPage() {
           ))}
         </tbody>
       </table>
-      {events.length === 0 ? <p>No cached events yet.</p> : null}
+      {events.length === 0 ? <p>No events found.</p> : null}
     </section>
   )
 }

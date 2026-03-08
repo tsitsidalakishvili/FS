@@ -78,8 +78,14 @@ cd frontend
 cp .env.example .env
 ```
 
-Set API base URL if needed:
+Set env values if needed:
 - `VITE_API_BASE_URL=http://localhost:8020/api/v1`
+- `VITE_DELIBERATION_API_BASE_URL=http://localhost:8010`
+- `VITE_DUE_DILIGENCE_APP_URL=https://your-dd-app.example`
+
+Current parity pages in the new UI:
+- Dashboard, People, Tasks, Outreach, Map, Events, Due Diligence, Data, Admin, Deliberation
+- Public routes: Event registration + preserved questionnaire/survey links
 
 ## Agent Chain Console (multi-agent dev console)
 The console orchestrates specialist agents over a shared run state (blackboard), keeps run history, and can optionally apply safe code changes and run git automation.

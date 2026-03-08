@@ -49,3 +49,27 @@ export type PublicRegistrationResponse = {
   createdAt: string
 }
 
+export type Conversation = {
+  id: string
+  topic: string
+  description?: string
+  is_open: boolean
+  allow_comment_submission: boolean
+  allow_viz: boolean
+  moderation_required: boolean
+  created_at?: string
+  comments?: number
+  participants?: number
+}
+
+export type ConversationComment = {
+  id: string
+  text: string
+  status: 'pending' | 'approved' | 'rejected' | string
+  is_seed: boolean
+  created_at?: string
+  agree_count: number
+  disagree_count: number
+  pass_count: number
+}
+

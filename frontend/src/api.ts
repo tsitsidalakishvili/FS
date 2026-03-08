@@ -1,5 +1,7 @@
 import { buildInternalHeaders } from './authHeaders'
 import type {
+  Conversation,
+  ConversationComment,
   DeepLinkResponse,
   Event,
   EventRegistration,
@@ -9,6 +11,8 @@ import type {
 } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8020/api/v1'
+const DELIBERATION_API_BASE_URL =
+  import.meta.env.VITE_DELIBERATION_API_BASE_URL || 'http://localhost:8010'
 
 export class ApiError extends Error {
   status: number
@@ -125,6 +129,10 @@ export async function getEvent(eventId: string): Promise<Event> {
   return request<Event>(`/events/${eventId}`)
 }
 
+export async function listEvents(limit = 200): Promise<Event[]> {
+  return request<Event[]>(`/events?limit=${limit}`)
+}
+
 export async function createDeepLink(
   eventId: string,
   payload: { subjectPersonId: string; expiresInHours: number },
@@ -158,5 +166,64 @@ export async function submitPublicRegistration(payload: {
     },
     { internal: false },
   )
+}
+
+async function deliberationRequest<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const headers = new Headers(init.headers || {})
+  headers.set('Content-Type', 'application/json')
+  const response = await fetch(`${DELIBERATION_API_BASE_URL}${path}`, { ...init, headers })
+  if (!response.ok) {
+    let detail = `Request failed (${response.status})`
+    try {
+      const payload = (await response.json()) as { detail?: string }
+      if (payload.detail) detail = payload.detail
+    } catch {
+      // keep fallback detail
+    }
+    throw new ApiError(detail, response.status)
+  }
+  return (await response.json()) as T
+}
+
+export async function getDeliberationHealth(): Promise<{ status: string }> {
+  return deliberationRequest<{ status: string }>('/healthz')
+}
+
+export async function listConversations(): Promise<Conversation[]> {
+  return deliberationRequest<Conversation[]>('/conversations')
+}
+
+export async function createConversation(payload: {
+  topic: string
+  description?: string
+}): Promise<Conversation> {
+  return deliberationRequest<Conversation>('/conversations', {
+    method: 'POST',
+    body: JSON.stringify({
+      topic: payload.topic,
+      description: payload.description,
+      is_open: true,
+      allow_comment_submission: true,
+      allow_viz: true,
+      moderation_required: false,
+    }),
+  })
+}
+
+export async function listConversationComments(conversationId: string): Promise<ConversationComment[]> {
+  return deliberationRequest<ConversationComment[]>(`/conversations/${conversationId}/comments`)
+}
+
+export async function createConversationComment(
+  conversationId: string,
+  text: string,
+): Promise<ConversationComment> {
+  return deliberationRequest<ConversationComment>(`/conversations/${conversationId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  })
 }
 

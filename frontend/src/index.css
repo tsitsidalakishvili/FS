@@ -183,6 +183,37 @@ h4 {
   margin-bottom: 1rem;
 }
 
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+
+.metric-card {
+  border: 1px solid #b7cae8;
+  border-radius: 8px;
+  padding: 0.6rem;
+  background: #f6f9ff;
+}
+
+.metric-card h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.92rem;
+}
+
+.metric-card p {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
 label {
   display: grid;
   gap: 0.25rem;
@@ -231,6 +262,15 @@ th {
   color: #1f3a66;
 }
 
+.selected-row {
+  background: #e8f0ff;
+}
+
+.selected-row td {
+  border-top-color: #6c8ebf;
+  border-bottom-color: #6c8ebf;
+}
+
 .error {
   color: #8a1c1c;
   background: #f8cecc;
@@ -269,5 +309,8 @@ code {
   .identity-form input,
   .identity-form select {
     min-width: 120px;
+  }
+  .two-col {
+    grid-template-columns: 1fr;
   }
 }

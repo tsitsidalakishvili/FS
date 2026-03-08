@@ -145,3 +145,20 @@ def test_event_registration_is_visible_to_internal_readers() -> None:
     assert registrations.status_code == 200
     assert len(registrations.json()) == 1
 
+
+def test_events_list_endpoint_returns_created_events() -> None:
+    client = _client()
+    headers = _admin_headers()
+    created = client.post(
+        "/api/v1/events",
+        headers=headers,
+        json={"eventKey": "event-003", "name": "Community Meetup"},
+    )
+    assert created.status_code == 200
+    event_id = created.json()["eventId"]
+
+    listed = client.get("/api/v1/events?limit=50", headers=headers)
+    assert listed.status_code == 200
+    rows = listed.json()
+    assert any(item["eventId"] == event_id for item in rows)
+

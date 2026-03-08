@@ -112,6 +112,14 @@ def create_app() -> FastAPI:
     ) -> dict:
         return repo.create_event(payload.model_dump(), actor_id=actor.actor_id)
 
+    @app.get("/api/v1/events", response_model=list[EventOut])
+    def list_events(
+        _: Actor = EventReadAccess,
+        limit: int = Query(default=200, ge=1, le=500),
+        repo: Repository = Depends(get_repo),
+    ) -> list[dict]:
+        return repo.list_events(limit=limit)
+
     @app.get("/api/v1/events/{event_id}", response_model=EventOut)
     def get_event(
         event_id: str,

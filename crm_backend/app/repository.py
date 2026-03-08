@@ -53,6 +53,8 @@ class Repository(Protocol):
 
     def create_event(self, payload: dict[str, Any], *, actor_id: str) -> dict[str, Any]: ...
 
+    def list_events(self, *, limit: int) -> list[dict[str, Any]]: ...
+
     def get_event(self, event_id: str) -> dict[str, Any] | None: ...
 
     def create_deeplink(
@@ -198,6 +200,11 @@ class InMemoryRepository:
 
     def get_event(self, event_id: str) -> dict[str, Any] | None:
         return self.events.get(event_id)
+
+    def list_events(self, *, limit: int) -> list[dict[str, Any]]:
+        rows = list(self.events.values())
+        rows.sort(key=lambda r: r["createdAt"], reverse=True)
+        return rows[:limit]
 
     def create_deeplink(
         self,
@@ -497,6 +504,24 @@ class Neo4jRepository:
         event["createdAt"] = _to_iso(event.get("createdAt"))
         event["updatedAt"] = _to_iso(event.get("updatedAt"))
         return event
+
+    def list_events(self, *, limit: int) -> list[dict[str, Any]]:
+        rows = self._read(
+            """
+            MATCH (e:Event)
+            RETURN e
+            ORDER BY e.createdAt DESC
+            LIMIT $limit
+            """,
+            {"limit": int(limit)},
+        )
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            event = _node_to_dict(row["e"])
+            event["createdAt"] = _to_iso(event.get("createdAt"))
+            event["updatedAt"] = _to_iso(event.get("updatedAt"))
+            result.append(event)
+        return result
 
     def create_deeplink(
         self,
