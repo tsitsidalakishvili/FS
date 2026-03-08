@@ -599,8 +599,24 @@ def render_deliberation(public_only: bool):
         if not comments:
             st.info("No approved comments yet.")
         else:
-            # Mobile questionnaire mode should stay focused on card + swipe controls.
-            _render_swipe_component(comments, convo_id, headers, compact=True)
+            swipe_state = _render_swipe_component(comments, convo_id, headers, compact=True)
+            current_comment_id = (
+                swipe_state.get("current_comment_id")
+                if isinstance(swipe_state, dict)
+                else None
+            )
+            focus_key = f"delib_questionnaire_focus_comment_{convo_id}"
+            pinned_focus_comment_id = st.session_state.get(focus_key)
+            resolved_focus_comment_id = pinned_focus_comment_id or current_comment_id
+            with st.expander("Comments", expanded=False):
+                _render_questionnaire_like_dislike_buttons(
+                    comments,
+                    convo_id,
+                    headers,
+                    focus_comment_id=resolved_focus_comment_id,
+                )
+        if convo.get("allow_comment_submission", True):
+            _render_questionnaire_comment_form(convo_id, headers)
         return
 
     st.subheader("Deliberation")
