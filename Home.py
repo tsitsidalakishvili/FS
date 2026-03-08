@@ -24,10 +24,10 @@ if not ensure_db_connection():
 
 st.markdown("### Home")
 st.write(
-    "Use the sidebar **Pages** navigation to open Dashboard, People, Tasks, Outreach, "
-    "Map, Events, Due Diligence, Data, Admin, and Deliberation."
+    "Use the sidebar **Pages** navigation to open CRM, Deliberation, Due Diligence, "
+    "Data, and Admin."
 )
 st.caption(
-    "This app now uses native Streamlit multipage routing. Query links for survey, "
-    "deliberation, and event registration are still supported."
+    "CRM page contains tabs for Dashboard, People, Tasks, Outreach, Events, and Map. "
+    "Data/Admin stay standalone and cover CRM + Deliberation + Due Diligence."
 )

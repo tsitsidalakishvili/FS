@@ -8,7 +8,7 @@ This folder now contains the **combined** application:
 ```
 ./
   Home.py                 # CRM + Deliberation UI entrypoint (Streamlit multipage)
-  pages/                  # Streamlit native pages (Dashboard, People, Tasks, ...)
+  pages/                  # Streamlit native pages (CRM, Deliberation, Due Diligence, Data, Admin)
   app.py                  # legacy shell (kept for compatibility)
   crm/                    # modularized CRM app code
   data/                   # sample CSVs (imports)

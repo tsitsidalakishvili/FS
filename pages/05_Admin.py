@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from crm.ui.pages.data import render_data_page
+from crm.ui.pages.admin import render_admin_page
 from crm.ui.shell import (
     apply_global_styles,
     ensure_db_connection,
@@ -15,9 +15,11 @@ st.set_page_config(page_title="Freedom Square CRM", layout="wide")
 apply_global_styles()
 if handle_special_entrypoints():
     st.stop()
-if not ensure_supporter_access("Data"):
+if not ensure_supporter_access("Admin"):
     st.stop()
 if not ensure_db_connection():
     st.stop()
 
-render_data_page()
+st.subheader("Admin")
+st.caption("Cross-module administration for CRM, Deliberation, and Due Diligence.")
+render_admin_page()
