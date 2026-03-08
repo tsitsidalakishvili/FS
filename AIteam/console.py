@@ -46,7 +46,7 @@ def _fmt(agent_id: str) -> str:
     return orch.agents_config.agents[agent_id].display_name
 
 agent = st.selectbox("Agent", options=agent_ids, index=agent_ids.index(default_agent), format_func=_fmt)
-autopilot = st.checkbox("Supervisor autopilot", value=False)
+autopilot = st.checkbox("New UI Supervisor autopilot", value=False)
 rounds = st.number_input("Rounds", min_value=1, max_value=10, value=3, step=1)
 
 prompt = st.chat_input("Message")

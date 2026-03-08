@@ -100,7 +100,7 @@ If you want to stay mostly inside Cursor (without the Streamlit console UI), you
 ```
 python -m AIteam.chain_cli create-run "Add a new volunteer follow-up workflow in app.py"
 python -m AIteam.chain_cli autopilot --run-id <RUN_ID> --text "Plan the change and produce a bounded code_change_plan.json"
-python -m AIteam.chain_cli message --run-id <RUN_ID> --agent Supervisor --text "Give me next steps"
+python -m AIteam.chain_cli message --run-id <RUN_ID> --agent "New UI Supervisor" --text "Give me next steps"
 ```
 
 ## Seed data
