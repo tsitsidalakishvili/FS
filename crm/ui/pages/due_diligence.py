@@ -88,7 +88,7 @@ def _render_architecture_card(title: str, concept: str, outcome: str, tone: str 
     )
 
 
-def _render_workflow_architecture() -> None:
+def render_due_diligence_how_it_works() -> None:
     st.markdown("### Workflow architecture")
     st.caption("Draw.io style process map")
     html = """
@@ -241,119 +241,112 @@ def _render_competitor_watchlist() -> tuple[str, str]:
 
 def render_due_diligence_page():
     st.subheader("Due Diligence")
-    how_it_works_tab, actual_app_tab = st.tabs(["How it works", "Actual app"])
-
-    with how_it_works_tab:
-        _render_workflow_architecture()
-
-    with actual_app_tab:
-        st.markdown("### Actual app")
-        st.write(
-            "Use this tab to access the working Due Diligence app and run live checks. "
-            "Case workflow (Phase 2) will build on top of this foundation."
+    st.write(
+        "Use this page to access the working Due Diligence app and run live checks. "
+        "Case workflow (Phase 2) will build on top of this foundation."
+    )
+    st.markdown("#### Investigation start point")
+    start_mode = st.radio(
+        "Start from",
+        ["CRM context", "Competitor person", "Competitor company", "Competitor watchlist"],
+        horizontal=True,
+        key="dd_start_mode",
+    )
+    subject_name = ""
+    subject_type = ""
+    if start_mode == "CRM context":
+        subject_name = st.text_input(
+            "CRM subject (person/company)",
+            key="dd_start_crm_subject",
+            help="Use this when the investigation starts from CRM context.",
+        ).strip()
+        subject_type = st.selectbox(
+            "CRM subject type",
+            ["Person", "Company"],
+            key="dd_start_crm_subject_type",
         )
-        st.markdown("#### Investigation start point")
-        start_mode = st.radio(
-            "Start from",
-            ["CRM context", "Competitor person", "Competitor company", "Competitor watchlist"],
-            horizontal=True,
-            key="dd_start_mode",
-        )
-        subject_name = ""
-        subject_type = ""
-        if start_mode == "CRM context":
-            subject_name = st.text_input(
-                "CRM subject (person/company)",
-                key="dd_start_crm_subject",
-                help="Use this when the investigation starts from CRM context.",
-            ).strip()
-            subject_type = st.selectbox(
-                "CRM subject type",
-                ["Person", "Company"],
-                key="dd_start_crm_subject_type",
-            )
-        elif start_mode == "Competitor person":
-            subject_name = st.text_input(
-                "Competitor person name",
-                key="dd_start_competitor_person",
-                help="Investigate a competitor individual directly without opening a CRM profile first.",
-            ).strip()
-            subject_type = "Person"
-        elif start_mode == "Competitor company":
-            subject_name = st.text_input(
-                "Competitor company name",
-                key="dd_start_competitor_company",
-                help="Investigate a competitor organization directly.",
-            ).strip()
-            subject_type = "Company"
-        else:
-            with st.expander("Manage competitor watchlist", expanded=True):
-                selected_name, selected_type = _render_competitor_watchlist()
-            subject_name = selected_name
-            subject_type = selected_type
+    elif start_mode == "Competitor person":
+        subject_name = st.text_input(
+            "Competitor person name",
+            key="dd_start_competitor_person",
+            help="Investigate a competitor individual directly without opening a CRM profile first.",
+        ).strip()
+        subject_type = "Person"
+    elif start_mode == "Competitor company":
+        subject_name = st.text_input(
+            "Competitor company name",
+            key="dd_start_competitor_company",
+            help="Investigate a competitor organization directly.",
+        ).strip()
+        subject_type = "Company"
+    else:
+        with st.expander("Manage competitor watchlist", expanded=True):
+            selected_name, selected_type = _render_competitor_watchlist()
+        subject_name = selected_name
+        subject_type = selected_type
 
-        if subject_name:
-            st.success(f"Current DD subject: {subject_name} ({subject_type})")
-        else:
-            st.caption("Select or enter a subject to prefill DD app launch and Gmail share.")
+    if subject_name:
+        st.success(f"Current DD subject: {subject_name} ({subject_type})")
+    else:
+        st.caption("Select or enter a subject to prefill DD app launch and Gmail share.")
 
-        app_url = (
-            str(get_config("DUE_DILIGENCE_APP_URL") or "").strip()
-            or str(get_config("DD_APP_URL") or "").strip()
+    app_url = (
+        str(get_config("DUE_DILIGENCE_APP_URL") or "").strip()
+        or str(get_config("DD_APP_URL") or "").strip()
+    )
+    if app_url:
+        st.success("External Due Diligence app is configured.")
+        st.text_input("Configured app URL", value=app_url, key="dd_app_url_preview")
+        app_launch_url = _append_query_params(
+            app_url,
+            {
+                "subject": subject_name,
+                "subject_type": subject_type,
+                "start_mode": start_mode.replace(" ", "_").lower(),
+            },
         )
-        if app_url:
-            st.success("External Due Diligence app is configured.")
-            st.text_input("Configured app URL", value=app_url, key="dd_app_url_preview")
-            app_launch_url = _append_query_params(
-                app_url,
-                {
-                    "subject": subject_name,
-                    "subject_type": subject_type,
-                    "start_mode": start_mode.replace(" ", "_").lower(),
-                },
-            )
-            action_cols = st.columns(3)
-            with action_cols[0]:
-                _link_button("🚀 Open DD app", app_launch_url or app_url)
-            with action_cols[1]:
-                if st.button("🖼️ Toggle embed", key="dd_embed_toggle", use_container_width=True):
-                    st.session_state["dd_embed_external_app"] = not bool(
-                        st.session_state.get("dd_embed_external_app")
-                    )
-            with action_cols[2]:
-                to_email = st.text_input(
-                    "Gmail to",
-                    value=str(FEEDBACK_EMAIL_TO or "").strip(),
-                    key="dd_gmail_to",
-                    help="Optional recipient for Gmail compose action.",
+        action_cols = st.columns(3)
+        with action_cols[0]:
+            _link_button("🚀 Open DD app", app_launch_url or app_url)
+        with action_cols[1]:
+            if st.button("🖼️ Toggle embed", key="dd_embed_toggle", use_container_width=True):
+                st.session_state["dd_embed_external_app"] = not bool(
+                    st.session_state.get("dd_embed_external_app")
                 )
-                gmail_url = _build_gmail_compose_url(
-                    to_email=to_email,
-                    subject="Due Diligence subject review",
-                    body=(
-                        f"Start mode: {start_mode}\n"
-                        f"Subject: {subject_name or 'not set'}\n"
-                        f"Subject type: {subject_type or 'not set'}\n\n"
-                        f"Due Diligence app:\n{app_launch_url or app_url}"
-                    ),
-                )
-                _link_button("✉️ Open in Gmail", gmail_url)
-            with st.expander("Open app inside this tab", expanded=False):
-                if st.checkbox("Embed external DD app", key="dd_embed_external_app"):
-                    components.iframe(app_launch_url or app_url, height=900, scrolling=True)
-        else:
-            st.info(
-                "External DD app URL is not configured yet. "
-                "Set `DUE_DILIGENCE_APP_URL` (or `DD_APP_URL`) in secrets/.env."
+        with action_cols[2]:
+            to_email = st.text_input(
+                "Gmail to",
+                value=str(FEEDBACK_EMAIL_TO or "").strip(),
+                key="dd_gmail_to",
+                help="Optional recipient for Gmail compose action.",
             )
-            st.markdown("**Run locally**")
-            st.code(
-                "cd DD\n"
-                "python -m pip install -r requirements.txt\n"
-                "python -m app.scripts.init_db\n"
-                "streamlit run app/main.py",
-                language="bash",
+            gmail_url = _build_gmail_compose_url(
+                to_email=to_email,
+                subject="Due Diligence subject review",
+                body=(
+                    f"Start mode: {start_mode}\n"
+                    f"Subject: {subject_name or 'not set'}\n"
+                    f"Subject type: {subject_type or 'not set'}\n\n"
+                    f"Due Diligence app:\n{app_launch_url or app_url}"
+                ),
             )
-            st.caption(
-                "After deployment, set DUE_DILIGENCE_APP_URL so this tab can open/embed the live app."
-            )
+            _link_button("✉️ Open in Gmail", gmail_url)
+        with st.expander("Open app inside this tab", expanded=False):
+            if st.checkbox("Embed external DD app", key="dd_embed_external_app"):
+                components.iframe(app_launch_url or app_url, height=900, scrolling=True)
+    else:
+        st.info(
+            "External DD app URL is not configured yet. "
+            "Set `DUE_DILIGENCE_APP_URL` (or `DD_APP_URL`) in secrets/.env."
+        )
+        st.markdown("**Run locally**")
+        st.code(
+            "cd DD\n"
+            "python -m pip install -r requirements.txt\n"
+            "python -m app.scripts.init_db\n"
+            "streamlit run app/main.py",
+            language="bash",
+        )
+        st.caption(
+            "After deployment, set DUE_DILIGENCE_APP_URL so this tab can open/embed the live app."
+        )

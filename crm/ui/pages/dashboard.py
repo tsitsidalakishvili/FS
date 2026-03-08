@@ -8,7 +8,7 @@ from crm.data.tasks import list_tasks
 from crm.db.neo4j import run_query
 
 
-def _render_dashboard_how_it_works():
+def render_dashboard_how_it_works():
     st.markdown("### How it works")
     st.caption("CRM navigation model aligned to tabs: Dashboard, People, Tasks, Outreach, Events, Map")
     diagram = """
@@ -463,11 +463,5 @@ def render_dashboard_trends_page():
 
 def render_dashboard_page():
     st.subheader("Dashboard")
-    how_tab, app_tab = st.tabs(["How it works", "Actual app"])
-
-    with how_tab:
-        _render_dashboard_how_it_works()
-
-    with app_tab:
-        _render_dashboard_actual_app()
+    _render_dashboard_actual_app()
 
