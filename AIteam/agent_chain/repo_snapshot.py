@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -74,6 +75,29 @@ def _read_excerpt(path: Path, *, max_chars: int) -> str:
     return text[: max_chars - 120] + "\n\n... [truncated] ...\n"
 
 
+def _iter_repo_files(repo_root: Path):
+    root = repo_root.resolve()
+    for dirpath, dirnames, filenames in os.walk(root):
+        dir_path = Path(dirpath)
+        rel_dir = dir_path.relative_to(root)
+        parts = rel_dir.parts
+        has_agent_chain_runs = any(
+            parts[i] == "agent_chain" and parts[i + 1] == "runs"
+            for i in range(len(parts) - 1)
+        )
+        if has_agent_chain_runs:
+            dirnames[:] = []
+            continue
+
+        dirnames[:] = [
+            name
+            for name in sorted(dirnames, key=str.lower)
+            if name not in DEFAULT_IGNORE_DIRS
+        ]
+        for filename in sorted(filenames, key=str.lower):
+            yield dir_path / filename
+
+
 def build_repo_snapshot_md(repo_root: Path, *, options: SnapshotOptions | None = None) -> str:
     options = options or SnapshotOptions()
     repo_root = repo_root.resolve()
@@ -92,14 +116,10 @@ def build_repo_snapshot_md(repo_root: Path, *, options: SnapshotOptions | None =
             candidates.append(p)
             seen.add(str(p))
 
-    for p in repo_root.rglob("*"):
+    for p in _iter_repo_files(repo_root):
         if len(candidates) >= options.max_files:
             break
-        if not p.is_file():
-            continue
         rel = p.relative_to(repo_root)
-        if rel.parts and rel.parts[0] in DEFAULT_IGNORE_DIRS:
-            continue
         if not _is_text_candidate(p):
             continue
         if str(p) in seen:
