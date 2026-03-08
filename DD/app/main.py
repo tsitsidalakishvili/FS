@@ -55,6 +55,13 @@ def get_client() -> Neo4jClient:
     )
 
 
+@st.cache_data(ttl=600, show_spinner=False)
+def load_georgia_profiles(api_key: str | None) -> list[dict[str, object]]:
+    if not api_key:
+        return []
+    return get_georgia_dataset_profiles(api_key)
+
+
 client = get_client()
 
 st.title("Graph-Centric Due Diligence Platform")
@@ -109,10 +116,6 @@ with st.sidebar:
         if ok:
             st.success("Neo4j connection OK.")
 
-    if st.button("Reconnect Neo4j"):
-        st.cache_resource.clear()
-        st.experimental_rerun()
-
     st.divider()
     st.header("Create Entity")
     create_label = st.selectbox("Entity type", ["Person", "Company"])
@@ -158,11 +161,13 @@ if search_term.strip():
 
 selected = None
 if results:
-    label_to_display = [
-        f'{r["label"]}: {r["name"]} ({r["id"]})' for r in results if r.get("name")
-    ]
-    selection = st.selectbox("Results", label_to_display)
-    selected = results[label_to_display.index(selection)]
+    display_results = [r for r in results if r.get("name")]
+    if display_results:
+        label_to_display = [
+            f'{r["label"]}: {r["name"]} ({r["id"]})' for r in display_results
+        ]
+        selection = st.selectbox("Results", label_to_display)
+        selected = display_results[label_to_display.index(selection)]
 
 col_left, col_right = st.columns([2, 1])
 
@@ -217,7 +222,7 @@ with col_right:
         georgia_profiles: list[dict[str, object]] = []
         georgia_catalog_error = None
         try:
-            georgia_profiles = get_georgia_dataset_profiles(settings.opensanctions_api_key)
+            georgia_profiles = load_georgia_profiles(settings.opensanctions_api_key)
         except Exception as exc:
             georgia_catalog_error = str(exc)
 
@@ -273,11 +278,12 @@ with col_right:
                 help="Common values: default, sanctions, wd_peps, ge_declarations, ge_ot_list",
             )
 
-        def _run_opensanctions_enrichment(dataset_name: str):
-            _, entity = safe_neo4j_call(
-                "Load entity", get_entity, {}, client, selected["label"], selected["id"]
-            )
-            entity = entity or {}
+        _, entity_snapshot = safe_neo4j_call(
+            "Load entity", get_entity, {}, client, selected["label"], selected["id"]
+        )
+        entity_snapshot = entity_snapshot or {}
+
+        def _run_opensanctions_enrichment(dataset_name: str, entity: dict[str, object]):
             matches: list[dict[str, object]] = []
             if opensanctions_mode == "Match":
                 properties: dict[str, list[str]] = {"name": [selected["name"]]}
@@ -332,7 +338,9 @@ with col_right:
             if not settings.opensanctions_api_key:
                 st.error("Set OPENSANCTIONS_API_KEY in .env to use OpenSanctions.")
             else:
-                ok, _, matches = _run_opensanctions_enrichment(opensanctions_dataset)
+                ok, _, matches = _run_opensanctions_enrichment(
+                    opensanctions_dataset, entity_snapshot
+                )
                 if ok:
                     st.success(f"OpenSanctions enrichment applied (dataset: {opensanctions_dataset}).")
                 if matches:
@@ -353,7 +361,9 @@ with col_right:
                 run_rows = []
                 for dataset_name in sweep_datasets:
                     try:
-                        ok, batch, matches = _run_opensanctions_enrichment(dataset_name)
+                        ok, batch, matches = _run_opensanctions_enrichment(
+                            dataset_name, entity_snapshot
+                        )
                         run_rows.append(
                             {
                                 "dataset": dataset_name,
