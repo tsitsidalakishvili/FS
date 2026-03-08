@@ -5,7 +5,7 @@ import tempfile
 import streamlit.components.v1 as components
 
 
-_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V24 */"
+_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V26 */"
 
 
 def _replace_all(content, replacements):
@@ -50,8 +50,17 @@ def _js_replacements():
             '<button class="action-btn btn-like" onclick="swipeCards.swipeRight()"><span class="fs-swipe-icon fs-right" aria-hidden="true"></span><span class="fs-swipe-copy"><b>AGREE</b><small>SWIPE RIGHT</small></span></button>',
         ),
         (
+            '<button class="action-btn btn-back" onclick="swipeCards.goBack()">',
+            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()"><span class="fs-swipe-icon fs-down" aria-hidden="true"></span><span class="fs-swipe-copy"><b>PASS</b><small>SWIPE DOWN</small></span></button>\n'
+            '          <button class="action-btn btn-back" onclick="swipeCards.goBack()">',
+        ),
+        (
             '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()">PASS</button>',
             '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()"><span class="fs-swipe-icon fs-down" aria-hidden="true"></span><span class="fs-swipe-copy"><b>PASS</b><small>SWIPE DOWN</small></span></button>',
+        ),
+        (
+            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()" disabled>PASS</button>',
+            '<button class="action-btn btn-pass" onclick="swipeCards.swipeDown()" disabled><span class="fs-swipe-icon fs-down" aria-hidden="true"></span><span class="fs-swipe-copy"><b>PASS</b><small>SWIPE DOWN</small></span></button>',
         ),
         (
             '<button class="action-btn btn-back" onclick="swipeCards.goBack()">\n'
@@ -255,7 +264,7 @@ def _css_append():
   width: 100% !important;
   max-width: 560px;
   display: flex !important;
-  flex-wrap: wrap !important;
+  flex-wrap: nowrap !important;
   justify-content: center !important;
   align-items: center !important;
   gap: 8px;
@@ -359,9 +368,17 @@ def _css_append():
 }}
 
 .btn-pass {{
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
   background: rgba(255, 255, 255, 0.90) !important;
   border-color: #D1DEE8 !important;
   color: #0B3A52 !important;
+}}
+
+/* If upstream and patch both render PASS, keep only one */
+.action-buttons .btn-pass + .btn-pass {{
+  display: none !important;
 }}
 
 .action-indicator {{
@@ -486,7 +503,7 @@ def _build_patched_frontend_dir(package_root: Path):
     if not source_frontend.exists():
         return None
 
-    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v24"
+    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v26"
     target_frontend = base_temp / "frontend"
 
     if not target_frontend.exists():
