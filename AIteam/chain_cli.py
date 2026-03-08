@@ -109,7 +109,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--text", required=True)
     sp.set_defaults(func=cmd_message)
 
-    sp = sub.add_parser("autopilot", help="Run Supervisor autopilot")
+    sp = sub.add_parser("autopilot", help="Run CRM Supervisor autopilot")
     sp.add_argument("--run-id", required=True)
     sp.add_argument("--text", required=True)
     sp.add_argument("--rounds", type=int, default=3)

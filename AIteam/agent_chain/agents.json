@@ -1,7 +1,7 @@
 {
   "agents": {
     "Supervisor": {
-      "display_name": "Team Lead (Supervisor)",
+      "display_name": "CRM Supervisor (Supervisor)",
       "prompt": "prompts/Supervisor.md",
       "temperature": 0.2
     },
@@ -100,7 +100,7 @@
     },
     {
       "agent": "Supervisor",
-      "message": "Kickoff: consolidate all kickoff inputs into a clear `kickoff_summary.md` and a prioritized backlog (short, medium, long), including risks and next steps."
+      "message": "Kickoff: CRM Supervisor consolidates all kickoff inputs into a clear `kickoff_summary.md` and a prioritized backlog (short, medium, long), including risks and next steps."
     }
   ]
 }

@@ -71,7 +71,7 @@ def format_run_context(*, objective: str, repo_snapshot_md: str | None, state: d
     supervisor = state.get("supervisor") or {}
     backlog = supervisor.get("backlog") or []
     if backlog:
-        parts.append("\n\n**Current backlog (from Supervisor)**:\n")
+        parts.append("\n\n**Current backlog (from CRM Supervisor)**:\n")
         for item in backlog[:20]:
             parts.append(f"- {item}")
 
