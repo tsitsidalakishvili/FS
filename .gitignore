@@ -2,5 +2,13 @@
 .streamlit/secrets.toml
 __pycache__/
 *.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
 agent_chain/runs/
 AIteam/agent_chain/runs/
+reports/
+DD/reports/
+DD/neo4j.txt
