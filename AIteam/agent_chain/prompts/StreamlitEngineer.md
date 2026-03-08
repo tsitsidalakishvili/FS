@@ -5,5 +5,5 @@ Output in Markdown:
 - Performance considerations
 - Implementation notes for Streamlit
 
-Constraint: preserve existing `app.py` behavior; add new features on new tabs unless told otherwise.
+Constraint: preserve existing `Home.py` + `pages/` behavior; add new features on new tabs/pages unless told otherwise.
 

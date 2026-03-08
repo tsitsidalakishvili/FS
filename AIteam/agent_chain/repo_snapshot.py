@@ -105,7 +105,7 @@ def build_repo_snapshot_md(repo_root: Path, *, options: SnapshotOptions | None =
     priority_files = [
         repo_root / "README.md",
         repo_root / "requirements.txt",
-        repo_root / "app.py",
+        repo_root / "Home.py",
         repo_root / "GRAPH_SCHEMA.md",
     ]
 

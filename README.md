@@ -9,7 +9,6 @@ This folder now contains the **combined** application:
 ./
   Home.py                 # CRM + Deliberation UI entrypoint (Streamlit multipage)
   pages/                  # Streamlit native pages (CRM, Deliberation, Due Diligence, Data, Admin)
-  app.py                  # legacy shell (kept for compatibility)
   crm/                    # modularized CRM app code
   data/                   # sample CSVs (imports)
   scripts/                # local utilities (e.g., testneo4j.py)
@@ -57,7 +56,7 @@ python -m streamlit run AIteam/console.py --server.address 0.0.0.0 --server.port
 ### (Optional) Use from Cursor Terminal (CLI)
 If you want to stay mostly inside Cursor (without the Streamlit console UI), you can drive the chain via:
 ```
-python -m AIteam.chain_cli create-run "Add a new volunteer follow-up workflow in app.py"
+python -m AIteam.chain_cli create-run "Add a new volunteer follow-up workflow in Home.py"
 python -m AIteam.chain_cli autopilot --run-id <RUN_ID> --text "Plan the change and produce a bounded code_change_plan.json"
 python -m AIteam.chain_cli message --run-id <RUN_ID> --agent Supervisor --text "Give me next steps"
 ```

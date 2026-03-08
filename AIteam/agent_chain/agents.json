@@ -80,7 +80,7 @@
     },
     {
       "agent": "StreamlitEngineer",
-      "message": "Kickoff: propose a UX and information architecture for campaign ops within Streamlit (views, navigation, key dashboards) that complements the existing `app.py`."
+      "message": "Kickoff: propose a UX and information architecture for campaign ops within Streamlit (views, navigation, key dashboards) that complements the existing `Home.py` + `pages/` structure."
     },
     {
       "agent": "PrivacyCompliance",
