@@ -1,0 +1,214 @@
+from __future__ import annotations
+
+import streamlit as st
+
+import crm.db.neo4j as neo4j_db
+from crm.clients.deliberation import delib_api_get
+from crm.config import (
+    NEO4J_SANDBOX_DATABASE,
+    NEO4J_SANDBOX_PASSWORD,
+    NEO4J_SANDBOX_URI,
+    NEO4J_SANDBOX_USER,
+    PUBLIC_ONLY,
+    SUPPORTER_ACCESS_CODE,
+)
+from crm.db.neo4j import init_driver
+from crm.services.feedback import render_feedback_widget
+from crm.ui.components.questionnaire import render_survey_page
+from crm.ui.pages.deliberation import render_deliberation
+from crm.ui.pages.events import render_event_registration_page
+
+
+_GLOBAL_STYLE = """
+<style>
+/* Make Streamlit tooltip icons more visible */
+[data-testid="stTooltipIcon"] {
+  opacity: 1 !important;
+  color: #6b7280 !important;
+}
+[data-testid="stTooltipIcon"] svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+/* Compact + colorful page rhythm */
+[data-testid="stAppViewContainer"] .main .block-container {
+  max-width: 100% !important;
+  padding-top: 0.55rem !important;
+  padding-bottom: 0.8rem !important;
+  padding-left: 0.85rem !important;
+  padding-right: 0.85rem !important;
+}
+[data-testid="stAppViewContainer"] .main .block-container h1,
+[data-testid="stAppViewContainer"] .main .block-container h2,
+[data-testid="stAppViewContainer"] .main .block-container h3,
+[data-testid="stAppViewContainer"] .main .block-container h4 {
+  margin-top: 0.14rem !important;
+  margin-bottom: 0.28rem !important;
+  line-height: 1.2 !important;
+}
+[data-testid="stAppViewContainer"] .main .block-container h1 {
+  color: #0B3A52 !important;
+}
+[data-testid="stAppViewContainer"] .main .block-container h2,
+[data-testid="stAppViewContainer"] .main .block-container h3 {
+  color: #0B3A52 !important;
+  padding: 0.36rem 0.62rem !important;
+  border-left: 4px solid #167CA7;
+  border-radius: 10px;
+  background: linear-gradient(
+    90deg,
+    rgba(22, 124, 167, 0.18) 0%,
+    rgba(22, 124, 167, 0.08) 60%,
+    rgba(22, 124, 167, 0.02) 100%
+  );
+}
+[data-testid="stAppViewContainer"] .main .block-container h4 {
+  color: #0B3A52 !important;
+  padding-left: 0.45rem !important;
+  border-left: 3px solid #6BB5D3;
+}
+div[data-testid="stCaptionContainer"] {
+  margin-top: -0.08rem !important;
+  margin-bottom: 0.16rem !important;
+}
+.block-container hr {
+  margin-top: 0.4rem !important;
+  margin-bottom: 0.4rem !important;
+}
+[data-testid="stHorizontalBlock"] {
+  gap: 0.65rem !important;
+}
+[data-testid="stVerticalBlock"] > div.element-container {
+  margin-bottom: 0.32rem !important;
+}
+[data-testid="stMetric"] {
+  border: 1px solid #D3E7F2;
+  border-radius: 10px;
+  padding: 0.35rem 0.45rem !important;
+  background: #F8FCFF;
+}
+[data-testid="stForm"],
+[data-testid="stExpander"] details {
+  border-radius: 12px !important;
+}
+@media (max-width: 768px) {
+  [data-testid="stAppViewContainer"] .main .block-container {
+    padding-left: 0.6rem !important;
+    padding-right: 0.6rem !important;
+    padding-top: 0.45rem !important;
+  }
+  [data-testid="stHorizontalBlock"] {
+    gap: 0.45rem !important;
+  }
+}
+</style>
+"""
+
+
+def apply_global_styles() -> None:
+    st.markdown(_GLOBAL_STYLE, unsafe_allow_html=True)
+
+
+def get_query_param(name: str):
+    try:
+        value = st.query_params.get(name)
+    except Exception:
+        params = st.experimental_get_query_params()
+        value = params.get(name)
+    if isinstance(value, list):
+        return value[0] if value else None
+    return value
+
+
+def ensure_db_connection(*, show_sidebar: bool = True) -> bool:
+    if neo4j_db.driver is not None:
+        return True
+
+    if show_sidebar:
+        st.sidebar.markdown("### Database")
+        st.sidebar.caption("Connection: Sandbox (Web)")
+    if not NEO4J_SANDBOX_URI or not NEO4J_SANDBOX_PASSWORD:
+        if show_sidebar:
+            st.sidebar.warning(
+                "Sandbox credentials missing. Set NEO4J_SANDBOX_URI and "
+                "NEO4J_SANDBOX_PASSWORD in .env or Streamlit secrets."
+            )
+        return False
+
+    ok = init_driver(
+        uri=NEO4J_SANDBOX_URI,
+        user=NEO4J_SANDBOX_USER,
+        password=NEO4J_SANDBOX_PASSWORD,
+        database=NEO4J_SANDBOX_DATABASE,
+    )
+    if not ok or neo4j_db.driver is None:
+        st.error(
+            "Missing or invalid Sandbox Neo4j credentials. "
+            "Set NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD."
+        )
+        return False
+    return True
+
+
+def _supporter_mode() -> bool:
+    supporter_mode = not PUBLIC_ONLY
+    if SUPPORTER_ACCESS_CODE:
+        st.sidebar.markdown("### Access")
+        entered_code = st.sidebar.text_input(
+            "Supporter access code",
+            type="password",
+            help=(
+                "If set in .env, this code gates access to CRM pages. "
+                "Share only with trusted team members."
+            ),
+        )
+        supporter_mode = entered_code == SUPPORTER_ACCESS_CODE
+    return supporter_mode
+
+
+def ensure_supporter_access(page_name: str) -> bool:
+    if not _supporter_mode():
+        st.info("Public view: deliberation participation only.")
+        render_feedback_widget("Deliberation (Public)")
+        render_deliberation(public_only=True)
+        return False
+    render_feedback_widget(page_name)
+    return True
+
+
+def handle_special_entrypoints() -> bool:
+    questionnaire_kind = get_query_param("questionnaire")
+    if questionnaire_kind:
+        kind = str(questionnaire_kind).strip().lower()
+        if kind in {"deliberation", "deliberation_admin"}:
+            convo_id = get_query_param("conversation_id") or get_query_param("conversation")
+            if convo_id:
+                conversations = delib_api_get("/conversations", show_error=False) or []
+                convo_topic = None
+                for convo in conversations:
+                    if str(convo.get("id")) == str(convo_id):
+                        convo_topic = convo.get("topic")
+                        break
+                if convo_topic:
+                    st.session_state["delib_conversation_id"] = convo_id
+                    st.session_state["delib_conversation_select"] = convo_topic
+            render_deliberation(public_only=(kind == "deliberation"))
+            return True
+
+        if kind in {"event_registration", "event"}:
+            if not ensure_db_connection(show_sidebar=False):
+                st.error("Database connection unavailable for event registration.")
+                return True
+            event_id = get_query_param("event_id") or get_query_param("event")
+            event_key = get_query_param("event_key") or get_query_param("eventKey")
+            render_event_registration_page(event_id=event_id, event_key=event_key)
+            return True
+
+        st.error("Unknown questionnaire type.")
+        return True
+
+    survey_id = get_query_param("survey")
+    if survey_id:
+        render_survey_page(str(survey_id).strip())
+        return True
+    return False

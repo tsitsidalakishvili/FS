@@ -7,7 +7,9 @@ This folder now contains the **combined** application:
 ## Folder structure
 ```
 ./
-  app.py                  # CRM + Deliberation UI entrypoint
+  Home.py                 # CRM + Deliberation UI entrypoint (Streamlit multipage)
+  pages/                  # Streamlit native pages (Dashboard, People, Tasks, ...)
+  app.py                  # legacy shell (kept for compatibility)
   crm/                    # modularized CRM app code
   data/                   # sample CSVs (imports)
   scripts/                # local utilities (e.g., testneo4j.py)
@@ -33,7 +35,7 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8010
 
 ### 2) Start CRM UI
 ```
-python -m streamlit run app.py --server.address 0.0.0.0 --server.port 8506
+python -m streamlit run Home.py --server.address 0.0.0.0 --server.port 8506
 ```
 
 Open: `http://localhost:8506`
