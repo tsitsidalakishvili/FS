@@ -261,48 +261,92 @@ def render_deliberation(public_only: bool):
                     )
                     st.caption(counts)
                     cols = st.columns(3)
-                    if cols[0].button(
-                        "Agree",
-                        key=f"delib-{comment['id']}-agree",
-                        help="Vote Agree on this comment.",
-                    ):
-                        delib_api_post(
-                            "/vote",
-                            {
-                                "conversation_id": convo_id,
-                                "comment_id": comment["id"],
-                                "choice": 1,
-                            },
-                            headers=headers,
-                        )
-                    if cols[1].button(
-                        "Disagree",
-                        key=f"delib-{comment['id']}-disagree",
-                        help="Vote Disagree on this comment.",
-                    ):
-                        delib_api_post(
-                            "/vote",
-                            {
-                                "conversation_id": convo_id,
-                                "comment_id": comment["id"],
-                                "choice": -1,
-                            },
-                            headers=headers,
-                        )
-                    if cols[2].button(
-                        "Pass",
-                        key=f"delib-{comment['id']}-pass",
-                        help="Skip/Pass on this comment (neutral / no vote).",
-                    ):
-                        delib_api_post(
-                            "/vote",
-                            {
-                                "conversation_id": convo_id,
-                                "comment_id": comment["id"],
-                                "choice": 0,
-                            },
-                            headers=headers,
-                        )
+                    if public_only:
+                        if cols[0].button(
+                            "Swipe left",
+                            key=f"delib-{comment['id']}-swipe-left",
+                            help="Swipe left / vote Disagree on this comment.",
+                        ):
+                            delib_api_post(
+                                "/vote",
+                                {
+                                    "conversation_id": convo_id,
+                                    "comment_id": comment["id"],
+                                    "choice": -1,
+                                },
+                                headers=headers,
+                            )
+                        if cols[1].button(
+                            "Pass",
+                            key=f"delib-{comment['id']}-swipe-pass",
+                            help="Skip/Pass on this comment (neutral / no vote).",
+                        ):
+                            delib_api_post(
+                                "/vote",
+                                {
+                                    "conversation_id": convo_id,
+                                    "comment_id": comment["id"],
+                                    "choice": 0,
+                                },
+                                headers=headers,
+                            )
+                        if cols[2].button(
+                            "Swipe right",
+                            key=f"delib-{comment['id']}-swipe-right",
+                            help="Swipe right / vote Agree on this comment.",
+                        ):
+                            delib_api_post(
+                                "/vote",
+                                {
+                                    "conversation_id": convo_id,
+                                    "comment_id": comment["id"],
+                                    "choice": 1,
+                                },
+                                headers=headers,
+                            )
+                    else:
+                        if cols[0].button(
+                            "Agree",
+                            key=f"delib-{comment['id']}-agree",
+                            help="Vote Agree on this comment.",
+                        ):
+                            delib_api_post(
+                                "/vote",
+                                {
+                                    "conversation_id": convo_id,
+                                    "comment_id": comment["id"],
+                                    "choice": 1,
+                                },
+                                headers=headers,
+                            )
+                        if cols[1].button(
+                            "Disagree",
+                            key=f"delib-{comment['id']}-disagree",
+                            help="Vote Disagree on this comment.",
+                        ):
+                            delib_api_post(
+                                "/vote",
+                                {
+                                    "conversation_id": convo_id,
+                                    "comment_id": comment["id"],
+                                    "choice": -1,
+                                },
+                                headers=headers,
+                            )
+                        if cols[2].button(
+                            "Pass",
+                            key=f"delib-{comment['id']}-pass",
+                            help="Skip/Pass on this comment (neutral / no vote).",
+                        ):
+                            delib_api_post(
+                                "/vote",
+                                {
+                                    "conversation_id": convo_id,
+                                    "comment_id": comment["id"],
+                                    "choice": 0,
+                                },
+                                headers=headers,
+                            )
                     st.divider()
 
             if convo and convo.get("allow_comment_submission", True):
