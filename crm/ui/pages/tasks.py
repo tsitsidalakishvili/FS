@@ -46,13 +46,17 @@ def render_tasks_tab():
             help="Max number of tasks to load.",
         )
     with filter_cols[3]:
-        refresh = st.button("Refresh", key="tasks_refresh", help="Reload the task queue with the selected filters.")
+        refresh = st.button(
+            "Refresh",
+            key="tasks_refresh",
+            help="Reload the task queue with the selected filters.",
+        )
 
     status = None if status_filter == "(any)" else status_filter
     group = None if group_filter == "(any)" else group_filter
-    df = list_tasks(status=status, group=group, limit=limit)
     if refresh:
-        df = list_tasks(status=status, group=group, limit=limit)
+        st.rerun()
+    df = list_tasks(status=status, group=group, limit=limit)
 
     st.markdown("#### Task statistics")
     if not df.empty and "status" in df.columns:

@@ -18,6 +18,7 @@ def _safe_conversations():
     return conversations if conversations is not None else None
 
 
+@st.cache_data(ttl=120, show_spinner=False)
 def _load_survey_templates():
     templates = []
     if not os.path.isdir(FORMS_DIR):
