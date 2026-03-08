@@ -40,6 +40,8 @@ def _load_survey_templates():
 
 
 def _filter_templates(templates, kind):
+    if str(kind or "").strip().lower() in {"", "all", "any"}:
+        return list(templates)
     filtered = []
     for template in templates:
         audience = template.get("audience") or []
@@ -218,16 +220,24 @@ def render_survey_page(survey_id):
 
 
 def render_questionnaire_block(kind, show_expander=True):
-    label = "Supporter" if kind == "supporter" else "Member"
+    normalized_kind = str(kind or "").strip().lower()
+    if normalized_kind == "supporter":
+        label = "Supporter"
+    elif normalized_kind == "member":
+        label = "Member"
+    else:
+        label = "Audience"
+
     def _render_content():
         survey_tab, delib_tab = st.tabs(["Survey form", "Deliberation"])
 
         with survey_tab:
-            render_survey_block(kind)
+            render_survey_block(normalized_kind)
 
         with delib_tab:
+            audience_text = "audiences" if normalized_kind in {"all", "any", ""} else f"{label.lower()}s"
             st.caption(
-                f"Send a deliberation link to {label.lower()}s so they can vote and comment."
+                f"Send a deliberation link to {audience_text} so they can vote and comment."
             )
             conversations = _safe_conversations()
             if conversations is None:

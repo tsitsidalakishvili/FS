@@ -620,7 +620,6 @@ def render_deliberation(public_only: bool):
         return
 
     st.subheader("Deliberation")
-    st.caption("Anonymous comments + votes, consensus analysis, and clustering.")
     convo_lookup = {}
     convo_options = {}
     for convo in conversations:
@@ -668,10 +667,10 @@ def render_deliberation(public_only: bool):
             if description:
                 st.write(description)
             if public_only:
-                st.caption("Continue in Participate and Reports tabs.")
+                st.caption("Continue in Reports tab.")
             else:
                 st.caption(
-                    "Continue in Configure, Participate, Moderate, and Monitor / Reports tabs."
+                    "Continue in Configure, Moderate, and Monitor / Reports tabs."
                 )
         elif conversations:
             st.info("Select an active conversation to unlock participation and reports.")
@@ -680,26 +679,91 @@ def render_deliberation(public_only: bool):
         else:
             st.info("No conversations yet. Create one in Configure.")
 
+    def _render_participation_workspace() -> None:
+        convo_id = st.session_state.get("delib_conversation_id")
+        if not convo_id:
+            st.info("Select a conversation first.")
+            return
+
+        convo = delib_api_get(f"/conversations/{convo_id}")
+        if convo:
+            st.subheader(convo["topic"])
+            st.caption(convo.get("description") or "")
+            if not convo.get("is_open", True):
+                st.warning("This conversation is closed.")
+        p_notice_key = f"delib_participate_comment_notice_{convo_id}"
+        p_notice = st.session_state.pop(p_notice_key, None)
+        if p_notice == "pending":
+            st.info("Comment submitted. It is awaiting moderation before it appears in the feed.")
+        elif p_notice == "approved":
+            st.success("Comment submitted and added to the feed.")
+
+        comments = delib_api_get(f"/conversations/{convo_id}/comments?status=approved") or []
+        if not comments:
+            st.info("No approved comments yet.")
+        else:
+            default_swipe_mode = public_only and _is_questionnaire_participation_mode()
+            swipe_mode = st.toggle(
+                "Swipe mode (mobile-friendly)",
+                value=default_swipe_mode,
+                key=f"delib_swipe_mode_{convo_id}",
+                help="Shows one statement card at a time with real touch swipe gestures.",
+            )
+            if swipe_mode:
+                _render_swipe_component(comments, convo_id, headers, compact=False)
+            else:
+                _render_classic_vote_list(comments, convo_id, headers)
+
+        if convo and convo.get("allow_comment_submission", True):
+            st.markdown("### Submit comment")
+            new_comment = st.text_area("Your comment", key="delib_submit_comment")
+            if st.button(
+                "Submit comment",
+                key="delib_submit_comment_btn",
+                help="Submit a new comment into this conversation (may require moderation).",
+            ):
+                text = new_comment.strip()
+                if not text:
+                    st.warning("Comment cannot be empty.")
+                elif len(text) < 2:
+                    st.warning("Comment should be at least 2 characters.")
+                else:
+                    result = delib_api_post(
+                        f"/conversations/{convo_id}/comments",
+                        {"text": text},
+                        headers=headers,
+                    )
+                    if result:
+                        status = str(result.get("status", "")).lower()
+                        notice_key = f"delib_participate_comment_notice_{convo_id}"
+                        if status == "pending":
+                            st.session_state[notice_key] = "pending"
+                        else:
+                            st.session_state[notice_key] = "approved"
+                        st.rerun()
+        else:
+            st.caption("Comment submission is disabled for this conversation.")
+
     if public_only:
-        tab_conversation, tab_participate, tab_reports = st.tabs(
-            ["Conversation", "Participate", "Reports"]
-        )
+        tab_conversation, tab_reports = st.tabs(["Conversation", "Reports"])
         with tab_conversation:
             _render_conversation_workspace()
+            st.markdown("---")
+            st.markdown("### Participation")
+            _render_participation_workspace()
     else:
-        tab_conversation, tab_config, tab_participate, tab_moderate, tab_reports = st.tabs(
-            ["Conversation", "Configure", "Participate", "Moderate", "Monitor / Reports"]
+        tab_conversation, tab_config, tab_moderate, tab_reports = st.tabs(
+            ["Conversation", "Configure", "Moderate", "Monitor / Reports"]
         )
         with tab_conversation:
             _render_conversation_workspace()
+            st.markdown("---")
+            st.markdown("### Participation")
+            _render_participation_workspace()
 
         with tab_config:
             st.markdown("### Questionnaire templates (shareable)")
-            q_supporter_tab, q_member_tab = st.tabs(["Supporters", "Members"])
-            with q_supporter_tab:
-                render_questionnaire_block("supporter", show_expander=False)
-            with q_member_tab:
-                render_questionnaire_block("member", show_expander=False)
+            render_questionnaire_block("all", show_expander=False)
 
             st.markdown("---")
             st.markdown("### Create conversation")
@@ -1188,70 +1252,6 @@ def render_deliberation(public_only: bool):
 
             else:
                 st.info("Select a conversation to edit settings or seed comments.")
-
-    with tab_participate:
-        convo_id = st.session_state.get("delib_conversation_id")
-        if not convo_id:
-            st.info("Select a conversation first.")
-        else:
-            convo = delib_api_get(f"/conversations/{convo_id}")
-            if convo:
-                st.subheader(convo["topic"])
-                st.caption(convo.get("description") or "")
-                if not convo.get("is_open", True):
-                    st.warning("This conversation is closed.")
-            p_notice_key = f"delib_participate_comment_notice_{convo_id}"
-            p_notice = st.session_state.pop(p_notice_key, None)
-            if p_notice == "pending":
-                st.info("Comment submitted. It is awaiting moderation before it appears in the feed.")
-            elif p_notice == "approved":
-                st.success("Comment submitted and added to the feed.")
-
-            comments = delib_api_get(f"/conversations/{convo_id}/comments?status=approved") or []
-            if not comments:
-                st.info("No approved comments yet.")
-            else:
-                default_swipe_mode = public_only and _is_questionnaire_participation_mode()
-                swipe_mode = st.toggle(
-                    "Swipe mode (mobile-friendly)",
-                    value=default_swipe_mode,
-                    key=f"delib_swipe_mode_{convo_id}",
-                    help="Shows one statement card at a time with real touch swipe gestures.",
-                )
-                if swipe_mode:
-                    _render_swipe_component(comments, convo_id, headers, compact=False)
-                else:
-                    _render_classic_vote_list(comments, convo_id, headers)
-
-            if convo and convo.get("allow_comment_submission", True):
-                st.markdown("### Submit comment")
-                new_comment = st.text_area("Your comment", key="delib_submit_comment")
-                if st.button(
-                    "Submit comment",
-                    key="delib_submit_comment_btn",
-                    help="Submit a new comment into this conversation (may require moderation).",
-                ):
-                    text = new_comment.strip()
-                    if not text:
-                        st.warning("Comment cannot be empty.")
-                    elif len(text) < 2:
-                        st.warning("Comment should be at least 2 characters.")
-                    else:
-                        result = delib_api_post(
-                            f"/conversations/{convo_id}/comments",
-                            {"text": text},
-                            headers=headers,
-                        )
-                        if result:
-                            status = str(result.get("status", "")).lower()
-                            notice_key = f"delib_participate_comment_notice_{convo_id}"
-                            if status == "pending":
-                                st.session_state[notice_key] = "pending"
-                            else:
-                                st.session_state[notice_key] = "approved"
-                            st.rerun()
-            else:
-                st.caption("Comment submission is disabled for this conversation.")
 
     if not public_only:
         with tab_moderate:
