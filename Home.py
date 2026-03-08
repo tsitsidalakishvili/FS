@@ -13,9 +13,9 @@ from crm.ui.shell import (
 )
 
 
-st.set_page_config(page_title="Freedom Square CRM", layout="wide")
+st.set_page_config(page_title="Home", layout="wide")
 apply_global_styles()
-st.title("Freedom Square CRM")
+st.title("Home")
 
 
 def _render_deliberation_how_it_works() -> None:
@@ -83,16 +83,6 @@ if not ensure_supporter_access("Home"):
     st.stop()
 if not ensure_db_connection():
     st.stop()
-
-st.markdown("### Home")
-st.write(
-    "Use the sidebar **Pages** navigation to open CRM, Deliberation, Due Diligence, "
-    "Data, and Admin."
-)
-st.caption(
-    "CRM page contains tabs for Dashboard, People, Tasks, Outreach, Events, and Map. "
-    "Data/Admin stay standalone and cover CRM + Deliberation + Due Diligence."
-)
 
 st.markdown("### How it works")
 crm_tab, dd_tab, deliberation_tab = st.tabs(["CRM", "Due Diligence", "Deliberation"])
