@@ -10,97 +10,75 @@ from crm.db.neo4j import run_query
 
 def _render_dashboard_how_it_works():
     st.markdown("### How it works")
-    st.caption("Full CRM app flow (from data intake to execution and reporting)")
+    st.caption("CRM navigation model aligned to tabs: Dashboard, People, Tasks, Outreach, Events, Map")
     diagram = """
     <div style="width:100%; background:#ffffff; border:1px solid #E2E8F0; border-radius:12px; padding:8px;">
-      <svg viewBox="0 0 1260 760" width="100%" height="730" xmlns="http://www.w3.org/2000/svg">
+      <svg viewBox="0 0 1260 520" width="100%" height="500" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748B"></path>
           </marker>
         </defs>
 
-        <rect x="20" y="18" width="1220" height="724" rx="12" fill="#F8FAFC" stroke="#E2E8F0"/>
-        <text x="42" y="46" font-size="18" font-weight="700" fill="#0B3A52">CRM Platform Architecture</text>
+        <rect x="20" y="18" width="1220" height="484" rx="12" fill="#F8FAFC" stroke="#E2E8F0"/>
+        <text x="42" y="46" font-size="18" font-weight="700" fill="#0B3A52">CRM Tab Flow</text>
 
-        <rect x="40" y="70" width="1160" height="130" rx="12" fill="#EFF6FF" stroke="#93C5FD"/>
-        <text x="60" y="98" font-size="16" font-weight="700" fill="#1E3A8A">1) Intake & Data Sources</text>
-        <rect x="60" y="112" width="220" height="72" rx="8" fill="#FFFFFF" stroke="#CFE2EC"/>
-        <text x="72" y="138" font-size="13" fill="#334155">Forms & manual entry</text>
-        <text x="72" y="158" font-size="13" fill="#334155">Profiles / comments / tasks</text>
-        <rect x="300" y="112" width="220" height="72" rx="8" fill="#FFFFFF" stroke="#CFE2EC"/>
-        <text x="312" y="138" font-size="13" fill="#334155">CSV import / bulk tools</text>
-        <text x="312" y="158" font-size="13" fill="#334155">People, votes, datasets</text>
-        <rect x="540" y="112" width="220" height="72" rx="8" fill="#FFFFFF" stroke="#CFE2EC"/>
-        <text x="552" y="138" font-size="13" fill="#334155">Integrations</text>
-        <text x="552" y="158" font-size="13" fill="#334155">Slack / WhatsApp / Email</text>
-        <rect x="780" y="112" width="400" height="72" rx="8" fill="#FFFFFF" stroke="#CFE2EC"/>
-        <text x="792" y="138" font-size="13" fill="#334155">Due Diligence enrichment</text>
-        <text x="792" y="158" font-size="13" fill="#334155">Wikidata / OpenSanctions / News</text>
+        <rect x="45" y="78" width="180" height="118" rx="10" fill="#EFF6FF" stroke="#93C5FD"/>
+        <text x="58" y="106" font-size="15" font-weight="700" fill="#1E3A8A">Dashboard</text>
+        <text x="58" y="130" font-size="12" fill="#334155">See KPIs, task feed,</text>
+        <text x="58" y="148" font-size="12" fill="#334155">and trends first.</text>
 
-        <rect x="40" y="230" width="1160" height="130" rx="12" fill="#F8FAFF" stroke="#9FB8E8"/>
-        <text x="60" y="258" font-size="16" font-weight="700" fill="#1E3A8A">2) Core Data Layer (Neo4j)</text>
-        <rect x="60" y="272" width="280" height="72" rx="8" fill="#FFFFFF" stroke="#CFE2EC"/>
-        <text x="72" y="298" font-size="13" fill="#334155">People + supporter/member state</text>
-        <text x="72" y="318" font-size="13" fill="#334155">Effort, tags, attributes</text>
-        <rect x="360" y="272" width="280" height="72" rx="8" fill="#FFFFFF" stroke="#CFE2EC"/>
-        <text x="372" y="298" font-size="13" fill="#334155">Operational graph</text>
-        <text x="372" y="318" font-size="13" fill="#334155">Events, tasks, segments</text>
-        <rect x="660" y="272" width="260" height="72" rx="8" fill="#FFFFFF" stroke="#CFE2EC"/>
-        <text x="672" y="298" font-size="13" fill="#334155">Deliberation graph</text>
-        <text x="672" y="318" font-size="13" fill="#334155">Conversations, votes, clusters</text>
-        <rect x="940" y="272" width="240" height="72" rx="8" fill="#FFFFFF" stroke="#CFE2EC"/>
-        <text x="952" y="298" font-size="13" fill="#334155">Audit / provenance</text>
-        <text x="952" y="318" font-size="13" fill="#334155">Feedback logs, ingest metadata</text>
+        <rect x="245" y="78" width="180" height="118" rx="10" fill="#EFF6FF" stroke="#93C5FD"/>
+        <text x="258" y="106" font-size="15" font-weight="700" fill="#1E3A8A">People</text>
+        <text x="258" y="130" font-size="12" fill="#334155">Create/search profiles</text>
+        <text x="258" y="148" font-size="12" fill="#334155">and update details.</text>
 
-        <rect x="40" y="390" width="1160" height="150" rx="12" fill="#EEFDF3" stroke="#86EFAC"/>
-        <text x="60" y="418" font-size="16" font-weight="700" fill="#166534">3) Application Modules (CRM UI)</text>
-        <rect x="60" y="432" width="170" height="90" rx="8" fill="#FFFFFF" stroke="#B7E4C7"/>
-        <text x="72" y="458" font-size="13" fill="#14532D">Dashboard</text>
-        <text x="72" y="478" font-size="13" fill="#14532D">KPIs + analytics</text>
-        <rect x="250" y="432" width="170" height="90" rx="8" fill="#FFFFFF" stroke="#B7E4C7"/>
-        <text x="262" y="458" font-size="13" fill="#14532D">Profiles & Segments</text>
-        <text x="262" y="478" font-size="13" fill="#14532D">Targeting lists</text>
-        <rect x="440" y="432" width="170" height="90" rx="8" fill="#FFFFFF" stroke="#B7E4C7"/>
-        <text x="452" y="458" font-size="13" fill="#14532D">Tasks & Events</text>
-        <text x="452" y="478" font-size="13" fill="#14532D">Execution workflow</text>
-        <rect x="630" y="432" width="170" height="90" rx="8" fill="#FFFFFF" stroke="#B7E4C7"/>
-        <text x="642" y="458" font-size="13" fill="#14532D">Deliberation</text>
-        <text x="642" y="478" font-size="13" fill="#14532D">Participation + insights</text>
-        <rect x="820" y="432" width="170" height="90" rx="8" fill="#FFFFFF" stroke="#B7E4C7"/>
-        <text x="832" y="458" font-size="13" fill="#14532D">Due Diligence</text>
-        <text x="832" y="478" font-size="13" fill="#14532D">Risk investigation</text>
-        <rect x="1010" y="432" width="170" height="90" rx="8" fill="#FFFFFF" stroke="#B7E4C7"/>
-        <text x="1022" y="458" font-size="13" fill="#14532D">Admin</text>
-        <text x="1022" y="478" font-size="13" fill="#14532D">System controls</text>
+        <rect x="445" y="78" width="180" height="118" rx="10" fill="#EFF6FF" stroke="#93C5FD"/>
+        <text x="458" y="106" font-size="15" font-weight="700" fill="#1E3A8A">Tasks</text>
+        <text x="458" y="130" font-size="12" fill="#334155">Assign follow-ups and</text>
+        <text x="458" y="148" font-size="12" fill="#334155">track completion.</text>
 
-        <rect x="40" y="570" width="1160" height="150" rx="12" fill="#FFF7ED" stroke="#FDBA74"/>
-        <text x="60" y="598" font-size="16" font-weight="700" fill="#9A3412">4) Outcomes</text>
-        <rect x="60" y="612" width="260" height="86" rx="8" fill="#FFFFFF" stroke="#FED7AA"/>
-        <text x="72" y="638" font-size="13" fill="#7C2D12">Operational decisions</text>
-        <text x="72" y="658" font-size="13" fill="#7C2D12">Prioritized people + follow-ups</text>
-        <rect x="340" y="612" width="260" height="86" rx="8" fill="#FFFFFF" stroke="#FED7AA"/>
-        <text x="352" y="638" font-size="13" fill="#7C2D12">Continuous monitoring</text>
-        <text x="352" y="658" font-size="13" fill="#7C2D12">Weekly updates + alerts</text>
-        <rect x="620" y="612" width="260" height="86" rx="8" fill="#FFFFFF" stroke="#FED7AA"/>
-        <text x="632" y="638" font-size="13" fill="#7C2D12">Shareable communication</text>
-        <text x="632" y="658" font-size="13" fill="#7C2D12">Links + coordinated outreach</text>
-        <rect x="900" y="612" width="280" height="86" rx="8" fill="#FFFFFF" stroke="#FED7AA"/>
-        <text x="912" y="638" font-size="13" fill="#7C2D12">Reporting & accountability</text>
-        <text x="912" y="658" font-size="13" fill="#7C2D12">Evidence-backed outputs</text>
+        <rect x="645" y="78" width="180" height="118" rx="10" fill="#EFF6FF" stroke="#93C5FD"/>
+        <text x="658" y="106" font-size="15" font-weight="700" fill="#1E3A8A">Outreach</text>
+        <text x="658" y="130" font-size="12" fill="#334155">Prepare audiences and</text>
+        <text x="658" y="148" font-size="12" fill="#334155">share campaign links.</text>
 
-        <path d="M 620 200 L 620 228" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
-        <path d="M 620 360 L 620 388" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
-        <path d="M 620 540 L 620 568" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+        <rect x="845" y="78" width="180" height="118" rx="10" fill="#EFF6FF" stroke="#93C5FD"/>
+        <text x="858" y="106" font-size="15" font-weight="700" fill="#1E3A8A">Events</text>
+        <text x="858" y="130" font-size="12" fill="#334155">Run registrations and</text>
+        <text x="858" y="148" font-size="12" fill="#334155">attendance workflows.</text>
+
+        <rect x="1045" y="78" width="180" height="118" rx="10" fill="#EFF6FF" stroke="#93C5FD"/>
+        <text x="1058" y="106" font-size="15" font-weight="700" fill="#1E3A8A">Map</text>
+        <text x="1058" y="130" font-size="12" fill="#334155">Analyze territory and</text>
+        <text x="1058" y="148" font-size="12" fill="#334155">spatial supporter data.</text>
+
+        <path d="M 225 137 L 245 137" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+        <path d="M 425 137 L 445 137" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+        <path d="M 625 137 L 645 137" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+        <path d="M 825 137 L 845 137" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+        <path d="M 1025 137 L 1045 137" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+
+        <rect x="45" y="240" width="1180" height="110" rx="10" fill="#EEFDF3" stroke="#86EFAC"/>
+        <text x="65" y="272" font-size="16" font-weight="700" fill="#166534">Shared data layer (Neo4j)</text>
+        <text x="65" y="298" font-size="13" fill="#14532D">All CRM tabs read/write the same connected data: people, tasks, events, tags, skills, and engagement history.</text>
+        <text x="65" y="320" font-size="13" fill="#14532D">Changes in one tab immediately affect what other tabs show.</text>
+
+        <rect x="45" y="372" width="1180" height="110" rx="10" fill="#FFF7ED" stroke="#FDBA74"/>
+        <text x="65" y="404" font-size="16" font-weight="700" fill="#9A3412">Operational loop</text>
+        <text x="65" y="430" font-size="13" fill="#7C2D12">Monitor in Dashboard → update People/Tasks → execute via Outreach/Events → verify distribution on Map → iterate.</text>
+        <text x="65" y="452" font-size="13" fill="#7C2D12">This loop keeps campaign execution aligned and measurable.</text>
       </svg>
     </div>
     """
-    components.html(diagram, height=740, scrolling=False)
+    components.html(diagram, height=510, scrolling=False)
     st.markdown(
-        "- **Data enters** via forms/imports/integrations and enrichments.\n"
-        "- **Neo4j stores one connected graph** for CRM + deliberation + due diligence.\n"
-        "- **Modules operate on the same graph** so updates are immediately shared across tabs.\n"
-        "- **Outcomes** are execution-ready actions, monitoring signals, and transparent reporting."
+        "- **Dashboard**: baseline health check and trend monitoring.\n"
+        "- **People**: maintain supporter/member profiles and attributes.\n"
+        "- **Tasks**: operational execution queue with status tracking.\n"
+        "- **Outreach**: message planning and audience activation.\n"
+        "- **Events**: registration and participation workflows.\n"
+        "- **Map**: geographic coverage and prioritization."
     )
 
 
