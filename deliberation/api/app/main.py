@@ -1,7 +1,10 @@
 import os
+import logging
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from neo4j.exceptions import Neo4jError, ServiceUnavailable
 
 load_dotenv(
     dotenv_path=os.path.abspath(
@@ -12,6 +15,8 @@ load_dotenv(
 
 from .db import close_driver, db_health, init_constraints
 from .routes import router
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Polis-style Deliberation API")
 app.include_router(router)
@@ -42,9 +47,43 @@ def health():
 
 @app.on_event("startup")
 def on_startup():
-    init_constraints()
+    try:
+        init_constraints()
+        app.state.db_bootstrap_ok = True
+    except Exception as exc:
+        app.state.db_bootstrap_ok = False
+        app.state.db_bootstrap_error = str(exc)
+        logger.exception("Deliberation startup: Neo4j initialization failed: %s", exc)
 
 
 @app.on_event("shutdown")
 def on_shutdown():
     close_driver()
+
+
+@app.exception_handler(ServiceUnavailable)
+def handle_neo4j_unavailable(_: Request, exc: ServiceUnavailable):
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": (
+                "Neo4j is unavailable for deliberation backend. "
+                "Check DELIBERATION_NEO4J_* / NEO4J_* credentials and network."
+            ),
+            "error": str(exc),
+        },
+    )
+
+
+@app.exception_handler(Neo4jError)
+def handle_neo4j_error(_: Request, exc: Neo4jError):
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": (
+                "Neo4j query failed for deliberation backend. "
+                "Verify credentials/database and retry."
+            ),
+            "error": str(exc),
+        },
+    )
