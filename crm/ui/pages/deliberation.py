@@ -219,7 +219,15 @@ def _apply_questionnaire_card_only_layout():
         <style>
         section[data-testid="stSidebar"],
         [data-testid="stSidebar"],
+        [data-testid="stSidebarContent"],
+        [data-testid="stSidebarHeader"],
         [data-testid="stSidebarNav"],
+        [data-testid="stSidebarNavItems"],
+        [data-testid="stSidebarCollapseButton"],
+        [data-testid="stBaseButton-headerNoPadding"],
+        button[kind="headerNoPadding"],
+        button[title="View sidebar"],
+        button[title="Close sidebar"],
         [data-testid="collapsedControl"] {
           display: none !important;
           visibility: hidden !important;
@@ -588,7 +596,7 @@ def render_deliberation(public_only: bool):
         render_delib_api_unavailable()
         return
     conversations = conversations or []
-    questionnaire_mode = public_only and _is_questionnaire_participation_mode()
+    questionnaire_mode = _is_questionnaire_participation_mode()
 
     if questionnaire_mode:
         _apply_questionnaire_card_only_layout()
