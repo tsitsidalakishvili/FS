@@ -383,6 +383,9 @@ def _cast_swipe_vote(convo_id, comment_id, choice, headers):
 
 def _render_swipe_component(comments, convo_id, headers, compact=False):
     if streamlit_swipecards is None:
+        if compact:
+            st.warning("Swipe cards are unavailable in this environment.")
+            return {"current_comment_id": None, "total_swiped": 0}
         st.warning(
             "Swipe component is unavailable in this environment. "
             "Use classic mode below."
@@ -659,22 +662,7 @@ def render_deliberation(public_only: bool):
         if not comments:
             st.info("No approved comments yet.")
         else:
-            swipe_state = _render_swipe_component(comments, convo_id, headers, compact=True)
-            current_comment_id = (
-                swipe_state.get("current_comment_id")
-                if isinstance(swipe_state, dict)
-                else None
-            )
-            focus_key = f"delib_questionnaire_focus_comment_{convo_id}"
-            pinned_focus_comment_id = st.session_state.get(focus_key)
-            resolved_focus_comment_id = pinned_focus_comment_id or current_comment_id
-            with st.expander("Comments", expanded=False):
-                _render_questionnaire_like_dislike_buttons(
-                    comments,
-                    convo_id,
-                    headers,
-                    focus_comment_id=resolved_focus_comment_id,
-                )
+            _render_swipe_component(comments, convo_id, headers, compact=True)
         if convo.get("allow_comment_submission", True):
             _render_questionnaire_comment_form(convo_id, headers)
         return
