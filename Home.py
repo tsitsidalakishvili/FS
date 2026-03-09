@@ -18,6 +18,10 @@ if handle_special_entrypoints():
     st.stop()
 
 apply_global_styles()
+
+if handle_special_entrypoints():
+    st.stop()
+
 st.title("Home")
 
 
