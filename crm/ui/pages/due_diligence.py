@@ -251,7 +251,7 @@ def render_due_diligence_page():
     intake_tab, watchlist_tab, launch_tab = st.tabs(["Intake", "Watchlist", "Launch"])
 
     with intake_tab:
-        st.markdown("#### 1) Intake")
+        st.markdown("#### Intake")
         st.caption("Choose one source and set the subject for the investigation.")
         start_mode = st.radio(
             "Source",
@@ -328,7 +328,7 @@ def render_due_diligence_page():
             st.success(f"{current_name} ({current_type}) — source: {current_mode or 'not set'}")
 
     with watchlist_tab:
-        st.markdown("#### 2) Watchlist")
+        st.markdown("#### Watchlist")
         st.caption("Save competitors and optionally use one as your intake subject.")
         selected_name, selected_type = _render_competitor_watchlist()
         if selected_name and selected_type:
@@ -339,7 +339,7 @@ def render_due_diligence_page():
                 st.rerun()
 
     with launch_tab:
-        st.markdown("#### 3) Launch")
+        st.markdown("#### Launch")
         subject_name = str(st.session_state.get("dd_subject_name") or "").strip()
         subject_type = str(st.session_state.get("dd_subject_type") or "").strip()
         start_mode = str(st.session_state.get("dd_start_mode") or "CRM context")
