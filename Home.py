@@ -13,8 +13,8 @@ from crm.ui.shell import (
 
 
 st.set_page_config(page_title="Home", layout="wide")
-apply_global_styles()
-st.title("Home")
+if handle_special_entrypoints():
+    st.stop()
 
 
 def _render_deliberation_how_it_works() -> None:
@@ -75,8 +75,8 @@ def _render_deliberation_how_it_works() -> None:
     """
     components.html(html, height=510, scrolling=False)
 
-if handle_special_entrypoints():
-    st.stop()
+apply_global_styles()
+st.title("Home")
 
 if not ensure_supporter_access("Home"):
     st.stop()
