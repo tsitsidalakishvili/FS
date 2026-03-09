@@ -98,3 +98,20 @@ def handle_neo4j_error(_: Request, exc: Neo4jError):
             "error": str(exc),
         },
     )
+
+
+@app.exception_handler(RuntimeError)
+def handle_runtime_error(_: Request, exc: RuntimeError):
+    message = str(exc)
+    if "No working Neo4j configuration" in message:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": (
+                    "Neo4j configuration is invalid/unreachable for deliberation backend. "
+                    "Set DELIBERATION_NEO4J_* (or NEO4J_*) to a reachable DB."
+                ),
+                "error": message,
+            },
+        )
+    return JSONResponse(status_code=500, content={"detail": message})
