@@ -7,6 +7,10 @@ import streamlit as st
 import crm.db.neo4j as neo4j_db
 from crm.clients.deliberation import delib_api_get
 from crm.config import (
+    NEO4J_DATABASE,
+    NEO4J_PASSWORD,
+    NEO4J_URI,
+    NEO4J_USER,
     NEO4J_SANDBOX_DATABASE,
     NEO4J_SANDBOX_PASSWORD,
     NEO4J_SANDBOX_URI,
@@ -123,7 +127,20 @@ def get_query_param(name: str):
 
 
 def ensure_db_connection(*, show_sidebar: bool = True) -> bool:
-    if neo4j_db.driver is not None:
+    target_uri = str(NEO4J_SANDBOX_URI or NEO4J_URI or "").strip()
+    target_user = str(NEO4J_SANDBOX_USER or NEO4J_USER or "neo4j").strip()
+    target_password = str(NEO4J_SANDBOX_PASSWORD or NEO4J_PASSWORD or "").strip()
+    target_database = str(NEO4J_SANDBOX_DATABASE or NEO4J_DATABASE or "neo4j").strip()
+
+    active_uri = str(getattr(neo4j_db, "_active_uri", "") or "").strip()
+    active_user = str(getattr(neo4j_db, "_active_user", "") or "").strip()
+    active_db = str(getattr(neo4j_db, "_active_database", "") or "").strip()
+    if (
+        neo4j_db.driver is not None
+        and active_uri == target_uri
+        and active_user == target_user
+        and active_db == target_database
+    ):
         return True
 
     cooldown_s = 30
@@ -140,20 +157,22 @@ def ensure_db_connection(*, show_sidebar: bool = True) -> bool:
 
     if show_sidebar:
         st.sidebar.markdown("### Database")
-        st.sidebar.caption("Connection: Sandbox (Web)")
-    if not NEO4J_SANDBOX_URI or not NEO4J_SANDBOX_PASSWORD:
+        connection_mode = "Sandbox (Web)" if NEO4J_SANDBOX_URI else "Primary"
+        st.sidebar.caption(f"Connection: {connection_mode}")
+    if not target_uri or not target_password:
         if show_sidebar:
             st.sidebar.warning(
-                "Sandbox credentials missing. Set NEO4J_SANDBOX_URI and "
-                "NEO4J_SANDBOX_PASSWORD in .env or Streamlit secrets."
+                "Neo4j credentials missing. Set either "
+                "NEO4J_SANDBOX_URI/NEO4J_SANDBOX_PASSWORD or "
+                "NEO4J_URI/NEO4J_PASSWORD."
             )
         return False
 
     ok = init_driver(
-        uri=NEO4J_SANDBOX_URI,
-        user=NEO4J_SANDBOX_USER,
-        password=NEO4J_SANDBOX_PASSWORD,
-        database=NEO4J_SANDBOX_DATABASE,
+        uri=target_uri,
+        user=target_user,
+        password=target_password,
+        database=target_database,
     )
     if not ok or neo4j_db.driver is None:
         st.session_state["_db_connect_failed_at"] = time.time()

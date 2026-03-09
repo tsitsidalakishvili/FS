@@ -7,8 +7,9 @@ def _normalize_neo4j_uri(uri: str | None) -> str | None:
     text = str(uri or "").strip()
     if not text:
         return None
-    if ".bolt.neo4jsandbox.com:443" in text:
-        return text.replace(".bolt.neo4jsandbox.com:443", ".neo4jsandbox.com:7687")
+    if ".bolt.neo4jsandbox.com" in text:
+        text = text.replace(".bolt.neo4jsandbox.com:443", ".neo4jsandbox.com:7687")
+        text = text.replace(".bolt.neo4jsandbox.com", ".neo4jsandbox.com:7687")
     return text
 
 

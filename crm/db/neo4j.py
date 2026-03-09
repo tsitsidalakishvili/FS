@@ -17,8 +17,12 @@ def _normalize_neo4j_uri(uri: str | None) -> str | None:
         return None
     # Neo4j sandbox "websocket bolt" endpoint on 443 is not a direct Bolt
     # endpoint for the Python driver; normalize to the TLS Bolt endpoint.
-    if ".bolt.neo4jsandbox.com:443" in text:
-        return text.replace(".bolt.neo4jsandbox.com:443", ".neo4jsandbox.com:7687")
+    if ".bolt.neo4jsandbox.com" in text:
+        # Handles:
+        # - bolt+s://<id>.bolt.neo4jsandbox.com:443
+        # - bolt+s://<id>.bolt.neo4jsandbox.com
+        text = text.replace(".bolt.neo4jsandbox.com:443", ".neo4jsandbox.com:7687")
+        text = text.replace(".bolt.neo4jsandbox.com", ".neo4jsandbox.com:7687")
     return text
 
 
