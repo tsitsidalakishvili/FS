@@ -57,7 +57,7 @@ def load_openai_config() -> OpenAIConfig:
     return OpenAIConfig(
         api_key=_get_env("OPENAI_API_KEY"),
         base_url=_get_env("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
-        model=_get_env("OPENAI_MODEL", "gpt-4o-mini"),
+        model=_get_env("OPENAI_MODEL", "gpt-4o"),
         timeout_s=int(_get_env("OPENAI_TIMEOUT_S", "90") or "90"),
     )
 
