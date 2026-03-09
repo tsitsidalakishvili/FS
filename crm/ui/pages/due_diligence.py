@@ -257,7 +257,7 @@ def render_due_diligence_page():
             "Source",
             ["CRM context", "Competitors", "Watchlist"],
             horizontal=True,
-            key="dd_start_mode",
+            key="dd_intake_source",
         )
 
         if start_mode == "CRM context":
