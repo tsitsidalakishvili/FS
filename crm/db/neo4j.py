@@ -42,7 +42,13 @@ def init_driver(uri=None, user=None, password=None, database=None):
                 pass
         _auth_rate_limited = False
     try:
-        driver = GraphDatabase.driver(uri, auth=basic_auth(user, password))
+        driver = GraphDatabase.driver(
+            uri,
+            auth=basic_auth(user, password),
+            connection_timeout=8,
+            connection_acquisition_timeout=8,
+            max_transaction_retry_time=4,
+        )
         _active_uri = uri
         _active_user = user
         _active_database = database

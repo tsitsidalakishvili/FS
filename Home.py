@@ -7,7 +7,6 @@ from crm.ui.pages.dashboard import render_dashboard_how_it_works
 from crm.ui.pages.due_diligence import render_due_diligence_how_it_works
 from crm.ui.shell import (
     apply_global_styles,
-    ensure_db_connection,
     ensure_supporter_access,
     handle_special_entrypoints,
 )
@@ -80,8 +79,6 @@ if handle_special_entrypoints():
     st.stop()
 
 if not ensure_supporter_access("Home"):
-    st.stop()
-if not ensure_db_connection():
     st.stop()
 
 st.markdown("### How it works")

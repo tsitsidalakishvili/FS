@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import streamlit as st
 
 import crm.db.neo4j as neo4j_db
@@ -124,6 +126,18 @@ def ensure_db_connection(*, show_sidebar: bool = True) -> bool:
     if neo4j_db.driver is not None:
         return True
 
+    cooldown_s = 30
+    last_failed_at = float(st.session_state.get("_db_connect_failed_at", 0.0) or 0.0)
+    elapsed = time.time() - last_failed_at
+    if last_failed_at > 0 and elapsed < cooldown_s:
+        remaining = int(cooldown_s - elapsed)
+        if show_sidebar:
+            st.sidebar.warning(
+                f"Database reconnect is cooling down ({remaining}s). "
+                "Check Neo4j credentials/network and retry shortly."
+            )
+        return False
+
     if show_sidebar:
         st.sidebar.markdown("### Database")
         st.sidebar.caption("Connection: Sandbox (Web)")
@@ -142,11 +156,13 @@ def ensure_db_connection(*, show_sidebar: bool = True) -> bool:
         database=NEO4J_SANDBOX_DATABASE,
     )
     if not ok or neo4j_db.driver is None:
+        st.session_state["_db_connect_failed_at"] = time.time()
         st.error(
             "Missing or invalid Sandbox Neo4j credentials. "
             "Set NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD."
         )
         return False
+    st.session_state["_db_connect_failed_at"] = 0.0
     return True
 
 
