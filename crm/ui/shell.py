@@ -116,13 +116,23 @@ def apply_global_styles() -> None:
 
 
 def get_query_param(name: str):
+    value = None
     try:
         value = st.query_params.get(name)
     except Exception:
-        params = st.experimental_get_query_params()
-        value = params.get(name)
+        value = None
     if isinstance(value, list):
         return value[0] if value else None
+    if value not in (None, ""):
+        return value
+    try:
+        params = st.experimental_get_query_params()
+        fallback = params.get(name)
+        if isinstance(fallback, list):
+            return fallback[0] if fallback else None
+        return fallback
+    except Exception:
+        return value
     return value
 
 
