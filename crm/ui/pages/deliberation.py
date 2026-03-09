@@ -405,7 +405,6 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
             if comment_id:
                 _cast_swipe_vote(convo_id, comment_id, choice, headers)
         st.session_state[processed_key] = total_swiped
-        st.rerun()
 
     if not compact and st.button(
         "Reset swipe progress",
