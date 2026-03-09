@@ -10,7 +10,6 @@ from crm.db.neo4j import run_query
 
 def render_dashboard_how_it_works():
     st.markdown("### How it works")
-    st.caption("CRM navigation model aligned to tabs: Dashboard, People, Tasks, Outreach, Events, Map")
     diagram = """
     <div style="width:100%; background:#ffffff; border:1px solid #E2E8F0; border-radius:12px; padding:8px;">
       <svg viewBox="0 0 1260 520" width="100%" height="500" xmlns="http://www.w3.org/2000/svg">
@@ -21,7 +20,7 @@ def render_dashboard_how_it_works():
         </defs>
 
         <rect x="20" y="18" width="1220" height="484" rx="12" fill="#F8FAFC" stroke="#E2E8F0"/>
-        <text x="42" y="46" font-size="18" font-weight="700" fill="#0B3A52">CRM Tab Flow</text>
+        <text x="42" y="46" font-size="18" font-weight="700" fill="#0B3A52">CRM Flow</text>
 
         <rect x="45" y="78" width="180" height="118" rx="10" fill="#EFF6FF" stroke="#93C5FD"/>
         <text x="58" y="106" font-size="15" font-weight="700" fill="#1E3A8A">Dashboard</text>

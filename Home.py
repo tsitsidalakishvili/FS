@@ -19,7 +19,6 @@ st.title("Home")
 
 def _render_deliberation_how_it_works() -> None:
     st.markdown("### Deliberation workflow")
-    st.caption("From conversation setup to participant voting and monitoring.")
     html = """
     <div style="width:100%; background:#ffffff; border:1px solid #E2E8F0; border-radius:12px; padding:8px;">
       <svg viewBox="0 0 1240 520" width="100%" height="500" xmlns="http://www.w3.org/2000/svg">
