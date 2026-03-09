@@ -226,7 +226,6 @@ def handle_special_entrypoints() -> bool:
                         break
                 if convo_topic:
                     st.session_state["delib_conversation_id"] = convo_id
-                    st.session_state["delib_conversation_select"] = convo_topic
             render_deliberation(public_only=(kind == "deliberation"))
             return True
 
