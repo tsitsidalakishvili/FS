@@ -1,6 +1,6 @@
 import json
 import os
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, quote_plus, urlencode, urlparse, urlunparse
 
 import streamlit as st
 
@@ -101,7 +101,26 @@ def _detect_base_url():
 
 def _build_app_link(params):
     base = _detect_base_url()
-    return f"{base}?{urlencode(params)}"
+    clean_base = str(base or "").strip()
+    if not clean_base:
+        return ""
+    parsed = urlparse(clean_base)
+    merged = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    for key, value in params.items():
+        text = str(value or "").strip()
+        if text:
+            merged[key] = text
+    new_query = urlencode(merged, quote_via=quote_plus)
+    return urlunparse(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            new_query,
+            parsed.fragment,
+        )
+    )
 
 
 def _show_link_hint_if_needed(link):
@@ -262,7 +281,12 @@ def render_questionnaire_block(kind, show_expander=True):
 
             convo_id = convo_options[selected_topic]
             public_link = _build_app_link(
-                {"questionnaire": "deliberation", "conversation_id": convo_id}
+                {
+                    "questionnaire": "deliberation",
+                    "conversation_id": convo_id,
+                    "mobile": "1",
+                    "view": "mobile",
+                }
             )
             admin_link = _build_app_link(
                 {"questionnaire": "deliberation_admin", "conversation_id": convo_id}

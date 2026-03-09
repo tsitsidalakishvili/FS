@@ -288,14 +288,14 @@ def _apply_questionnaire_card_only_layout():
 
 
 def _is_questionnaire_participation_mode():
-    try:
-        value = st.query_params.get("questionnaire")
-    except Exception:
-        params = st.experimental_get_query_params()
-        value = params.get("questionnaire")
-    if isinstance(value, list):
-        value = value[0] if value else ""
-    return str(value or "").strip().lower() == "deliberation"
+    questionnaire = str(_get_query_param("questionnaire") or "").strip().lower()
+    if questionnaire == "deliberation":
+        return True
+    mobile = str(_get_query_param("mobile") or "").strip().lower()
+    if mobile in {"1", "true", "yes", "on"}:
+        return True
+    view = str(_get_query_param("view") or "").strip().lower()
+    return view == "mobile"
 
 
 def _get_query_param(name):
