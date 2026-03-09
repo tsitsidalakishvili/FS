@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -22,14 +23,17 @@ from app.graph.seed import seed_demo_graph, seed_sample_data
 from app.graph.visualize import build_graph_html
 from app.ingestion.ingest import apply_batch
 from app.ingestion.models import Entity, IngestionBatch, Relationship
+from app.ingestion.gdelt import fetch_gdelt_articles
 from app.ingestion.news import fetch_news_articles
 from app.ingestion.opensanctions import (
     fetch_opensanctions_match,
     get_georgia_dataset_profiles,
     fetch_opensanctions_search,
 )
+from app.ingestion.wikipedia import fetch_wikipedia_profile
 from app.ingestion.wikidata import fetch_wikidata
 from app.monitoring.weekly import run_weekly_monitoring
+from app.reporting.dossier import build_dossier_snapshot, dossier_markdown
 from app.reporting.pdf import generate_pdf_report
 
 
@@ -318,6 +322,322 @@ with col_right:
             ok, _ = safe_neo4j_call("OpenSanctions enrichment", apply_batch, None, client, batch)
             return ok, batch, matches
 
+        def _attach_mentions(article_batch: IngestionBatch) -> IngestionBatch:
+            relationships: list[Relationship] = []
+            for article_entity in article_batch.entities:
+                article_id = str(article_entity.properties.get("id") or "").strip()
+                if not article_id:
+                    continue
+                rel_props: dict[str, object] = {}
+                article_source = article_entity.properties.get("source")
+                if article_source:
+                    rel_props["source"] = article_source
+                published_date = article_entity.properties.get("published_date")
+                if published_date:
+                    rel_props["published_date"] = published_date
+                relationships.append(
+                    Relationship(
+                        source_label=selected["label"],
+                        source_id=selected["id"],
+                        rel_type="MENTIONED_IN",
+                        target_label="NewsArticle",
+                        target_id=article_id,
+                        properties=rel_props,
+                    )
+                )
+            return IngestionBatch(
+                source=article_batch.source,
+                entities=article_batch.entities,
+                relationships=relationships,
+            )
+
+        st.subheader("Dossier Generator")
+        st.caption(
+            "Generate a consolidated dossier from multiple public databases in one run."
+        )
+        source_cols = st.columns(2)
+        with source_cols[0]:
+            use_wikidata = st.checkbox(
+                "Wikidata", value=True, key="dd_dossier_src_wikidata"
+            )
+            use_wikipedia = st.checkbox(
+                "Wikipedia profile", value=True, key="dd_dossier_src_wikipedia"
+            )
+            use_opensanctions = st.checkbox(
+                "OpenSanctions",
+                value=True,
+                key="dd_dossier_src_opensanctions",
+            )
+        with source_cols[1]:
+            use_newsapi = st.checkbox(
+                "NewsAPI (recent headlines)",
+                value=bool(settings.news_api_key),
+                key="dd_dossier_src_newsapi",
+            )
+            use_gdelt = st.checkbox(
+                "GDELT (global media)",
+                value=True,
+                key="dd_dossier_src_gdelt",
+            )
+            use_georgia_sweep = st.checkbox(
+                "OpenSanctions Georgia sweep",
+                value=False,
+                key="dd_dossier_src_georgia_sweep",
+            )
+
+        if st.button("Generate Dossier (all selected sources)", type="primary"):
+            source_runs: list[dict[str, object]] = []
+            _, working_entity = safe_neo4j_call(
+                "Load entity", get_entity, {}, client, selected["label"], selected["id"]
+            )
+            working_entity = working_entity or entity_snapshot
+
+            if use_wikidata:
+                try:
+                    batch = fetch_wikidata(
+                        selected["name"],
+                        target_label=selected["label"],
+                        target_id=selected["id"],
+                    )
+                    ok, _ = safe_neo4j_call(
+                        "Wikidata enrichment", apply_batch, None, client, batch
+                    )
+                    source_runs.append(
+                        {
+                            "source": "wikidata",
+                            "ok": bool(ok),
+                            "items": len(batch.entities),
+                            "detail": "profile + relationship graph",
+                        }
+                    )
+                except Exception as exc:
+                    source_runs.append(
+                        {
+                            "source": "wikidata",
+                            "ok": False,
+                            "items": 0,
+                            "detail": str(exc),
+                        }
+                    )
+
+            if use_wikipedia:
+                try:
+                    batch = fetch_wikipedia_profile(
+                        selected["name"],
+                        target_label=selected["label"],
+                        target_id=selected["id"],
+                    )
+                    ok, _ = safe_neo4j_call(
+                        "Wikipedia enrichment", apply_batch, None, client, batch
+                    )
+                    source_runs.append(
+                        {
+                            "source": "wikipedia",
+                            "ok": bool(ok),
+                            "items": len(batch.entities),
+                            "detail": "encyclopedia profile",
+                        }
+                    )
+                except Exception as exc:
+                    source_runs.append(
+                        {
+                            "source": "wikipedia",
+                            "ok": False,
+                            "items": 0,
+                            "detail": str(exc),
+                        }
+                    )
+
+            if use_opensanctions:
+                if not settings.opensanctions_api_key:
+                    source_runs.append(
+                        {
+                            "source": "opensanctions",
+                            "ok": False,
+                            "items": 0,
+                            "detail": "missing OPENSANCTIONS_API_KEY",
+                        }
+                    )
+                elif use_georgia_sweep:
+                    sweep_datasets = [
+                        str(item.get("name") or "").strip()
+                        for item in georgia_profiles
+                        if str(item.get("group") or "") == "Georgia core"
+                    ]
+                    sweep_datasets = [name for name in sweep_datasets if name]
+                    if not sweep_datasets:
+                        sweep_datasets = [
+                            "ge_declarations",
+                            "ge_ot_list",
+                            "ext_ge_company_registry",
+                        ]
+                    for dataset_name in sweep_datasets:
+                        try:
+                            ok, batch, matches = _run_opensanctions_enrichment(
+                                dataset_name, working_entity
+                            )
+                            source_runs.append(
+                                {
+                                    "source": f"opensanctions:{dataset_name}",
+                                    "ok": bool(ok),
+                                    "items": len(batch.entities),
+                                    "detail": f"matches={len(matches)}",
+                                }
+                            )
+                        except Exception as exc:
+                            source_runs.append(
+                                {
+                                    "source": f"opensanctions:{dataset_name}",
+                                    "ok": False,
+                                    "items": 0,
+                                    "detail": str(exc),
+                                }
+                            )
+                else:
+                    try:
+                        ok, batch, matches = _run_opensanctions_enrichment(
+                            opensanctions_dataset, working_entity
+                        )
+                        source_runs.append(
+                            {
+                                "source": f"opensanctions:{opensanctions_dataset}",
+                                "ok": bool(ok),
+                                "items": len(batch.entities),
+                                "detail": f"matches={len(matches)}",
+                            }
+                        )
+                    except Exception as exc:
+                        source_runs.append(
+                            {
+                                "source": f"opensanctions:{opensanctions_dataset}",
+                                "ok": False,
+                                "items": 0,
+                                "detail": str(exc),
+                            }
+                        )
+
+            if use_newsapi:
+                if not settings.news_api_key:
+                    source_runs.append(
+                        {
+                            "source": "newsapi",
+                            "ok": False,
+                            "items": 0,
+                            "detail": "missing NEWS_API_KEY",
+                        }
+                    )
+                else:
+                    try:
+                        news_batch = fetch_news_articles(
+                            settings.news_api_key, selected["name"]
+                        )
+                        news_batch = _attach_mentions(news_batch)
+                        ok, _ = safe_neo4j_call(
+                            "News ingestion", apply_batch, None, client, news_batch
+                        )
+                        source_runs.append(
+                            {
+                                "source": "newsapi",
+                                "ok": bool(ok),
+                                "items": len(news_batch.entities),
+                                "detail": "recent headlines",
+                            }
+                        )
+                    except Exception as exc:
+                        source_runs.append(
+                            {
+                                "source": "newsapi",
+                                "ok": False,
+                                "items": 0,
+                                "detail": str(exc),
+                            }
+                        )
+
+            if use_gdelt:
+                try:
+                    gdelt_batch = fetch_gdelt_articles(selected["name"])
+                    gdelt_batch = _attach_mentions(gdelt_batch)
+                    ok, _ = safe_neo4j_call(
+                        "GDELT ingestion", apply_batch, None, client, gdelt_batch
+                    )
+                    source_runs.append(
+                        {
+                            "source": "gdelt",
+                            "ok": bool(ok),
+                            "items": len(gdelt_batch.entities),
+                            "detail": "global media index",
+                        }
+                    )
+                except Exception as exc:
+                    source_runs.append(
+                        {
+                            "source": "gdelt",
+                            "ok": False,
+                            "items": 0,
+                            "detail": str(exc),
+                        }
+                    )
+
+            _, latest_entity = safe_neo4j_call(
+                "Load entity", get_entity, {}, client, selected["label"], selected["id"]
+            )
+            latest_entity = latest_entity or {}
+            _, latest_neighbors = safe_neo4j_call(
+                "Load connections", get_neighbors, [], client, selected["label"], selected["id"]
+            )
+            _, latest_risky = safe_neo4j_call(
+                "Load risk view",
+                get_risky_neighbors,
+                [],
+                client,
+                selected["label"],
+                selected["id"],
+            )
+            snapshot = build_dossier_snapshot(
+                subject={
+                    "label": selected["label"],
+                    "id": selected["id"],
+                    "name": selected["name"],
+                },
+                entity=latest_entity,
+                neighbors=latest_neighbors,
+                risky=latest_risky,
+                source_runs=source_runs,
+            )
+            markdown_text = dossier_markdown(snapshot)
+            st.session_state["dd_last_dossier_snapshot"] = snapshot
+            st.session_state["dd_last_dossier_markdown"] = markdown_text
+            st.success("Dossier generation finished.")
+            st.dataframe(source_runs, use_container_width=True)
+
+        dossier_snapshot = st.session_state.get("dd_last_dossier_snapshot")
+        if isinstance(dossier_snapshot, dict):
+            dossier_subject = dossier_snapshot.get("subject") or {}
+            if dossier_subject.get("id") == selected["id"]:
+                markdown_text = str(
+                    st.session_state.get("dd_last_dossier_markdown") or ""
+                )
+                with st.expander("Latest dossier summary", expanded=True):
+                    st.markdown(markdown_text)
+                    safe_subject_id = selected["id"].replace(":", "_").replace("/", "_")
+                    st.download_button(
+                        "Download dossier (Markdown)",
+                        data=markdown_text.encode("utf-8"),
+                        file_name=f"dossier-{safe_subject_id}.md",
+                        mime="text/markdown",
+                    )
+                    st.download_button(
+                        "Download dossier (JSON)",
+                        data=json.dumps(
+                            dossier_snapshot, ensure_ascii=False, indent=2
+                        ).encode("utf-8"),
+                        file_name=f"dossier-{safe_subject_id}.json",
+                        mime="application/json",
+                    )
+
+        st.markdown("---")
+        st.caption("Manual source actions")
+
         if st.button("Enrich from Wikidata"):
             try:
                 batch = fetch_wikidata(
@@ -391,26 +711,16 @@ with col_right:
 
         if st.button("Fetch Recent News"):
             batch = fetch_news_articles(settings.news_api_key, selected["name"])
-            relationships = []
-            for entity in batch.entities:
-                relationships.append(
-                    Relationship(
-                        source_label=selected["label"],
-                        source_id=selected["id"],
-                        rel_type="MENTIONED_IN",
-                        target_label="NewsArticle",
-                        target_id=entity.properties.get("id", ""),
-                        properties={},
-                    )
-                )
-            batch = IngestionBatch(
-                source=batch.source,
-                entities=batch.entities,
-                relationships=relationships,
-            )
+            batch = _attach_mentions(batch)
             ok, _ = safe_neo4j_call("News ingestion", apply_batch, None, client, batch)
             if ok:
                 st.success("News articles ingested.")
+        if st.button("Fetch GDELT Global News"):
+            batch = fetch_gdelt_articles(selected["name"])
+            batch = _attach_mentions(batch)
+            ok, _ = safe_neo4j_call("GDELT ingestion", apply_batch, None, client, batch)
+            if ok:
+                st.success("GDELT articles ingested.")
         st.subheader("Report")
         if st.button("Generate PDF Report"):
             _, entity = safe_neo4j_call(
