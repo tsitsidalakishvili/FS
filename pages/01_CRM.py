@@ -142,7 +142,11 @@ def _render_people_tab() -> None:
         render_profiles_tab()
 
 
-st.set_page_config(page_title="Freedom Square CRM", layout="wide")
+st.set_page_config(
+    page_title="Freedom Square CRM",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 apply_global_styles()
 if handle_special_entrypoints():
     st.stop()

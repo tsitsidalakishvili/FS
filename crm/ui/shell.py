@@ -111,11 +111,53 @@ div[data-testid="stCaptionContainer"] {
 """
 
 
-def apply_global_styles() -> None:
-    st.markdown(_GLOBAL_STYLE, unsafe_allow_html=True)
+_QUESTIONNAIRE_KIOSK_STYLE = """
+<style>
+html body section[data-testid="stSidebar"],
+html body [data-testid="stSidebar"],
+html body [data-testid="stSidebarUserContent"],
+html body [data-testid="stSidebarContent"],
+html body [data-testid="stSidebarHeader"],
+html body [data-testid="stSidebarNav"],
+html body [data-testid="stSidebarNavItems"],
+html body [data-testid="stSidebarNavLink"],
+html body [data-testid="stPageLink"],
+html body [data-testid="stSidebarCollapsedControl"],
+html body [data-testid="collapsedControl"],
+html body [aria-label="Sidebar"],
+html body [aria-label="Page navigation"],
+html body aside {
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+}
+html body header[data-testid="stHeader"],
+html body [data-testid="stToolbar"],
+html body [data-testid="stDecoration"],
+html body [data-testid="stStatusWidget"],
+html body #MainMenu,
+html body footer,
+html body nav,
+html body button[kind="headerNoPadding"],
+html body button[title="View sidebar"],
+html body button[title="Close sidebar"] {
+  display: none !important;
+}
+html body [data-testid="stAppViewContainer"] > .main {
+  margin-left: 0 !important;
+}
+html body .block-container {
+  max-width: 100% !important;
+  padding-left: 0.35rem !important;
+  padding-right: 0.35rem !important;
+}
+</style>
+"""
 
 
-def get_query_param(name: str):
+def _query_param_raw(name: str):
     value = None
     try:
         value = st.query_params.get(name)
@@ -133,7 +175,22 @@ def get_query_param(name: str):
         return fallback
     except Exception:
         return value
-    return value
+
+
+def _is_questionnaire_kiosk_request() -> bool:
+    questionnaire_kind = str(_query_param_raw("questionnaire") or "").strip().lower()
+    return questionnaire_kind == "deliberation"
+
+
+def apply_global_styles() -> None:
+    style = _GLOBAL_STYLE
+    if _is_questionnaire_kiosk_request():
+        style += _QUESTIONNAIRE_KIOSK_STYLE
+    st.markdown(style, unsafe_allow_html=True)
+
+
+def get_query_param(name: str):
+    return _query_param_raw(name)
 
 
 def ensure_db_connection(*, show_sidebar: bool = True) -> bool:
@@ -222,45 +279,7 @@ def ensure_supporter_access(page_name: str) -> bool:
 
 
 def _apply_questionnaire_kiosk_shell() -> None:
-    st.markdown(
-        """
-        <style>
-        section[data-testid="stSidebar"],
-        [data-testid="stSidebar"],
-        [data-testid="stSidebarContent"],
-        [data-testid="stSidebarHeader"],
-        [data-testid="stSidebarNav"],
-        [data-testid="stSidebarNavItems"],
-        [data-testid="stSidebarCollapsedControl"],
-        [data-testid="collapsedControl"],
-        aside {
-          display: none !important;
-          visibility: hidden !important;
-          width: 0 !important;
-          min-width: 0 !important;
-          max-width: 0 !important;
-        }
-        header[data-testid="stHeader"],
-        [data-testid="stToolbar"],
-        [data-testid="stDecoration"],
-        [data-testid="stStatusWidget"],
-        #MainMenu,
-        footer,
-        nav {
-          display: none !important;
-        }
-        [data-testid="stAppViewContainer"] > .main {
-          margin-left: 0 !important;
-        }
-        .block-container {
-          max-width: 100% !important;
-          padding-left: 0.35rem !important;
-          padding-right: 0.35rem !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown(_QUESTIONNAIRE_KIOSK_STYLE, unsafe_allow_html=True)
 
 
 def handle_special_entrypoints() -> bool:
