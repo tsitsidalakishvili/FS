@@ -13,93 +13,131 @@ def _normalize_neo4j_uri(uri: str | None) -> str | None:
     return text
 
 
-def _load_db_config():
-    def _first(*keys: str, default: str | None = None) -> str | None:
-        for key in keys:
-            value = os.getenv(key)
-            if value is not None and str(value).strip() != "":
-                return value
-        return default
+def _first(*keys: str, default: str | None = None) -> str | None:
+    for key in keys:
+        value = os.getenv(key)
+        if value is not None and str(value).strip() != "":
+            return value
+    return default
 
-    override_uri = _first("DELIBERATION_NEO4J_URI")
-    override_user = _first("DELIBERATION_NEO4J_USER", "DELIBERATION_NEO4J_USERNAME")
-    override_password = _first("DELIBERATION_NEO4J_PASSWORD")
-    override_database = _first("DELIBERATION_NEO4J_DATABASE")
-    if override_uri:
-        return (
-            _normalize_neo4j_uri(override_uri),
-            override_user or _first("NEO4J_USER", "NEO4J_USERNAME", default="neo4j"),
-            override_password
-            or _first("NEO4J_PASSWORD", "NEO4J_PASS", default="change-this"),
-            override_database or _first("NEO4J_DATABASE", default="neo4j"),
+
+def _build_db_candidates() -> list[dict[str, str]]:
+    mode = str(os.getenv("DELIBERATION_DB_MODE", "local") or "local").lower()
+    candidates: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+
+    def add_candidate(source: str, uri: str | None, user: str | None, password: str | None, database: str | None):
+        normalized_uri = _normalize_neo4j_uri(uri)
+        text_password = str(password or "").strip()
+        text_user = str(user or "neo4j").strip() or "neo4j"
+        text_db = str(database or "neo4j").strip() or "neo4j"
+        if not normalized_uri or not text_password:
+            return
+        key = (normalized_uri, text_user, text_password, text_db)
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append(
+            {
+                "source": source,
+                "uri": normalized_uri,
+                "user": text_user,
+                "password": text_password,
+                "database": text_db,
+            }
         )
 
-    mode = os.getenv("DELIBERATION_DB_MODE", "local").lower()
+    add_candidate(
+        "DELIBERATION_*",
+        _first("DELIBERATION_NEO4J_URI"),
+        _first("DELIBERATION_NEO4J_USER", "DELIBERATION_NEO4J_USERNAME"),
+        _first("DELIBERATION_NEO4J_PASSWORD"),
+        _first("DELIBERATION_NEO4J_DATABASE", default="neo4j"),
+    )
     if mode == "sandbox":
-        sandbox_uri = _first("NEO4J_SANDBOX_URI")
-        sandbox_user = _first("NEO4J_SANDBOX_USER", "NEO4J_SANDBOX_USERNAME", default="neo4j")
-        sandbox_password = _first("NEO4J_SANDBOX_PASSWORD")
-        sandbox_database = _first("NEO4J_SANDBOX_DATABASE", default="neo4j")
-        if sandbox_uri and sandbox_password:
-            return (
-                _normalize_neo4j_uri(sandbox_uri),
-                sandbox_user,
-                sandbox_password,
-                sandbox_database,
-            )
-
-    primary_uri = _first("NEO4J_URI")
-    primary_user = _first("NEO4J_USER", "NEO4J_USERNAME")
-    primary_password = _first("NEO4J_PASSWORD", "NEO4J_PASS")
-    primary_database = _first("NEO4J_DATABASE", default="neo4j")
-    if primary_uri and primary_password:
-        return (
-            _normalize_neo4j_uri(primary_uri),
-            primary_user or "neo4j",
-            primary_password,
-            primary_database,
-        )
-
-    # Safety fallback for deployments that only provide sandbox variables.
-    sandbox_uri = _first("NEO4J_SANDBOX_URI")
-    sandbox_password = _first("NEO4J_SANDBOX_PASSWORD")
-    if sandbox_uri and sandbox_password:
-        return (
-            _normalize_neo4j_uri(sandbox_uri),
+        add_candidate(
+            "NEO4J_SANDBOX_*",
+            _first("NEO4J_SANDBOX_URI"),
             _first("NEO4J_SANDBOX_USER", "NEO4J_SANDBOX_USERNAME", default="neo4j"),
-            sandbox_password,
+            _first("NEO4J_SANDBOX_PASSWORD"),
+            _first("NEO4J_SANDBOX_DATABASE", default="neo4j"),
+        )
+    add_candidate(
+        "NEO4J_*",
+        _first("NEO4J_URI"),
+        _first("NEO4J_USER", "NEO4J_USERNAME", default="neo4j"),
+        _first("NEO4J_PASSWORD", "NEO4J_PASS"),
+        _first("NEO4J_DATABASE", default="neo4j"),
+    )
+    if mode != "sandbox":
+        add_candidate(
+            "NEO4J_SANDBOX_*",
+            _first("NEO4J_SANDBOX_URI"),
+            _first("NEO4J_SANDBOX_USER", "NEO4J_SANDBOX_USERNAME", default="neo4j"),
+            _first("NEO4J_SANDBOX_PASSWORD"),
             _first("NEO4J_SANDBOX_DATABASE", default="neo4j"),
         )
 
-    return (
-        "bolt://localhost:7687",
-        "neo4j",
-        "change-this",
-        "neo4j",
-    )
+    if not candidates:
+        add_candidate(
+            "defaults",
+            "bolt://localhost:7687",
+            "neo4j",
+            "change-this",
+            "neo4j",
+        )
+    return candidates
 
 
-NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, NEO4J_DATABASE = _load_db_config()
+_first_candidate = _build_db_candidates()[0]
+NEO4J_URI = _first_candidate["uri"]
+NEO4J_USER = _first_candidate["user"]
+NEO4J_PASSWORD = _first_candidate["password"]
+NEO4J_DATABASE = _first_candidate["database"]
 
 _driver = None
+_active_target: dict[str, str] | None = None
 
 
 def get_driver():
-    global _driver
+    global _driver, _active_target
     if _driver is None:
-        _driver = GraphDatabase.driver(
-            NEO4J_URI,
-            auth=(NEO4J_USER, NEO4J_PASSWORD),
-            connection_timeout=15,
-        )
+        errors: list[str] = []
+        for target in _build_db_candidates():
+            candidate_driver = None
+            try:
+                candidate_driver = GraphDatabase.driver(
+                    target["uri"],
+                    auth=(target["user"], target["password"]),
+                    connection_timeout=12,
+                    connection_acquisition_timeout=12,
+                )
+                candidate_driver.verify_connectivity()
+                with candidate_driver.session(database=target["database"]) as session:
+                    session.run("RETURN 1 AS ok").consume()
+                _driver = candidate_driver
+                _active_target = target
+                break
+            except Exception as exc:
+                errors.append(
+                    f"{target['source']}[{target['uri']}|{target['database']}] => {exc}"
+                )
+                try:
+                    if candidate_driver is not None:
+                        candidate_driver.close()
+                except Exception:
+                    pass
+        if _driver is None:
+            raise RuntimeError("No working Neo4j configuration. " + " ; ".join(errors))
     return _driver
 
 
 def close_driver():
-    global _driver
+    global _driver, _active_target
     if _driver is not None:
         _driver.close()
         _driver = None
+    _active_target = None
 
 
 def _execute_write(session, query):
@@ -127,9 +165,16 @@ def db_health() -> dict:
     try:
         driver = get_driver()
         driver.verify_connectivity()
-        with driver.session(database=NEO4J_DATABASE) as session:
+        active = _active_target or {}
+        active_db = active.get("database", NEO4J_DATABASE)
+        with driver.session(database=active_db) as session:
             records = session.run("RETURN 1 AS ok").data()
-        return {"ok": bool(records)}
+        return {
+            "ok": bool(records),
+            "target_source": active.get("source"),
+            "target_uri": active.get("uri"),
+            "target_database": active_db,
+        }
     except Neo4jError as exc:
         return {"ok": False, "error": str(exc)}
     except Exception as exc:

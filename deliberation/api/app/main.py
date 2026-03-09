@@ -36,8 +36,19 @@ def root():
 def healthz():
     health = db_health()
     if health.get("ok"):
-        return {"status": "ok", "db": "ok"}
-    return {"status": "degraded", "db": "error", "detail": health.get("error")}
+        return {
+            "status": "ok",
+            "db": "ok",
+            "target_source": health.get("target_source"),
+            "target_uri": health.get("target_uri"),
+            "target_database": health.get("target_database"),
+        }
+    return {
+        "status": "degraded",
+        "db": "error",
+        "detail": health.get("error"),
+        "startup_error": getattr(app.state, "db_bootstrap_error", None),
+    }
 
 
 @app.get("/health")

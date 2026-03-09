@@ -96,6 +96,9 @@ def _request_json(method, path, payload=None, headers=None, show_error=True):
                 try:
                     body = response.json()
                     detail = body.get("detail", body)
+                    backend_error = body.get("error")
+                    if backend_error:
+                        detail = f"{detail} | backend: {backend_error}"
                 except Exception:
                     detail = response.text
                 last_http_detail = detail
