@@ -241,85 +241,112 @@ def _render_competitor_watchlist() -> tuple[str, str]:
 
 def render_due_diligence_page():
     st.subheader("Due Diligence")
-    st.write(
-        "Use the tabs below to set the investigation subject, manage competitors, and launch DD."
-    )
+    st.caption("Simple flow: 1) Intake subject, 2) manage watchlist, 3) launch DD.")
 
-    intake_tab, competitors_tab, launch_tab = st.tabs(["Intake", "Competitors", "Launch"])
+    def _set_subject(name: str, subject_type: str, start_mode: str) -> None:
+        st.session_state["dd_subject_name"] = str(name or "").strip()
+        st.session_state["dd_subject_type"] = str(subject_type or "").strip()
+        st.session_state["dd_start_mode"] = str(start_mode or "").strip()
+
+    intake_tab, watchlist_tab, launch_tab = st.tabs(["Intake", "Watchlist", "Launch"])
 
     with intake_tab:
-        st.markdown("#### Investigation start point")
+        st.markdown("#### 1) Intake")
+        st.caption("Choose one source and set the subject for the investigation.")
         start_mode = st.radio(
-            "Start from",
-            ["CRM context", "Competitor person", "Competitor company", "Competitor watchlist"],
+            "Source",
+            ["CRM context", "Competitors", "Watchlist"],
             horizontal=True,
             key="dd_start_mode",
         )
-        subject_name = ""
-        subject_type = ""
 
         if start_mode == "CRM context":
-            subject_name = st.text_input(
-                "CRM subject (person/company)",
-                key="dd_start_crm_subject",
-                help="Use this when the investigation starts from CRM context.",
-            ).strip()
-            subject_type = st.selectbox(
-                "CRM subject type",
-                ["Person", "Company"],
-                key="dd_start_crm_subject_type",
-            )
-        elif start_mode == "Competitor person":
-            subject_name = st.text_input(
-                "Competitor person name",
-                key="dd_start_competitor_person",
-                help="Investigate a competitor individual directly without opening a CRM profile first.",
-            ).strip()
-            subject_type = "Person"
-        elif start_mode == "Competitor company":
-            subject_name = st.text_input(
-                "Competitor company name",
-                key="dd_start_competitor_company",
-                help="Investigate a competitor organization directly.",
-            ).strip()
-            subject_type = "Company"
+            crm_cols = st.columns([2, 1, 1])
+            with crm_cols[0]:
+                subject_name = st.text_input(
+                    "CRM subject name",
+                    key="dd_start_crm_subject",
+                    help="Search target from CRM context.",
+                ).strip()
+            with crm_cols[1]:
+                subject_type = st.selectbox(
+                    "Type",
+                    ["Person", "Company"],
+                    key="dd_start_crm_subject_type",
+                )
+            with crm_cols[2]:
+                st.write("")
+                st.write("")
+                if st.button("Set subject", key="dd_set_subject_crm", use_container_width=True):
+                    if subject_name:
+                        _set_subject(subject_name, subject_type, "CRM context")
+                        st.success(f"Subject set: {subject_name} ({subject_type})")
+                    else:
+                        st.warning("Enter a CRM subject name.")
+
+        elif start_mode == "Competitors":
+            comp_cols = st.columns([2, 1, 1])
+            with comp_cols[0]:
+                subject_name = st.text_input(
+                    "Competitor name",
+                    key="dd_start_competitor_name",
+                    help="Direct competitor intake.",
+                ).strip()
+            with comp_cols[1]:
+                subject_type = st.selectbox(
+                    "Type",
+                    ["Person", "Company"],
+                    key="dd_start_competitor_type",
+                )
+            with comp_cols[2]:
+                st.write("")
+                st.write("")
+                if st.button(
+                    "Set subject",
+                    key="dd_set_subject_competitor",
+                    use_container_width=True,
+                ):
+                    if subject_name:
+                        _set_subject(subject_name, subject_type, "Competitors")
+                        st.success(f"Subject set: {subject_name} ({subject_type})")
+                    else:
+                        st.warning("Enter a competitor name.")
         else:
             subject_name = str(st.session_state.get("dd_subject_name") or "").strip()
             subject_type = str(st.session_state.get("dd_subject_type") or "").strip()
-            if subject_name:
-                st.success(f"Current DD subject from watchlist: {subject_name} ({subject_type})")
+            if subject_name and str(st.session_state.get("dd_start_mode") or "") == "Watchlist":
+                st.success(f"Subject from watchlist: {subject_name} ({subject_type})")
             else:
-                st.info("Open the Competitors tab and select a competitor to use as DD subject.")
+                st.info("Go to the Watchlist tab, select a record, then set it as intake subject.")
 
-        if start_mode != "Competitor watchlist":
-            if subject_name:
-                st.session_state["dd_subject_name"] = subject_name
-                st.session_state["dd_subject_type"] = subject_type
-                st.session_state["dd_start_mode"] = start_mode
-                st.success(f"Current DD subject: {subject_name} ({subject_type})")
-            else:
-                st.caption("Select or enter a subject to prefill DD app launch and Gmail share.")
+        current_name = str(st.session_state.get("dd_subject_name") or "").strip()
+        current_type = str(st.session_state.get("dd_subject_type") or "").strip()
+        current_mode = str(st.session_state.get("dd_start_mode") or "").strip()
+        if current_name:
+            st.markdown("---")
+            st.markdown("**Current intake subject**")
+            st.success(f"{current_name} ({current_type}) — source: {current_mode or 'not set'}")
 
-    with competitors_tab:
-        st.markdown("#### Competitor watchlist")
+    with watchlist_tab:
+        st.markdown("#### 2) Watchlist")
+        st.caption("Save competitors and optionally use one as your intake subject.")
         selected_name, selected_type = _render_competitor_watchlist()
         if selected_name and selected_type:
-            st.success(f"Selected competitor: {selected_name} ({selected_type})")
-            if st.button("Use selected competitor as current subject", key="dd_use_competitor_subject"):
-                st.session_state["dd_subject_name"] = selected_name
-                st.session_state["dd_subject_type"] = selected_type
-                st.session_state["dd_start_mode"] = "Competitor watchlist"
-                st.success("Competitor set as current DD subject.")
+            st.success(f"Selected watchlist item: {selected_name} ({selected_type})")
+            if st.button("Use selected as intake subject", key="dd_use_watchlist_subject"):
+                _set_subject(selected_name, selected_type, "Watchlist")
+                st.success("Watchlist subject set for intake.")
                 st.rerun()
 
     with launch_tab:
+        st.markdown("#### 3) Launch")
         subject_name = str(st.session_state.get("dd_subject_name") or "").strip()
         subject_type = str(st.session_state.get("dd_subject_type") or "").strip()
         start_mode = str(st.session_state.get("dd_start_mode") or "CRM context")
         if subject_name:
             st.success(f"Launch subject: {subject_name} ({subject_type})")
         else:
-            st.caption("No subject selected yet. Set one in Intake or Competitors tab.")
+            st.warning("No subject selected yet. Set one in Intake or Watchlist.")
 
         app_url = (
             str(get_config("DUE_DILIGENCE_APP_URL") or "").strip()
