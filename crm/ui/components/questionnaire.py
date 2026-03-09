@@ -286,6 +286,7 @@ def render_questionnaire_block(kind, show_expander=True):
                     "conversation_id": convo_id,
                     "mobile": "1",
                     "view": "mobile",
+                    "embed": "true",
                 }
             )
             admin_link = _build_app_link(

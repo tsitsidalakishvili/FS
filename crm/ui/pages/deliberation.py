@@ -217,6 +217,19 @@ def _apply_questionnaire_card_only_layout():
     st.markdown(
         """
         <style>
+        section[data-testid="stSidebar"],
+        [data-testid="stSidebar"],
+        [data-testid="stSidebarNav"],
+        [data-testid="collapsedControl"] {
+          display: none !important;
+          visibility: hidden !important;
+          width: 0 !important;
+          min-width: 0 !important;
+          max-width: 0 !important;
+        }
+        [data-testid="stAppViewContainer"] > .main {
+          margin-left: 0 !important;
+        }
         [data-testid="stAppViewContainer"] {
           background: linear-gradient(145deg, #0B3A52 0%, #167CA7 52%, #44BEE0 100%) !important;
         }
