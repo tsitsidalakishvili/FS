@@ -635,10 +635,19 @@ def render_deliberation(public_only: bool):
 
     def _render_conversation_workspace() -> None:
         st.markdown("### Conversation workspace")
+        convo_labels = list(convo_options.keys())
+        selected_index = 0
+        active_convo_id = str(st.session_state.get("delib_conversation_id") or "").strip()
+        if active_convo_id:
+            for i, label in enumerate(convo_labels, start=1):
+                if convo_options.get(label) == active_convo_id:
+                    selected_index = i
+                    break
         selected_title = st.selectbox(
             "Active conversation",
-            [""] + list(convo_options.keys()),
-            key="delib_conversation_select",
+            [""] + convo_labels,
+            index=selected_index,
+            key="delib_conversation_picker",
             help="Pick the active conversation once, then continue in other tabs.",
         )
         if selected_title:
@@ -822,9 +831,6 @@ def render_deliberation(public_only: bool):
                         created_convo_id = str(result.get("id") or "").strip()
                         if created_convo_id:
                             st.session_state["delib_conversation_id"] = created_convo_id
-                        created_topic = str(result.get("topic") or topic).strip()
-                        if created_topic:
-                            st.session_state["delib_conversation_select"] = created_topic
                         st.success("Conversation created.")
                         st.rerun()
                 else:
