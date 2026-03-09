@@ -131,6 +131,14 @@ def _show_link_hint_if_needed(link):
         )
 
 
+def _sync_text_widget_value(key: str, value: str) -> None:
+    try:
+        if st.session_state.get(key) != value:
+            st.session_state[key] = value
+    except Exception:
+        pass
+
+
 def _render_field(field, key_prefix):
     field_id = field.get("id") or "field"
     label = field.get("label") or field_id
@@ -169,10 +177,12 @@ def render_survey_block(kind):
         return
     template = options[selected]
     link = _build_app_link({"survey": template["_id"]})
+    survey_link_key = f"survey_link_{kind}"
+    _sync_text_widget_value(survey_link_key, link)
     st.text_input(
         "Shareable link",
         value=link,
-        key=f"survey_link_{kind}",
+        key=survey_link_key,
         help="Auto-generated from current app URL. You can override with APP_URL secret.",
     )
     _show_link_hint_if_needed(link)
@@ -292,17 +302,21 @@ def render_questionnaire_block(kind, show_expander=True):
             admin_link = _build_app_link(
                 {"questionnaire": "deliberation_admin", "conversation_id": convo_id}
             )
+            public_link_key = f"questionnaire_link_public_{kind}"
+            admin_link_key = f"questionnaire_link_admin_{kind}"
+            _sync_text_widget_value(public_link_key, public_link)
+            _sync_text_widget_value(admin_link_key, admin_link)
 
             st.text_input(
                 "Participant link",
                 value=public_link,
-                key=f"questionnaire_link_public_{kind}",
+                key=public_link_key,
                 help="Auto-generated from current app URL. You can override with APP_URL secret.",
             )
             st.text_input(
                 "Admin preview link",
                 value=admin_link,
-                key=f"questionnaire_link_admin_{kind}",
+                key=admin_link_key,
                 help="Internal link with Configure/Moderate/Reports tabs.",
             )
             _show_link_hint_if_needed(public_link)
