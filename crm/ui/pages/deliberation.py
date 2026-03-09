@@ -228,7 +228,9 @@ def _apply_questionnaire_card_only_layout():
         button[kind="headerNoPadding"],
         button[title="View sidebar"],
         button[title="Close sidebar"],
-        [data-testid="collapsedControl"] {
+        [data-testid="collapsedControl"],
+        aside,
+        nav {
           display: none !important;
           visibility: hidden !important;
           width: 0 !important;
