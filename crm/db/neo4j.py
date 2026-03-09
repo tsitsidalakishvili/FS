@@ -11,6 +11,17 @@ _active_uri = None
 _active_user = None
 
 
+def _normalize_neo4j_uri(uri: str | None) -> str | None:
+    text = str(uri or "").strip()
+    if not text:
+        return None
+    # Neo4j sandbox "websocket bolt" endpoint on 443 is not a direct Bolt
+    # endpoint for the Python driver; normalize to the TLS Bolt endpoint.
+    if ".bolt.neo4jsandbox.com:443" in text:
+        return text.replace(".bolt.neo4jsandbox.com:443", ".neo4jsandbox.com:7687")
+    return text
+
+
 def _session_execute_read(session, func, *args):
     if hasattr(session, "execute_read"):
         return session.execute_read(func, *args)
@@ -27,7 +38,7 @@ def init_driver(uri=None, user=None, password=None, database=None):
     global driver, _auth_rate_limited, _active_database, _active_uri, _active_user
     if _auth_rate_limited:
         return False
-    uri = uri or NEO4J_URI
+    uri = _normalize_neo4j_uri(uri or NEO4J_URI)
     user = user or NEO4J_USER
     password = password or NEO4J_PASSWORD
     database = database or NEO4J_DATABASE
@@ -60,6 +71,12 @@ def init_driver(uri=None, user=None, password=None, database=None):
         if "AuthenticationRateLimit" in error_str or "authentication details too many times" in error_str:
             _auth_rate_limited = True
             st.error("Neo4j authentication rate limit reached. Please wait a few minutes.")
+        elif "looks like HTTP" in error_str:
+            st.error(
+                "Neo4j URI looks like a WebSocket/HTTP endpoint. "
+                "Use Bolt endpoint, e.g. "
+                "`bolt+s://<sandbox-id>.neo4jsandbox.com:7687`."
+            )
         else:
             st.error(f"Could not initialize Neo4j driver: {exc}")
         driver = None

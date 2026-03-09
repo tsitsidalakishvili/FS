@@ -3,6 +3,15 @@ from neo4j import GraphDatabase
 from neo4j.exceptions import Neo4jError
 
 
+def _normalize_neo4j_uri(uri: str | None) -> str | None:
+    text = str(uri or "").strip()
+    if not text:
+        return None
+    if ".bolt.neo4jsandbox.com:443" in text:
+        return text.replace(".bolt.neo4jsandbox.com:443", ".neo4jsandbox.com:7687")
+    return text
+
+
 def _load_db_config():
     def _first(*keys: str, default: str | None = None) -> str | None:
         for key in keys:
@@ -17,7 +26,7 @@ def _load_db_config():
     override_database = _first("DELIBERATION_NEO4J_DATABASE")
     if override_uri:
         return (
-            override_uri,
+            _normalize_neo4j_uri(override_uri),
             override_user or _first("NEO4J_USER", "NEO4J_USERNAME", default="neo4j"),
             override_password
             or _first("NEO4J_PASSWORD", "NEO4J_PASS", default="change-this"),
@@ -31,7 +40,12 @@ def _load_db_config():
         sandbox_password = _first("NEO4J_SANDBOX_PASSWORD")
         sandbox_database = _first("NEO4J_SANDBOX_DATABASE", default="neo4j")
         if sandbox_uri and sandbox_password:
-            return sandbox_uri, sandbox_user, sandbox_password, sandbox_database
+            return (
+                _normalize_neo4j_uri(sandbox_uri),
+                sandbox_user,
+                sandbox_password,
+                sandbox_database,
+            )
 
     primary_uri = _first("NEO4J_URI")
     primary_user = _first("NEO4J_USER", "NEO4J_USERNAME")
@@ -39,7 +53,7 @@ def _load_db_config():
     primary_database = _first("NEO4J_DATABASE", default="neo4j")
     if primary_uri and primary_password:
         return (
-            primary_uri,
+            _normalize_neo4j_uri(primary_uri),
             primary_user or "neo4j",
             primary_password,
             primary_database,
@@ -50,7 +64,7 @@ def _load_db_config():
     sandbox_password = _first("NEO4J_SANDBOX_PASSWORD")
     if sandbox_uri and sandbox_password:
         return (
-            sandbox_uri,
+            _normalize_neo4j_uri(sandbox_uri),
             _first("NEO4J_SANDBOX_USER", "NEO4J_SANDBOX_USERNAME", default="neo4j"),
             sandbox_password,
             _first("NEO4J_SANDBOX_DATABASE", default="neo4j"),
