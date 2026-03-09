@@ -221,11 +221,55 @@ def ensure_supporter_access(page_name: str) -> bool:
     return True
 
 
+def _apply_questionnaire_kiosk_shell() -> None:
+    st.markdown(
+        """
+        <style>
+        section[data-testid="stSidebar"],
+        [data-testid="stSidebar"],
+        [data-testid="stSidebarContent"],
+        [data-testid="stSidebarHeader"],
+        [data-testid="stSidebarNav"],
+        [data-testid="stSidebarNavItems"],
+        [data-testid="stSidebarCollapsedControl"],
+        [data-testid="collapsedControl"],
+        aside {
+          display: none !important;
+          visibility: hidden !important;
+          width: 0 !important;
+          min-width: 0 !important;
+          max-width: 0 !important;
+        }
+        header[data-testid="stHeader"],
+        [data-testid="stToolbar"],
+        [data-testid="stDecoration"],
+        [data-testid="stStatusWidget"],
+        #MainMenu,
+        footer,
+        nav {
+          display: none !important;
+        }
+        [data-testid="stAppViewContainer"] > .main {
+          margin-left: 0 !important;
+        }
+        .block-container {
+          max-width: 100% !important;
+          padding-left: 0.35rem !important;
+          padding-right: 0.35rem !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def handle_special_entrypoints() -> bool:
     questionnaire_kind = get_query_param("questionnaire")
     if questionnaire_kind:
         kind = str(questionnaire_kind).strip().lower()
         if kind in {"deliberation", "deliberation_admin"}:
+            if kind == "deliberation":
+                _apply_questionnaire_kiosk_shell()
             convo_id = get_query_param("conversation_id") or get_query_param("conversation")
             if convo_id:
                 conversations = delib_api_get("/conversations", show_error=False) or []
