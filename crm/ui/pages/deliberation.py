@@ -320,14 +320,50 @@ def _is_questionnaire_participation_mode():
 
 
 def _get_query_param(name):
+    value = None
     try:
         value = st.query_params.get(name)
     except Exception:
-        params = st.experimental_get_query_params()
-        value = params.get(name)
+        value = None
     if isinstance(value, list):
         return value[0] if value else None
+    if value not in (None, ""):
+        return value
+    try:
+        params = st.experimental_get_query_params()
+        fallback = params.get(name)
+        if isinstance(fallback, list):
+            return fallback[0] if fallback else None
+        return fallback
+    except Exception:
+        return value
     return value
+
+
+def _ensure_questionnaire_query_defaults(conversation_id: str) -> None:
+    canonical = {
+        "questionnaire": "deliberation",
+        "conversation_id": str(conversation_id or "").strip(),
+        "mobile": "1",
+        "view": "mobile",
+        "embed": "true",
+    }
+    if not canonical["conversation_id"]:
+        return
+    changed = False
+    try:
+        query_params = st.query_params
+        for key, expected in canonical.items():
+            current = query_params.get(key)
+            if isinstance(current, list):
+                current = current[0] if current else ""
+            if str(current or "").strip() != expected:
+                query_params[key] = expected
+                changed = True
+    except Exception:
+        return
+    if changed:
+        st.rerun()
 
 
 def _cast_swipe_vote(convo_id, comment_id, choice, headers):
@@ -606,6 +642,7 @@ def render_deliberation(public_only: bool):
         if not convo_id:
             st.error("Missing conversation_id in participant link.")
             return
+        _ensure_questionnaire_query_defaults(str(convo_id))
         convo = delib_api_get(f"/conversations/{convo_id}")
         if not convo:
             st.error("Conversation not found.")
