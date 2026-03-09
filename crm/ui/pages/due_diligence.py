@@ -90,7 +90,6 @@ def _render_architecture_card(title: str, concept: str, outcome: str, tone: str 
 
 def render_due_diligence_how_it_works() -> None:
     st.markdown("### Workflow architecture")
-    st.caption("Draw.io style process map")
     html = """
     <div style="width:100%; background:#ffffff; border:1px solid #E2E8F0; border-radius:12px; padding:8px;">
       <svg viewBox="0 0 1280 760" width="100%" height="740" xmlns="http://www.w3.org/2000/svg">
