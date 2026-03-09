@@ -10,7 +10,7 @@ load_dotenv(
     override=True,
 )
 
-from .db import close_driver, init_constraints
+from .db import close_driver, db_health, init_constraints
 from .routes import router
 
 app = FastAPI(title="Polis-style Deliberation API")
@@ -29,7 +29,15 @@ def root():
 
 @app.get("/healthz")
 def healthz():
-    return {"status": "ok"}
+    health = db_health()
+    if health.get("ok"):
+        return {"status": "ok", "db": "ok"}
+    return {"status": "degraded", "db": "error", "detail": health.get("error")}
+
+
+@app.get("/health")
+def health():
+    return healthz()
 
 
 @app.on_event("startup")

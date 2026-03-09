@@ -1,38 +1,66 @@
 import os
 from neo4j import GraphDatabase
+from neo4j.exceptions import Neo4jError
 
 
 def _load_db_config():
-    override_uri = os.getenv("DELIBERATION_NEO4J_URI")
-    override_user = os.getenv("DELIBERATION_NEO4J_USER")
-    override_password = os.getenv("DELIBERATION_NEO4J_PASSWORD")
-    override_database = os.getenv("DELIBERATION_NEO4J_DATABASE")
+    def _first(*keys: str, default: str | None = None) -> str | None:
+        for key in keys:
+            value = os.getenv(key)
+            if value is not None and str(value).strip() != "":
+                return value
+        return default
+
+    override_uri = _first("DELIBERATION_NEO4J_URI")
+    override_user = _first("DELIBERATION_NEO4J_USER", "DELIBERATION_NEO4J_USERNAME")
+    override_password = _first("DELIBERATION_NEO4J_PASSWORD")
+    override_database = _first("DELIBERATION_NEO4J_DATABASE")
     if override_uri:
         return (
             override_uri,
-            override_user or os.getenv("NEO4J_USER", "neo4j"),
-            override_password or os.getenv("NEO4J_PASSWORD", "change-this"),
-            override_database or os.getenv("NEO4J_DATABASE", "neo4j"),
+            override_user or _first("NEO4J_USER", "NEO4J_USERNAME", default="neo4j"),
+            override_password
+            or _first("NEO4J_PASSWORD", "NEO4J_PASS", default="change-this"),
+            override_database or _first("NEO4J_DATABASE", default="neo4j"),
         )
 
     mode = os.getenv("DELIBERATION_DB_MODE", "local").lower()
     if mode == "sandbox":
-        sandbox_uri = os.getenv("NEO4J_SANDBOX_URI")
-        sandbox_user = (
-            os.getenv("NEO4J_SANDBOX_USER")
-            or os.getenv("NEO4J_SANDBOX_USERNAME")
-            or "neo4j"
-        )
-        sandbox_password = os.getenv("NEO4J_SANDBOX_PASSWORD")
-        sandbox_database = os.getenv("NEO4J_SANDBOX_DATABASE", "neo4j")
+        sandbox_uri = _first("NEO4J_SANDBOX_URI")
+        sandbox_user = _first("NEO4J_SANDBOX_USER", "NEO4J_SANDBOX_USERNAME", default="neo4j")
+        sandbox_password = _first("NEO4J_SANDBOX_PASSWORD")
+        sandbox_database = _first("NEO4J_SANDBOX_DATABASE", default="neo4j")
         if sandbox_uri and sandbox_password:
             return sandbox_uri, sandbox_user, sandbox_password, sandbox_database
 
+    primary_uri = _first("NEO4J_URI")
+    primary_user = _first("NEO4J_USER", "NEO4J_USERNAME")
+    primary_password = _first("NEO4J_PASSWORD", "NEO4J_PASS")
+    primary_database = _first("NEO4J_DATABASE", default="neo4j")
+    if primary_uri and primary_password:
+        return (
+            primary_uri,
+            primary_user or "neo4j",
+            primary_password,
+            primary_database,
+        )
+
+    # Safety fallback for deployments that only provide sandbox variables.
+    sandbox_uri = _first("NEO4J_SANDBOX_URI")
+    sandbox_password = _first("NEO4J_SANDBOX_PASSWORD")
+    if sandbox_uri and sandbox_password:
+        return (
+            sandbox_uri,
+            _first("NEO4J_SANDBOX_USER", "NEO4J_SANDBOX_USERNAME", default="neo4j"),
+            sandbox_password,
+            _first("NEO4J_SANDBOX_DATABASE", default="neo4j"),
+        )
+
     return (
-        os.getenv("NEO4J_URI", "bolt://localhost:7687"),
-        os.getenv("NEO4J_USER", "neo4j"),
-        os.getenv("NEO4J_PASSWORD", "change-this"),
-        os.getenv("NEO4J_DATABASE", "neo4j"),
+        "bolt://localhost:7687",
+        "neo4j",
+        "change-this",
+        "neo4j",
     )
 
 
@@ -44,7 +72,11 @@ _driver = None
 def get_driver():
     global _driver
     if _driver is None:
-        _driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+        _driver = GraphDatabase.driver(
+            NEO4J_URI,
+            auth=(NEO4J_USER, NEO4J_PASSWORD),
+            connection_timeout=15,
+        )
     return _driver
 
 
@@ -74,3 +106,16 @@ def init_constraints():
     with driver.session(database=NEO4J_DATABASE) as session:
         for query in queries:
             _execute_write(session, query)
+
+
+def db_health() -> dict:
+    try:
+        driver = get_driver()
+        driver.verify_connectivity()
+        with driver.session(database=NEO4J_DATABASE) as session:
+            records = session.run("RETURN 1 AS ok").data()
+        return {"ok": bool(records)}
+    except Neo4jError as exc:
+        return {"ok": False, "error": str(exc)}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}

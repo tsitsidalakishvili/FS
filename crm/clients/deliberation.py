@@ -31,13 +31,22 @@ def _fallback_base_url():
     return base.rstrip("/") if base else None
 
 
+def _set_last_error(kind: str | None = None, **kwargs):
+    try:
+        payload = {"kind": kind} if kind else {}
+        payload.update(kwargs)
+        st.session_state["delib_last_error"] = payload
+    except Exception:
+        pass
+
+
 def _candidate_base_urls():
     urls = []
     primary = _delib_api_base_url()
     fallback = _fallback_base_url()
     if primary:
         urls.append(primary)
-    if (not primary or _is_localhost_base(primary)) and fallback and fallback not in urls:
+    if fallback and fallback not in urls:
         urls.append(fallback)
     return urls
 
@@ -90,13 +99,22 @@ def _request_json(method, path, payload=None, headers=None, show_error=True):
                 except Exception:
                     detail = response.text
                 last_http_detail = detail
+                _set_last_error(
+                    "http",
+                    status=last_http_status,
+                    detail=str(last_http_detail),
+                    url=url,
+                )
                 continue
             try:
+                _set_last_error(None)
                 return response.json()
             except ValueError:
+                _set_last_error(None)
                 return {}
         except requests.RequestException as exc:
             last_exc = exc
+            _set_last_error("request", detail=str(exc), url=url)
             continue
     if show_error:
         if last_http_status is not None:
@@ -135,6 +153,27 @@ def render_delib_api_unavailable():
     else:
         st.warning("Deliberation backend is not configured.")
         st.caption("Set `DELIBERATION_API_URL` (or `API_URL`) in `.env`.")
+    try:
+        last_error = st.session_state.get("delib_last_error") or {}
+    except Exception:
+        last_error = {}
+    if isinstance(last_error, dict) and last_error:
+        kind = str(last_error.get("kind") or "").strip()
+        if kind == "http":
+            st.caption(
+                "Last API response: "
+                f"HTTP {last_error.get('status')} from `{last_error.get('url')}` — "
+                f"{last_error.get('detail')}"
+            )
+            st.caption(
+                "The service is reachable but returned an application error "
+                "(often backend DB/config issues)."
+            )
+        elif kind == "request":
+            st.caption(
+                "Last request error: "
+                f"`{last_error.get('detail')}` against `{last_error.get('url')}`"
+            )
     st.caption("If running locally, start the service with:")
     st.code(
         "python -m uvicorn deliberation.api.app.main:app --host 0.0.0.0 --port 8010"
