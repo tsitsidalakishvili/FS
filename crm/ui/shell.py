@@ -272,14 +272,8 @@ def handle_special_entrypoints() -> bool:
                 _apply_questionnaire_kiosk_shell()
             convo_id = get_query_param("conversation_id") or get_query_param("conversation")
             if convo_id:
-                conversations = delib_api_get("/conversations", show_error=False) or []
-                convo_topic = None
-                for convo in conversations:
-                    if str(convo.get("id")) == str(convo_id):
-                        convo_topic = convo.get("topic")
-                        break
-                if convo_topic:
-                    st.session_state["delib_conversation_id"] = convo_id
+                # Always trust explicit deeplink conversation id to avoid stale session state.
+                st.session_state["delib_conversation_id"] = str(convo_id).strip()
             render_deliberation(public_only=(kind == "deliberation"))
             return True
 

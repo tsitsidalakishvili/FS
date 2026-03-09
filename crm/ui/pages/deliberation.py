@@ -641,9 +641,11 @@ def render_deliberation(public_only: bool):
 
     if questionnaire_mode:
         _apply_questionnaire_card_only_layout()
-        convo_id = st.session_state.get("delib_conversation_id") or _get_query_param(
-            "conversation_id"
-        ) or _get_query_param("conversation")
+        convo_id = _get_query_param("conversation_id") or _get_query_param("conversation")
+        if convo_id:
+            st.session_state["delib_conversation_id"] = str(convo_id).strip()
+        else:
+            convo_id = st.session_state.get("delib_conversation_id")
         if not convo_id:
             st.error("Missing conversation_id in participant link.")
             return
