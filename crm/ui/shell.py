@@ -20,9 +20,6 @@ from crm.config import (
 )
 from crm.db.neo4j import init_driver
 from crm.services.feedback import render_feedback_widget
-from crm.ui.components.questionnaire import render_survey_page
-from crm.ui.pages.deliberation import render_deliberation
-from crm.ui.pages.events import render_event_registration_page
 
 
 _GLOBAL_STYLE = """
@@ -276,6 +273,8 @@ def _supporter_mode() -> bool:
 
 def ensure_supporter_access(page_name: str) -> bool:
     if not _supporter_mode():
+        from crm.ui.pages.deliberation import render_deliberation
+
         st.info("Public view: deliberation participation only.")
         render_feedback_widget("Deliberation (Public)")
         render_deliberation(public_only=True)
@@ -293,6 +292,8 @@ def handle_special_entrypoints() -> bool:
     if questionnaire_kind:
         kind = str(questionnaire_kind).strip().lower()
         if kind in {"deliberation", "deliberation_admin"}:
+            from crm.ui.pages.deliberation import render_deliberation
+
             if kind == "deliberation":
                 _apply_questionnaire_kiosk_shell()
             convo_id = get_query_param("conversation_id") or get_query_param("conversation")
@@ -303,6 +304,8 @@ def handle_special_entrypoints() -> bool:
             return True
 
         if kind in {"event_registration", "event"}:
+            from crm.ui.pages.events import render_event_registration_page
+
             if not ensure_db_connection(show_sidebar=False):
                 st.error("Database connection unavailable for event registration.")
                 return True
@@ -316,6 +319,8 @@ def handle_special_entrypoints() -> bool:
 
     survey_id = get_query_param("survey")
     if survey_id:
+        from crm.ui.components.questionnaire import render_survey_page
+
         render_survey_page(str(survey_id).strip())
         return True
     return False
