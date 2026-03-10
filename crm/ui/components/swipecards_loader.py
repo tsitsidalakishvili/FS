@@ -5,7 +5,7 @@ import tempfile
 import streamlit.components.v1 as components
 
 
-_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V27 */"
+_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V28 */"
 
 
 def _replace_all(content, replacements):
@@ -232,6 +232,55 @@ def _js_replacements():
             "        this.isAnimating = false;\n"
             "        updateFrameHeightDebounced();\n"
             "      }, 300);",
+        ),
+        (
+            "  // Always create a fresh instance to avoid state persistence issues\n"
+            "  const finalMessage = last_card_message ?? 'No more cards to swipe';\n"
+            "  swipeCards = new SwipeCards(\n"
+            "    container,\n"
+            "    cards,\n"
+            "    table_data,\n"
+            "    highlight_cells,\n"
+            "    highlight_rows,\n"
+            "    highlight_columns,\n"
+            "    display_mode,\n"
+            "    centerTableRow,\n"
+            "    centerTableColumn,\n"
+            "    finalMessage,\n"
+            "    {\n"
+            "      tableFontSize: table_font_size,\n"
+            "      tableMaxRows: table_max_rows,\n"
+            "      tableMaxColumns: table_max_columns,\n"
+            "    }\n"
+            "  );",
+            "  // Preserve swipe progress across Python-triggered re-renders.\n"
+            "  // Without this, st.rerun() resets currentIndex to 0 so all\n"
+            "  // remaining cards disappear after each vote is processed.\n"
+            "  const _prevCurrentIndex = (swipeCards && swipeCards.cards && swipeCards.cards.length === cards.length) ? swipeCards.currentIndex : 0;\n"
+            "  const _prevSwipedCards = (swipeCards && swipeCards.cards && swipeCards.cards.length === cards.length) ? swipeCards.swipedCards.slice() : [];\n"
+            "  const finalMessage = last_card_message ?? 'No more cards to swipe';\n"
+            "  swipeCards = new SwipeCards(\n"
+            "    container,\n"
+            "    cards,\n"
+            "    table_data,\n"
+            "    highlight_cells,\n"
+            "    highlight_rows,\n"
+            "    highlight_columns,\n"
+            "    display_mode,\n"
+            "    centerTableRow,\n"
+            "    centerTableColumn,\n"
+            "    finalMessage,\n"
+            "    {\n"
+            "      tableFontSize: table_font_size,\n"
+            "      tableMaxRows: table_max_rows,\n"
+            "      tableMaxColumns: table_max_columns,\n"
+            "    }\n"
+            "  );\n"
+            "  if (_prevCurrentIndex > 0 || _prevSwipedCards.length > 0) {\n"
+            "    swipeCards.currentIndex = _prevCurrentIndex;\n"
+            "    swipeCards.swipedCards = _prevSwipedCards;\n"
+            "    swipeCards.render();\n"
+            "  }",
         ),
     ]
 
@@ -505,7 +554,7 @@ def _build_patched_frontend_dir(package_root: Path):
     if not source_frontend.exists():
         return None
 
-    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v27"
+    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v28"
     target_frontend = base_temp / "frontend"
 
     if not target_frontend.exists():
