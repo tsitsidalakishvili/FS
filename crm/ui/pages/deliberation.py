@@ -464,6 +464,8 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
         )
 
     mode_suffix = "compact" if compact else "full"
+    nonce_key = f"delib_swipe_nonce_{convo_id}_{mode_suffix}"
+    nonce = int(st.session_state.get(nonce_key, 0) or 0)
     result = streamlit_swipecards(
         cards=cards,
         display_mode="cards",
@@ -482,7 +484,7 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
             "background_color": "#F8FCFF",
             "text_color": "#0B3A52",
         },
-        key=f"delib_swipe_component_{convo_id}_{mode_suffix}",
+        key=f"delib_swipe_component_{convo_id}_{mode_suffix}_{nonce}",
     )
 
     casted_key = f"delib_swipe_casted_ids_{convo_id}_{mode_suffix}"
@@ -531,12 +533,30 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
     if new_votes_cast:
         st.session_state[casted_key] = sorted(casted_ids)
 
+    # Guard against stale frontend state (known issue where previous progress
+    # can reappear and collapse the deck after only a few swipes).
+    if compact and comments and total_swiped >= len(comments):
+        casted_count = len(casted_ids)
+        if casted_count < min(5, len(comments)):
+            stale_guard_key = f"delib_swipe_stale_guard_{convo_id}_{mode_suffix}_{nonce}"
+            if not st.session_state.get(stale_guard_key):
+                st.session_state[stale_guard_key] = True
+                st.session_state[casted_key] = []
+                st.session_state[nonce_key] = nonce + 1
+                st.rerun()
+        st.info("You have reviewed all statements.")
+        if st.button("Restart cards", key=f"delib_swipe_restart_{convo_id}_{mode_suffix}"):
+            st.session_state[casted_key] = []
+            st.session_state[nonce_key] = nonce + 1
+            st.rerun()
+
     if not compact and st.button(
         "Reset swipe progress",
         key=f"delib_swipe_reset_{convo_id}",
         help="Reset local swipe progress for this conversation.",
     ):
         st.session_state[casted_key] = []
+        st.session_state[nonce_key] = nonce + 1
         st.rerun()
 
     return {"current_comment_id": current_comment_id, "total_swiped": total_swiped}
