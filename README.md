@@ -25,6 +25,20 @@ This folder now contains the **combined** application:
 
 ## Run locally
 
+### Standalone app directories (new)
+You can now run/deploy each module independently from these folders:
+
+- `CRM/app.py`
+- `Deliberation/app.py`
+- `DueDiligence/app.py`
+
+Examples:
+```bash
+streamlit run CRM/app.py
+streamlit run Deliberation/app.py
+streamlit run DueDiligence/app.py
+```
+
 ### 1) Start deliberation API
 ```
 cd deliberation/api
