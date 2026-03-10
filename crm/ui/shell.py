@@ -176,7 +176,7 @@ def _query_param_raw(name: str):
 
 def _is_questionnaire_kiosk_request() -> bool:
     questionnaire_kind = str(_query_param_raw("questionnaire") or "").strip().lower()
-    return questionnaire_kind == "deliberation"
+    return questionnaire_kind in {"deliberation", "deliberation_admin"}
 
 
 def apply_global_styles() -> None:
@@ -294,13 +294,19 @@ def handle_special_entrypoints() -> bool:
         if kind in {"deliberation", "deliberation_admin"}:
             from crm.ui.pages.deliberation import render_deliberation
 
-            if kind == "deliberation":
-                _apply_questionnaire_kiosk_shell()
+            _apply_questionnaire_kiosk_shell()
+            # Ensure shared admin-style questionnaire links open the same
+            # participant mobile flow (cards/comments, no app navigation).
+            if kind == "deliberation_admin":
+                try:
+                    st.query_params["questionnaire"] = "deliberation"
+                except Exception:
+                    pass
             convo_id = get_query_param("conversation_id") or get_query_param("conversation")
             if convo_id:
                 # Always trust explicit deeplink conversation id to avoid stale session state.
                 st.session_state["delib_conversation_id"] = str(convo_id).strip()
-            render_deliberation(public_only=(kind == "deliberation"))
+            render_deliberation(public_only=True)
             return True
 
         if kind in {"event_registration", "event"}:

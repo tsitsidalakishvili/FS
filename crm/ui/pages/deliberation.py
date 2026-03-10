@@ -372,7 +372,7 @@ def _inject_questionnaire_parent_hide_script() -> None:
 
 def _is_questionnaire_participation_mode():
     questionnaire = str(_get_query_param("questionnaire") or "").strip().lower()
-    if questionnaire == "deliberation":
+    if questionnaire in {"deliberation", "deliberation_admin"}:
         return True
     mobile = str(_get_query_param("mobile") or "").strip().lower()
     if mobile in {"1", "true", "yes", "on"}:

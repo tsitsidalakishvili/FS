@@ -299,7 +299,13 @@ def render_questionnaire_block(kind, show_expander=True):
                 }
             )
             admin_link = _build_app_link(
-                {"questionnaire": "deliberation_admin", "conversation_id": convo_id}
+                {
+                    "questionnaire": "deliberation",
+                    "conversation_id": convo_id,
+                    "mobile": "1",
+                    "view": "mobile",
+                    "embed": "true",
+                }
             )
             public_link_key = f"questionnaire_link_public_{kind}"
             admin_link_key = f"questionnaire_link_admin_{kind}"
