@@ -305,6 +305,103 @@ def _apply_questionnaire_card_only_layout():
           color: #3A6786;
           font-size: 0.9rem;
         }
+        .stImage img {
+          border-radius: 20px !important;
+          box-shadow: 0 18px 34px rgba(18, 63, 94, 0.18) !important;
+          border: 1px solid rgba(183, 215, 239, 0.96) !important;
+          background: #EAF4FF !important;
+        }
+        .fs-mobile-swipe-note {
+          background: rgba(234, 244, 255, 0.95);
+          border: 1px solid #B7D7EF;
+          border-radius: 16px;
+          padding: 0.7rem 0.8rem;
+          margin: 0.35rem 0 0.65rem 0;
+          box-shadow: 0 8px 18px rgba(18, 63, 94, 0.07);
+          color: #123F5E;
+        }
+        .fs-mobile-swipe-note strong {
+          display: block;
+          font-size: 0.98rem;
+          margin-bottom: 0.16rem;
+        }
+        .fs-mobile-swipe-note span {
+          display: block;
+          font-size: 0.84rem;
+          color: #3A6786;
+          line-height: 1.35;
+        }
+        .fs-mobile-action-legend {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 0.45rem;
+          margin: 0.25rem 0 0.55rem 0;
+        }
+        .fs-mobile-action-pill {
+          min-height: 74px;
+          border-radius: 18px;
+          border: 1.5px solid #B7D7EF;
+          background: rgba(228, 241, 255, 0.92);
+          color: #123F5E;
+          padding: 0.45rem 0.35rem;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          text-align: center;
+          box-shadow: 0 8px 20px rgba(18, 63, 94, 0.10);
+        }
+        .fs-mobile-action-pill b {
+          font-size: 0.83rem;
+          letter-spacing: 0.03em;
+        }
+        .fs-mobile-action-pill small {
+          margin-top: 0.18rem;
+          font-size: 0.68rem;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          color: #3A6786;
+        }
+        [class*="st-key-delib_mobile_agree_"] button,
+        [class*="st-key-delib_mobile_disagree_"] button,
+        [class*="st-key-delib_mobile_pass_"] button {
+          min-height: 92px !important;
+          border-radius: 20px !important;
+          border: 1.5px solid #B7D7EF !important;
+          background: rgba(228, 241, 255, 0.92) !important;
+          color: #123F5E !important;
+          box-shadow: 0 8px 20px rgba(18, 63, 94, 0.10) !important;
+          padding: 0.65rem 0.4rem !important;
+          font-size: 0.86rem !important;
+          font-weight: 700 !important;
+          line-height: 1.12 !important;
+          white-space: pre-line !important;
+        }
+        [class*="st-key-delib_mobile_agree_"] button:hover,
+        [class*="st-key-delib_mobile_disagree_"] button:hover,
+        [class*="st-key-delib_mobile_pass_"] button:hover {
+          border-color: #8EC4E8 !important;
+          transform: translateY(-1px);
+        }
+        @media (max-width: 480px) {
+          .fs-mobile-action-pill {
+            min-height: 66px;
+            border-radius: 16px;
+          }
+          .fs-mobile-action-pill b {
+            font-size: 0.77rem;
+          }
+          .fs-mobile-action-pill small {
+            font-size: 0.64rem;
+          }
+          [class*="st-key-delib_mobile_agree_"] button,
+          [class*="st-key-delib_mobile_disagree_"] button,
+          [class*="st-key-delib_mobile_pass_"] button {
+            min-height: 84px !important;
+            font-size: 0.78rem !important;
+            padding: 0.58rem 0.3rem !important;
+          }
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -592,7 +689,20 @@ def _render_mobile_questionnaire_cards(comments, convo_id, headers):
     reviewed_count = total_comments - len(remaining_comments)
     st.progress((reviewed_count / total_comments) if total_comments else 0.0)
     st.caption(f"{reviewed_count}/{total_comments} reactions recorded")
-    st.caption("Use actions below: AGREE (right), DISAGREE (left), PASS (down).")
+    st.markdown(
+        """
+        <div class="fs-mobile-swipe-note">
+          <strong>Swipe-style voting, stable mobile version</strong>
+          <span>Same card design as before, with reliable tap actions for AGREE, DISAGREE, and PASS.</span>
+        </div>
+        <div class="fs-mobile-action-legend">
+          <div class="fs-mobile-action-pill"><b>AGREE</b><small>SWIPE RIGHT</small></div>
+          <div class="fs-mobile-action-pill"><b>DISAGREE</b><small>SWIPE LEFT</small></div>
+          <div class="fs-mobile-action-pill"><b>PASS</b><small>SWIPE DOWN</small></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     if not remaining_comments:
         st.success("You have reviewed all statements.")
