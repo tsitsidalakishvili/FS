@@ -99,6 +99,11 @@ _driver = None
 _active_target: dict[str, str] | None = None
 
 
+def get_active_database() -> str:
+    active = _active_target or {}
+    return str(active.get("database") or NEO4J_DATABASE or "neo4j")
+
+
 def get_driver():
     global _driver, _active_target
     if _driver is None:
@@ -156,7 +161,7 @@ def init_constraints():
         "CREATE CONSTRAINT cluster_id IF NOT EXISTS FOR (c:Cluster) REQUIRE c.id IS UNIQUE",
         "CREATE CONSTRAINT analysis_run_id IF NOT EXISTS FOR (a:AnalysisRun) REQUIRE a.id IS UNIQUE",
     ]
-    with driver.session(database=NEO4J_DATABASE) as session:
+    with driver.session(database=get_active_database()) as session:
         for query in queries:
             _execute_write(session, query)
 
@@ -166,7 +171,7 @@ def db_health() -> dict:
         driver = get_driver()
         driver.verify_connectivity()
         active = _active_target or {}
-        active_db = active.get("database", NEO4J_DATABASE)
+        active_db = get_active_database()
         with driver.session(database=active_db) as session:
             records = session.run("RETURN 1 AS ok").data()
         return {

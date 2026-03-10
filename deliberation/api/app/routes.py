@@ -8,7 +8,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Header, HTTPException, Query
 
 from .analytics import compute_cluster_insights, compute_metrics, run_clustering
-from .db import NEO4J_DATABASE, get_driver
+from .db import get_active_database, get_driver
 from .schemas import (
     ConversationDatasetImportRequest,
     CommentCreate,
@@ -63,10 +63,14 @@ def _execute_write(session, query, params=None):
     return session.write_transaction(_run)
 
 
+def _db_session(driver):
+    return driver.session(database=get_active_database())
+
+
 def _get_conversation(conversation_id: str) -> dict:
     driver = get_driver()
     query = "MATCH (c:Conversation {id: $id}) RETURN c"
-    with driver.session(database=NEO4J_DATABASE) as session:
+    with _db_session(driver) as session:
         records = _execute_read(session, query, {"id": conversation_id})
     if not records:
         raise HTTPException(status_code=404, detail="Conversation not found")
@@ -166,7 +170,7 @@ def create_conversation(payload: ConversationCreate):
     })
     RETURN c
     """
-    with driver.session(database=NEO4J_DATABASE) as session:
+    with _db_session(driver) as session:
         records = _execute_write(
             session,
             query,
@@ -209,7 +213,7 @@ def update_conversation(conversation_id: str, payload: ConversationUpdate):
     SET c += $updates
     RETURN c
     """
-    with driver.session(database=NEO4J_DATABASE) as session:
+    with _db_session(driver) as session:
         records = _execute_write(session, query, {"id": conversation_id, "updates": updates})
         record = records[0] if records else None
     if record is None:
@@ -221,7 +225,7 @@ def update_conversation(conversation_id: str, payload: ConversationUpdate):
 def list_conversations():
     driver = get_driver()
     query = "MATCH (c:Conversation) RETURN c ORDER BY c.createdAt DESC"
-    with driver.session(database=NEO4J_DATABASE) as session:
+    with _db_session(driver) as session:
         records = _execute_read(session, query)
     conversations = []
     for record in records:
@@ -240,7 +244,7 @@ def get_conversation(conversation_id: str):
     OPTIONAL MATCH (p:Participant)-[:PARTICIPATED_IN]->(c)
     RETURN c, comments, count(DISTINCT p) AS participants
     """
-    with driver.session(database=NEO4J_DATABASE) as session:
+    with _db_session(driver) as session:
         record = _execute_read(session, query, {"id": conversation_id})
     if not record:
         raise HTTPException(status_code=404, detail="Conversation not found")
@@ -253,7 +257,7 @@ def get_conversation(conversation_id: str):
 def delete_conversation(conversation_id: str):
     _get_conversation(conversation_id)
     driver = get_driver()
-    with driver.session(database=NEO4J_DATABASE) as session:
+    with _db_session(driver) as session:
         _execute_write(
             session,
             """
@@ -313,7 +317,7 @@ def seed_comments(conversation_id: str, payload: SeedCommentsRequest):
     CREATE (c)-[:HAS_COMMENT]->(cm)
     RETURN count(cm) AS created
     """
-    with driver.session(database=NEO4J_DATABASE) as session:
+    with _db_session(driver) as session:
         records = _execute_write(session, query, {"cid": conversation_id, "items": seed_items})
         created = records[0]["created"] if records else 0
     return {"created": int(created)}
@@ -349,7 +353,7 @@ def create_comment(
     CREATE (c)-[:HAS_COMMENT]->(cm)
     RETURN cm
     """
-    with driver.session(database=NEO4J_DATABASE) as session:
+    with _db_session(driver) as session:
         records = _execute_write(
             session,
             query,
@@ -389,7 +393,7 @@ def list_comments(
     RETURN cm, agree_count, disagree_count, pass_count
     ORDER BY cm.createdAt
     """
-    with driver.session(database=NEO4J_DATABASE) as session:
+    with _db_session(driver) as session:
         records = _execute_read(session, query, {"cid": conversation_id, "status": status})
     comments = []
     for record in records:
@@ -418,7 +422,7 @@ def update_comment_status(comment_id: str, payload: CommentStatusUpdate):
     SET cm.status = $status
     RETURN cm
     """
-    with driver.session(database=NEO4J_DATABASE) as session:
+    with _db_session(driver) as session:
         records = _execute_write(session, query, {"id": comment_id, "status": payload.status})
         record = records[0] if records else None
     if record is None:
@@ -459,7 +463,7 @@ def cast_vote(payload: VoteCreate, x_participant_id: Optional[str] = Header(None
         v.votedAt = datetime()
     RETURN v
     """
-    with driver.session(database=NEO4J_DATABASE) as session:
+    with _db_session(driver) as session:
         records = _execute_write(
             session,
             query,
@@ -506,7 +510,7 @@ def import_votes_bulk(conversation_id: str, payload: VotesImportRequest):
         )
 
     driver = get_driver()
-    with driver.session(database=NEO4J_DATABASE) as session:
+    with _db_session(driver) as session:
         records = _execute_write(
             session,
             """
@@ -605,7 +609,7 @@ def import_conversation_dataset(conversation_id: str, payload: ConversationDatas
     updated_comments = 0
 
     if comments:
-        with driver.session(database=NEO4J_DATABASE) as session:
+        with _db_session(driver) as session:
             records = _execute_write(
                 session,
                 """
@@ -644,7 +648,7 @@ def import_conversation_dataset(conversation_id: str, payload: ConversationDatas
     imported_rows = 0
     unique_votes = 0
     if votes:
-        with driver.session(database=NEO4J_DATABASE) as session:
+        with _db_session(driver) as session:
             records = _execute_write(
                 session,
                 """
@@ -694,7 +698,7 @@ def simulate_votes(conversation_id: str, payload: SimulateVotesRequest):
     rng = random.Random(payload.seed if payload.seed is not None else 42)
 
     driver = get_driver()
-    with driver.session(database=NEO4J_DATABASE) as session:
+    with _db_session(driver) as session:
         comment_records = _execute_read(
             session,
             """
@@ -735,7 +739,7 @@ def simulate_votes(conversation_id: str, payload: SimulateVotesRequest):
                 }
             )
 
-    with driver.session(database=NEO4J_DATABASE) as session:
+    with _db_session(driver) as session:
         records = _execute_write(
             session,
             """
@@ -773,7 +777,7 @@ def _collect_comments_and_votes(conversation_id: str):
     MATCH (p:Participant)-[v:VOTED]->(cm)
     RETURN p.id AS participant_id, cm.id AS comment_id, v.choice AS choice
     """
-    with driver.session(database=NEO4J_DATABASE) as session:
+    with _db_session(driver) as session:
         comment_records = _execute_read(session, comments_query, {"cid": conversation_id})
         vote_records = _execute_read(session, votes_query, {"cid": conversation_id})
     comments = [_node_to_dict(record["cm"]) for record in comment_records]
@@ -829,7 +833,7 @@ def analyze_conversation(conversation_id: str):
     ]
 
     driver = get_driver()
-    with driver.session(database=NEO4J_DATABASE) as session:
+    with _db_session(driver) as session:
         _execute_write(
             session,
             """

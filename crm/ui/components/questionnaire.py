@@ -250,11 +250,11 @@ def render_survey_page(survey_id):
 def render_questionnaire_block(kind, show_expander=True):
     normalized_kind = str(kind or "").strip().lower()
     if normalized_kind == "supporter":
-        label = "Supporter"
+        audience_label = "Supporter"
     elif normalized_kind == "member":
-        label = "Member"
+        audience_label = "Member"
     else:
-        label = "Audience"
+        audience_label = "Audience"
 
     def _render_content():
         survey_tab, delib_tab = st.tabs(["Survey form", "Deliberation"])
@@ -263,7 +263,11 @@ def render_questionnaire_block(kind, show_expander=True):
             render_survey_block(normalized_kind)
 
         with delib_tab:
-            audience_text = "audiences" if normalized_kind in {"all", "any", ""} else f"{label.lower()}s"
+            audience_text = (
+                "audiences"
+                if normalized_kind in {"all", "any", ""}
+                else f"{audience_label.lower()}s"
+            )
             st.caption(
                 f"Send a deliberation link to {audience_text} so they can vote and comment."
             )
@@ -283,10 +287,10 @@ def render_questionnaire_block(kind, show_expander=True):
                 topic = str(convo.get("topic") or "").strip() or "Untitled conversation"
                 if not convo_id:
                     continue
-                label = topic
-                if label in convo_options:
-                    label = f"{topic} [{convo_id[:8]}]"
-                convo_options[label] = convo_id
+                convo_label = topic
+                if convo_label in convo_options:
+                    convo_label = f"{topic} [{convo_id[:8]}]"
+                convo_options[convo_label] = convo_id
             selected_topic = st.selectbox(
                 "Conversation",
                 options=[""] + list(convo_options.keys()),
@@ -333,7 +337,7 @@ def render_questionnaire_block(kind, show_expander=True):
             )
             _show_link_hint_if_needed(public_link)
             message = (
-                f"Freedom Square questionnaire ({label})\n\n"
+                f"Freedom Square questionnaire ({audience_label})\n\n"
                 "Please vote and comment using this link:\n"
                 + public_link
             )
@@ -364,7 +368,7 @@ def render_questionnaire_block(kind, show_expander=True):
             )
             with st.expander("Admin link sharing (optional)", expanded=False):
                 admin_message = (
-                    f"Freedom Square deliberation admin preview ({label})\n\n"
+                    f"Freedom Square deliberation admin preview ({audience_label})\n\n"
                     "Open the same mobile participant flow with this link:\n"
                     + admin_link
                 )
@@ -404,7 +408,7 @@ def render_questionnaire_block(kind, show_expander=True):
                     st.markdown(f"- {comment.get('text','')}")
             else:
                 st.caption(
-                    "No approved comments yet — the link will show an empty vote list."
+                    "No approved comments yet — the link will open an empty card deck."
                 )
 
     if show_expander:

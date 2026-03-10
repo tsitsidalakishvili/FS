@@ -176,7 +176,24 @@ def _query_param_raw(name: str):
 
 def _is_questionnaire_kiosk_request() -> bool:
     questionnaire_kind = str(_query_param_raw("questionnaire") or "").strip().lower()
-    return questionnaire_kind in {"deliberation", "deliberation_admin"}
+    if questionnaire_kind in {"deliberation", "deliberation_admin"}:
+        return True
+    if questionnaire_kind:
+        return False
+
+    convo_id = str(
+        _query_param_raw("conversation_id") or _query_param_raw("conversation") or ""
+    ).strip()
+    if not convo_id:
+        return False
+    mobile = str(_query_param_raw("mobile") or "").strip().lower()
+    view = str(_query_param_raw("view") or "").strip().lower()
+    embed = str(_query_param_raw("embed") or "").strip().lower()
+    return (
+        mobile in {"1", "true", "yes", "on"}
+        or view == "mobile"
+        or embed in {"1", "true", "yes", "on"}
+    )
 
 
 def apply_global_styles() -> None:
@@ -320,6 +337,17 @@ def handle_special_entrypoints() -> bool:
             return True
 
         st.error("Unknown questionnaire type.")
+        return True
+
+    # Fallback for mobile links where `questionnaire` can be dropped on reruns.
+    if _is_questionnaire_kiosk_request():
+        from crm.ui.pages.deliberation import render_deliberation
+
+        _apply_questionnaire_kiosk_shell()
+        convo_id = get_query_param("conversation_id") or get_query_param("conversation")
+        if convo_id:
+            st.session_state["delib_conversation_id"] = str(convo_id).strip()
+        render_deliberation(public_only=True)
         return True
 
     survey_id = get_query_param("survey")

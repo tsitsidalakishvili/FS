@@ -143,8 +143,18 @@ def _request_json(method, path, payload=None, headers=None, show_error=True):
 def render_delib_api_unavailable():
     bases = _candidate_base_urls()
     base = _delib_api_base_url()
+    try:
+        last_error = st.session_state.get("delib_last_error") or {}
+    except Exception:
+        last_error = {}
+    last_kind = ""
+    if isinstance(last_error, dict):
+        last_kind = str(last_error.get("kind") or "").strip().lower()
     if bases:
-        st.warning("Deliberation backend is not reachable.")
+        if last_kind == "http":
+            st.warning("Deliberation backend is reachable but returned an application error.")
+        else:
+            st.warning("Deliberation backend is not reachable.")
         st.caption("Tried:")
         for item in bases:
             st.caption(f"- `{item}`")
@@ -156,10 +166,6 @@ def render_delib_api_unavailable():
     else:
         st.warning("Deliberation backend is not configured.")
         st.caption("Set `DELIBERATION_API_URL` (or `API_URL`) in `.env`.")
-    try:
-        last_error = st.session_state.get("delib_last_error") or {}
-    except Exception:
-        last_error = {}
     if isinstance(last_error, dict) and last_error:
         kind = str(last_error.get("kind") or "").strip()
         if kind == "http":

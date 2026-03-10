@@ -255,14 +255,28 @@ def render_admin_page():
     db_status = "Connected" if neo4j_db.driver is not None else "Not connected"
     st.write(f"**Neo4j**: {db_status}")
 
+    delib_health = delib_api_get("/healthz", show_error=False) or {}
     delib_ok = delib_api_get("/conversations", show_error=False)
-    delib_status = "Online" if delib_ok is not None else "Offline / not configured"
+    health_status = str(delib_health.get("status") or "").strip().lower()
+    if delib_ok is not None:
+        delib_status = "Online"
+    elif health_status in {"degraded", "error"}:
+        delib_status = "Reachable but degraded"
+    else:
+        delib_status = "Offline / not configured"
     st.write(f"**Deliberation API**: {delib_status}")
     effective_urls = [str(DELIBERATION_API_URL or "").strip()]
     fallback_url = str(DELIBERATION_API_FALLBACK_URL or "").strip()
     if fallback_url and fallback_url not in effective_urls:
         effective_urls.append(fallback_url)
     st.caption(f"API URL(s): {', '.join([u for u in effective_urls if u]) or 'Not set'}")
+    if delib_health:
+        st.caption(
+            "Health: "
+            f"status={delib_health.get('status')} "
+            f"db_ok={delib_health.get('db_ok')} "
+            f"target={delib_health.get('target_source') or 'n/a'}"
+        )
 
     st.markdown("### Access mode")
     st.write(f"**Public only**: {'Yes' if PUBLIC_ONLY else 'No'}")
