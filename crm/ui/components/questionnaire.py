@@ -181,7 +181,6 @@ def render_survey_block(kind):
     _sync_text_widget_value(survey_link_key, link)
     st.text_input(
         "Shareable link",
-        value=link,
         key=survey_link_key,
         help="Auto-generated from current app URL. You can override with APP_URL secret.",
     )
@@ -278,7 +277,16 @@ def render_questionnaire_block(kind, show_expander=True):
                 )
                 return
 
-            convo_options = {c["topic"]: c["id"] for c in conversations}
+            convo_options = {}
+            for convo in conversations:
+                convo_id = str(convo.get("id") or "").strip()
+                topic = str(convo.get("topic") or "").strip() or "Untitled conversation"
+                if not convo_id:
+                    continue
+                label = topic
+                if label in convo_options:
+                    label = f"{topic} [{convo_id[:8]}]"
+                convo_options[label] = convo_id
             selected_topic = st.selectbox(
                 "Conversation",
                 options=[""] + list(convo_options.keys()),
@@ -300,7 +308,13 @@ def render_questionnaire_block(kind, show_expander=True):
                 }
             )
             admin_link = _build_app_link(
-                {"questionnaire": "deliberation_admin", "conversation_id": convo_id}
+                {
+                    "questionnaire": "deliberation",
+                    "conversation_id": convo_id,
+                    "mobile": "1",
+                    "view": "mobile",
+                    "embed": "true",
+                }
             )
             public_link_key = f"questionnaire_link_public_{kind}"
             admin_link_key = f"questionnaire_link_admin_{kind}"
@@ -309,15 +323,13 @@ def render_questionnaire_block(kind, show_expander=True):
 
             st.text_input(
                 "Participant link",
-                value=public_link,
                 key=public_link_key,
                 help="Auto-generated from current app URL. You can override with APP_URL secret.",
             )
             st.text_input(
                 "Admin preview link",
-                value=admin_link,
                 key=admin_link_key,
-                help="Internal link with Configure/Moderate/Reports tabs.",
+                help="Internal link with Configure/Moderation/Reports tabs.",
             )
             _show_link_hint_if_needed(public_link)
             message = (

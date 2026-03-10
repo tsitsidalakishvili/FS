@@ -5,7 +5,7 @@ import tempfile
 import streamlit.components.v1 as components
 
 
-_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V27 */"
+_PATCH_MARKER = "/* FS_SWIPE_DOWN_PASS_PATCH_V29 */"
 
 
 def _replace_all(content, replacements):
@@ -277,10 +277,10 @@ def _css_append():
   min-height: 98px !important;
   height: auto !important;
   border-radius: 20px !important;
-  border: 1.5px solid #D1DEE8 !important;
-  background: rgba(255, 255, 255, 0.90) !important;
-  color: #0B3A52 !important;
-  box-shadow: 0 8px 20px rgba(11, 58, 82, 0.12) !important;
+  border: 1.5px solid #B7D7EF !important;
+  background: rgba(228, 241, 255, 0.92) !important;
+  color: #123F5E !important;
+  box-shadow: 0 8px 20px rgba(18, 63, 94, 0.10) !important;
   padding: 10px 10px 12px;
   font-size: 14px !important;
   line-height: 1.15 !important;
@@ -357,24 +357,24 @@ def _css_append():
 }}
 
 .btn-disagree {{
-  background: rgba(255, 255, 255, 0.90) !important;
-  border-color: #D1DEE8 !important;
-  color: #0B3A52 !important;
+  background: rgba(228, 241, 255, 0.92) !important;
+  border-color: #B7D7EF !important;
+  color: #123F5E !important;
 }}
 
 .btn-like {{
-  background: rgba(255, 255, 255, 0.90) !important;
-  border-color: #D1DEE8 !important;
-  color: #0B3A52 !important;
+  background: rgba(228, 241, 255, 0.92) !important;
+  border-color: #B7D7EF !important;
+  color: #123F5E !important;
 }}
 
 .btn-pass {{
   display: flex !important;
   visibility: visible !important;
   opacity: 1 !important;
-  background: rgba(255, 255, 255, 0.90) !important;
-  border-color: #D1DEE8 !important;
-  color: #0B3A52 !important;
+  background: rgba(228, 241, 255, 0.92) !important;
+  border-color: #B7D7EF !important;
+  color: #123F5E !important;
 }}
 
 /* If upstream and patch both render PASS, keep only one */
@@ -388,9 +388,9 @@ def _css_append():
   text-align: center !important;
   padding: 10px 12px;
   border-radius: 14px;
-  border: 1px solid rgba(209, 222, 232, 0.95);
-  background: rgba(255, 255, 255, 0.88);
-  color: #0B3A52 !important;
+  border: 1px solid rgba(183, 215, 239, 0.95);
+  background: rgba(228, 241, 255, 0.90);
+  color: #123F5E !important;
   display: flex !important;
   align-items: center !important;
   gap: 10px !important;
@@ -424,12 +424,12 @@ def _css_append():
 
 .action-indicator.like {{
   right: 16px;
-  color: #0B3A52 !important;
+  color: #123F5E !important;
 }}
 
 .action-indicator.pass {{
   left: 16px;
-  color: #0B3A52 !important;
+  color: #123F5E !important;
 }}
 
 .action-indicator.down {{
@@ -437,7 +437,7 @@ def _css_append():
   transform: translate(-50%, 0);
   bottom: 16px;
   top: auto;
-  color: #0B3A52 !important;
+  color: #123F5E !important;
 }}
 
 /* Avoid top/bottom clipping of tall card images on mobile */
@@ -505,7 +505,7 @@ def _build_patched_frontend_dir(package_root: Path):
     if not source_frontend.exists():
         return None
 
-    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v27"
+    base_temp = Path(tempfile.gettempdir()) / "fs_swipecards_patch_v29"
     target_frontend = base_temp / "frontend"
 
     if not target_frontend.exists():

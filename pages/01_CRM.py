@@ -26,53 +26,70 @@ from crm.ui.shell import (
 )
 
 
+def _render_new_person_form() -> None:
+    st.markdown("#### New person")
+    with st.form("people_new_person_form", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            first_name = st.text_input("First name")
+            email = st.text_input("Email *")
+            supporter_type = st.selectbox("Type", ["Supporter", "Member"], index=0)
+            gender = st.selectbox("Gender", ["", "Male", "Female", "Other"], index=0)
+            age = st.number_input("Age", min_value=0, max_value=120, value=0, step=1)
+        with c2:
+            last_name = st.text_input("Last name")
+            phone = st.text_input("Phone")
+            address = st.text_input("Address")
+            lat = st.number_input("Latitude", value=0.0, format="%.6f")
+            lon = st.number_input("Longitude", value=0.0, format="%.6f")
+        save_person = st.form_submit_button("Save person")
+    if save_person:
+        payload = {
+            "email": (email or "").strip(),
+            "firstName": (first_name or "").strip(),
+            "lastName": (last_name or "").strip(),
+            "gender": (gender or "").strip(),
+            "age": int(age) if age else None,
+            "phone": (phone or "").strip(),
+            "lat": float(lat) if lat else None,
+            "lon": float(lon) if lon else None,
+            "effortHours": None,
+            "eventsAttendedCount": None,
+            "referralCount": None,
+            "supporterType": supporter_type,
+            "address": (address or "").strip(),
+        }
+        if not payload["email"]:
+            st.error("Email is required.")
+        elif upsert_person(payload):
+            load_supporter_summary.clear()
+            load_map_data.clear()
+            st.success(f"{supporter_type} saved.")
+        else:
+            st.error("Could not save person.")
+
+
+def _render_crm_data_entry_tab() -> None:
+    st.subheader("Data Entry")
+    _render_new_person_form()
+    st.markdown("---")
+    st.markdown("#### People CSV import/export")
+    entry_group = st.radio(
+        "Target group",
+        ["Supporters", "Members"],
+        horizontal=True,
+        key="crm_data_entry_group",
+    )
+    target_group = "Supporter" if entry_group == "Supporters" else "Member"
+    section_id = "supporters" if target_group == "Supporter" else "members"
+    render_import_export_section(section_id, target_group, target_group)
+
+
 def _render_people_tab() -> None:
     st.subheader("People")
     people_tab, profile_tab = st.tabs(["Directory", "Profile"])
 
     with people_tab:
-        st.markdown("#### New person")
-        with st.form("people_new_person_form", clear_on_submit=True):
-            c1, c2 = st.columns(2)
-            with c1:
-                first_name = st.text_input("First name")
-                email = st.text_input("Email *")
-                supporter_type = st.selectbox("Type", ["Supporter", "Member"], index=0)
-                gender = st.selectbox("Gender", ["", "Male", "Female", "Other"], index=0)
-                age = st.number_input("Age", min_value=0, max_value=120, value=0, step=1)
-            with c2:
-                last_name = st.text_input("Last name")
-                phone = st.text_input("Phone")
-                address = st.text_input("Address")
-                lat = st.number_input("Latitude", value=0.0, format="%.6f")
-                lon = st.number_input("Longitude", value=0.0, format="%.6f")
-            save_person = st.form_submit_button("Save person")
-        if save_person:
-            payload = {
-                "email": (email or "").strip(),
-                "firstName": (first_name or "").strip(),
-                "lastName": (last_name or "").strip(),
-                "gender": (gender or "").strip(),
-                "age": int(age) if age else None,
-                "phone": (phone or "").strip(),
-                "lat": float(lat) if lat else None,
-                "lon": float(lon) if lon else None,
-                "effortHours": None,
-                "eventsAttendedCount": None,
-                "referralCount": None,
-                "supporterType": supporter_type,
-                "address": (address or "").strip(),
-            }
-            if not payload["email"]:
-                st.error("Email is required.")
-            elif upsert_person(payload):
-                load_supporter_summary.clear()
-                load_map_data.clear()
-                st.success(f"{supporter_type} saved.")
-            else:
-                st.error("Could not save person.")
-
-        st.markdown("---")
         group_view = st.radio(
             "View",
             ["Supporters", "Members"],
@@ -135,8 +152,6 @@ def _render_people_tab() -> None:
                 )
                 st.caption(f"{len(display_df):,} people shown")
                 st.dataframe(display_df, use_container_width=True)
-        section_id = "supporters" if target_group == "Supporter" else "members"
-        render_import_export_section(section_id, target_group, target_group)
 
     with profile_tab:
         render_profiles_tab()
@@ -156,10 +171,12 @@ if not ensure_db_connection():
     st.stop()
 
 st.subheader("CRM")
-dashboard_tab, people_tab, tasks_tab, outreach_tab, events_tab, map_tab = st.tabs(
-    ["Dashboard", "People", "Tasks", "Outreach", "Events", "Map"]
+data_entry_tab, dashboard_tab, people_tab, tasks_tab, outreach_tab, events_tab, map_tab = st.tabs(
+    ["Data Entry", "Dashboard", "People", "Tasks", "Outreach", "Events", "Map"]
 )
 
+with data_entry_tab:
+    _render_crm_data_entry_tab()
 with dashboard_tab:
     render_dashboard_page()
 with people_tab:
