@@ -329,7 +329,7 @@ def render_questionnaire_block(kind, show_expander=True):
             st.text_input(
                 "Admin preview link",
                 key=admin_link_key,
-                help="Internal link with Configure/Moderation/Reports tabs.",
+                help="Uses the same mobile participant view for quick verification.",
             )
             _show_link_hint_if_needed(public_link)
             message = (
@@ -365,7 +365,7 @@ def render_questionnaire_block(kind, show_expander=True):
             with st.expander("Admin link sharing (optional)", expanded=False):
                 admin_message = (
                     f"Freedom Square deliberation admin preview ({label})\n\n"
-                    "Configure / moderate / reports with this internal link:\n"
+                    "Open the same mobile participant flow with this link:\n"
                     + admin_link
                 )
                 admin_message_key = f"questionnaire_admin_message_{kind}"

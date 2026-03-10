@@ -201,6 +201,7 @@ def ensure_db_connection(*, show_sidebar: bool = True) -> bool:
     target_user = str(NEO4J_SANDBOX_USER or NEO4J_USER or "neo4j").strip()
     target_password = str(NEO4J_SANDBOX_PASSWORD or NEO4J_PASSWORD or "").strip()
     target_database = str(NEO4J_SANDBOX_DATABASE or NEO4J_DATABASE or "neo4j").strip()
+    connection_mode = "Sandbox (Web)" if NEO4J_SANDBOX_URI else "Primary"
 
     active_uri = str(getattr(neo4j_db, "_active_uri", "") or "").strip()
     active_user = str(getattr(neo4j_db, "_active_user", "") or "").strip()
@@ -227,7 +228,6 @@ def ensure_db_connection(*, show_sidebar: bool = True) -> bool:
 
     if show_sidebar:
         st.sidebar.markdown("### Database")
-        connection_mode = "Sandbox (Web)" if NEO4J_SANDBOX_URI else "Primary"
         st.sidebar.caption(f"Connection: {connection_mode}")
     if not target_uri or not target_password:
         if show_sidebar:
@@ -246,10 +246,16 @@ def ensure_db_connection(*, show_sidebar: bool = True) -> bool:
     )
     if not ok or neo4j_db.driver is None:
         st.session_state["_db_connect_failed_at"] = time.time()
-        st.error(
-            "Missing or invalid Sandbox Neo4j credentials. "
-            "Set NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD."
-        )
+        if connection_mode == "Sandbox (Web)":
+            st.error(
+                "Missing or invalid Sandbox Neo4j credentials. "
+                "Set NEO4J_SANDBOX_URI and NEO4J_SANDBOX_PASSWORD."
+            )
+        else:
+            st.error(
+                "Missing or invalid Primary Neo4j credentials. "
+                "Set NEO4J_URI and NEO4J_PASSWORD."
+            )
         return False
     st.session_state["_db_connect_failed_at"] = 0.0
     return True

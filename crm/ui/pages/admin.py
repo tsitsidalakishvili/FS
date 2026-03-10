@@ -3,6 +3,7 @@ import streamlit as st
 import crm.db.neo4j as neo4j_db
 from crm.clients.deliberation import delib_api_delete, delib_api_get
 from crm.config import (
+    DELIBERATION_API_FALLBACK_URL,
     DELIBERATION_API_URL,
     FEEDBACK_EMAIL_FROM,
     FEEDBACK_EMAIL_TO,
@@ -257,7 +258,11 @@ def render_admin_page():
     delib_ok = delib_api_get("/conversations", show_error=False)
     delib_status = "Online" if delib_ok is not None else "Offline / not configured"
     st.write(f"**Deliberation API**: {delib_status}")
-    st.caption(f"API URL: {DELIBERATION_API_URL}")
+    effective_urls = [str(DELIBERATION_API_URL or "").strip()]
+    fallback_url = str(DELIBERATION_API_FALLBACK_URL or "").strip()
+    if fallback_url and fallback_url not in effective_urls:
+        effective_urls.append(fallback_url)
+    st.caption(f"API URL(s): {', '.join([u for u in effective_urls if u]) or 'Not set'}")
 
     st.markdown("### Access mode")
     st.write(f"**Public only**: {'Yes' if PUBLIC_ONLY else 'No'}")

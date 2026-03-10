@@ -52,9 +52,7 @@ DELIBERATION_API_URL = (
     or get_config("API_URL")
     or "http://localhost:8010"
 )
-DELIBERATION_API_FALLBACK_URL = get_config(
-    "DELIBERATION_API_FALLBACK_URL", "https://fs-stns.onrender.com"
-)
+DELIBERATION_API_FALLBACK_URL = get_config("DELIBERATION_API_FALLBACK_URL") or DELIBERATION_API_URL
 SUPPORTER_ACCESS_CODE = get_config("SUPPORTER_ACCESS_CODE")
 PUBLIC_ONLY = str(get_config("PUBLIC_ONLY", "false")).lower() in {"1", "true", "yes", "y"}
 

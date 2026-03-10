@@ -19,7 +19,7 @@ from crm.ui.shell import (
 )
 
 
-st.set_page_config(page_title="Home", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Admin / Data", layout="wide", initial_sidebar_state="collapsed")
 apply_global_styles()
 if handle_special_entrypoints():
     st.stop()

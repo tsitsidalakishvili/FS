@@ -8,7 +8,7 @@ def render_map_page():
     st.subheader("Map")
     df_geo = load_map_data()
     if df_geo.empty:
-        st.info("No supporters with latitude/longitude found.")
+        st.info("No people with latitude/longitude found.")
         return
 
     sidebar_col, map_col = st.columns([1, 4])

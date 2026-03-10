@@ -61,7 +61,12 @@ def send_feedback_email(name, email, message, page=None):
         return False, str(exc)
 
 
-def render_feedback_widget(page_label="App"):
+def render_feedback_widget(page_label="App", key_prefix: str = ""):
+    normalized_prefix = str(key_prefix or page_label or "app").strip().lower().replace(" ", "_")
+    form_key = f"{normalized_prefix}_feedback_form"
+    name_key = f"{normalized_prefix}_feedback_name"
+    email_key = f"{normalized_prefix}_feedback_email"
+    message_key = f"{normalized_prefix}_feedback_message"
     with st.sidebar.expander("Feedback", expanded=False):
         st.caption("Send feedback to the team. Feedback is stored in Neo4j for documentation.")
         email_ready = feedback_email_configured()
@@ -69,10 +74,10 @@ def render_feedback_widget(page_label="App"):
             f"Email delivery: {'enabled' if email_ready else 'not configured'} "
             "(storage in Neo4j remains active)."
         )
-        with st.form("feedback_form", clear_on_submit=True):
-            name = st.text_input("Name (optional)", key="feedback_name")
-            email = st.text_input("Email (optional)", key="feedback_email")
-            message = st.text_area("Your feedback", key="feedback_message")
+        with st.form(form_key, clear_on_submit=True):
+            name = st.text_input("Name (optional)", key=name_key)
+            email = st.text_input("Email (optional)", key=email_key)
+            message = st.text_area("Your feedback", key=message_key)
             submitted = st.form_submit_button("Send feedback")
         if submitted:
             if not message.strip():

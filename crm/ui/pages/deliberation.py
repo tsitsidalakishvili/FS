@@ -374,6 +374,8 @@ def _is_questionnaire_participation_mode():
     questionnaire = str(_get_query_param("questionnaire") or "").strip().lower()
     if questionnaire in {"deliberation", "deliberation_admin"}:
         return True
+    if questionnaire:
+        return False
     mobile = str(_get_query_param("mobile") or "").strip().lower()
     if mobile in {"1", "true", "yes", "on"}:
         return True
@@ -400,6 +402,22 @@ def _get_query_param(name):
     except Exception:
         return value
     return value
+
+
+def _resolve_participant_id(conversation_id: str, *, questionnaire_mode: bool) -> str:
+    explicit_id = str(_get_query_param("participant_id") or "").strip()
+    if explicit_id:
+        return explicit_id
+    normalized_convo_id = str(conversation_id or "").strip()
+    if questionnaire_mode and normalized_convo_id:
+        state_key = f"delib_anon_id_{normalized_convo_id}"
+    else:
+        state_key = "delib_anon_id"
+    participant_id = str(st.session_state.get(state_key) or "").strip()
+    if not participant_id:
+        participant_id = str(uuid4())
+        st.session_state[state_key] = participant_id
+    return participant_id
 
 
 def _ensure_questionnaire_query_defaults(conversation_id: str) -> None:
@@ -441,7 +459,13 @@ def _cast_swipe_vote(convo_id, comment_id, choice, headers):
     return result is not None
 
 
-def _render_swipe_component(comments, convo_id, headers, compact=False):
+def _render_swipe_component(
+    comments,
+    convo_id,
+    headers,
+    compact=False,
+    participant_scope="",
+):
     if streamlit_swipecards is None:
         if compact:
             st.warning("Swipe cards are unavailable in this environment.")
@@ -454,9 +478,10 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
         return {"current_comment_id": None, "total_swiped": 0}
 
     mode_suffix = "compact" if compact else "full"
-    casted_key = f"delib_swipe_casted_ids_{convo_id}_{mode_suffix}"
+    scope_token = str(participant_scope or "anon").strip() or "anon"
+    casted_key = f"delib_swipe_casted_ids_{convo_id}_{mode_suffix}_{scope_token}"
     casted_ids = set(st.session_state.get(casted_key, []))
-    reset_nonce_key = f"delib_swipe_nonce_{convo_id}_{mode_suffix}"
+    reset_nonce_key = f"delib_swipe_nonce_{convo_id}_{mode_suffix}_{scope_token}"
     nonce = int(st.session_state.get(reset_nonce_key, 0) or 0)
     total_comments = len(comments)
 
@@ -470,7 +495,10 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
         if not compact:
             st.progress(1.0 if total_comments else 0.0)
         st.info("You have reviewed all statements.")
-        if st.button("Restart cards", key=f"delib_swipe_restart_{convo_id}_{mode_suffix}"):
+        if st.button(
+            "Restart cards",
+            key=f"delib_swipe_restart_{convo_id}_{mode_suffix}_{scope_token}",
+        ):
             st.session_state[casted_key] = []
             st.session_state[reset_nonce_key] = nonce + 1
             st.rerun()
@@ -480,7 +508,7 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
     for idx, comment in enumerate(remaining_comments):
         cards.append(
             {
-                "name": " " if compact else f"Question {idx + 1}/{len(remaining_comments)}",
+                "name": f"Question {idx + 1}/{len(remaining_comments)}",
                 "description": " ",
                 "image": _build_swipe_card_image(
                     comment, idx, len(remaining_comments), compact=compact
@@ -506,7 +534,10 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
             "background_color": "#F1F8FF",
             "text_color": "#123F5E",
         },
-        key=f"delib_swipe_component_{convo_id}_{mode_suffix}_{nonce}_{len(casted_ids)}",
+        key=(
+            f"delib_swipe_component_{convo_id}_{mode_suffix}_{scope_token}_"
+            f"{nonce}_{len(casted_ids)}"
+        ),
     )
 
     swiped_cards = (
@@ -523,7 +554,8 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
             current_comment_id = active_comment.get("id")
 
     processed_key = (
-        f"delib_swipe_processed_{convo_id}_{mode_suffix}_{nonce}_{len(casted_ids)}"
+        f"delib_swipe_processed_{convo_id}_{mode_suffix}_{scope_token}_"
+        f"{nonce}_{len(casted_ids)}"
     )
     processed_count = int(st.session_state.get(processed_key, 0) or 0)
 
@@ -568,7 +600,7 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
 
     if not compact and st.button(
         "Reset swipe progress",
-        key=f"delib_swipe_reset_{convo_id}",
+        key=f"delib_swipe_reset_{convo_id}_{scope_token}",
         help="Reset local swipe progress for this conversation.",
     ):
         st.session_state[casted_key] = []
@@ -578,9 +610,10 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
     return {"current_comment_id": current_comment_id, "total_swiped": total_swiped}
 
 
-def _render_mobile_questionnaire_cards(comments, convo_id, headers):
+def _render_mobile_questionnaire_cards(comments, convo_id, headers, participant_scope=""):
     mode_suffix = "compact"
-    casted_key = f"delib_swipe_casted_ids_{convo_id}_{mode_suffix}"
+    scope_token = str(participant_scope or "anon").strip() or "anon"
+    casted_key = f"delib_swipe_casted_ids_{convo_id}_{mode_suffix}_{scope_token}"
     casted_ids = set(st.session_state.get(casted_key, []))
     total_comments = len(comments)
     remaining_comments = []
@@ -596,7 +629,7 @@ def _render_mobile_questionnaire_cards(comments, convo_id, headers):
 
     if not remaining_comments:
         st.success("You have reviewed all statements.")
-        if st.button("Restart cards", key=f"delib_mobile_restart_{convo_id}"):
+        if st.button("Restart cards", key=f"delib_mobile_restart_{convo_id}_{scope_token}"):
             st.session_state[casted_key] = []
             st.rerun()
         return
@@ -1082,22 +1115,19 @@ def _render_csv_data_entry_workspace(convo_id: str) -> None:
 
 
 def render_deliberation(public_only: bool):
-    if "delib_anon_id" not in st.session_state:
-        st.session_state["delib_anon_id"] = str(uuid4())
-    headers = {"X-Participant-Id": st.session_state["delib_anon_id"]}
-
     questionnaire_mode = _is_questionnaire_participation_mode()
 
     if questionnaire_mode:
         _apply_questionnaire_card_only_layout()
-        convo_id = _get_query_param("conversation_id") or _get_query_param("conversation")
-        if convo_id:
-            st.session_state["delib_conversation_id"] = str(convo_id).strip()
-        else:
-            convo_id = st.session_state.get("delib_conversation_id")
+        convo_id = str(
+            _get_query_param("conversation_id") or _get_query_param("conversation") or ""
+        ).strip()
         if not convo_id:
             st.error("Missing conversation_id in participant link.")
             return
+        st.session_state["delib_conversation_id"] = convo_id
+        participant_id = _resolve_participant_id(convo_id, questionnaire_mode=True)
+        headers = {"X-Participant-Id": participant_id}
         convo_cache_key = f"delib_questionnaire_convo_cache_{convo_id}"
         convo = delib_api_get(f"/conversations/{convo_id}", show_error=False)
         if convo:
@@ -1129,9 +1159,13 @@ def render_deliberation(public_only: bool):
         if not comments:
             st.info("No approved comments yet.")
         else:
-            # Keep questionnaire/mobile participation on the simpler
-            # one-card-at-a-time renderer to avoid touch-swipe deck drift.
-            _render_mobile_questionnaire_cards(comments, convo_id, headers)
+            _render_swipe_component(
+                comments,
+                convo_id,
+                headers,
+                compact=True,
+                participant_scope=participant_id,
+            )
         if convo.get("allow_comment_submission", True):
             _render_questionnaire_comment_form(convo_id, headers)
         return
@@ -1141,6 +1175,8 @@ def render_deliberation(public_only: bool):
         render_delib_api_unavailable()
         return
     conversations = conversations or []
+    participant_id = _resolve_participant_id("", questionnaire_mode=False)
+    headers = {"X-Participant-Id": participant_id}
 
     st.subheader("Deliberation")
     convo_lookup = {}
@@ -1242,7 +1278,13 @@ def render_deliberation(public_only: bool):
                 help="Shows one statement card at a time with real touch swipe gestures.",
             )
             if swipe_mode:
-                _render_swipe_component(comments, convo_id, headers, compact=False)
+                _render_swipe_component(
+                    comments,
+                    convo_id,
+                    headers,
+                    compact=False,
+                    participant_scope=participant_id,
+                )
             else:
                 _render_classic_vote_list(comments, convo_id, headers)
 

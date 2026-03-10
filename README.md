@@ -93,7 +93,7 @@ DELIBERATION_API_TIMEOUT_S = "70"
 
 Optional fallback (used when primary URL is localhost/unreachable):
 ```toml
-DELIBERATION_API_FALLBACK_URL = "https://fs-stns.onrender.com"
+DELIBERATION_API_FALLBACK_URL = ""
 ```
 
 Notes:
@@ -148,10 +148,11 @@ The sidebar Feedback widget now stores every submission in Neo4j (`:FeedbackEntr
 - If SMTP is configured, the app also sends feedback by email.
 - Admin page shows recent stored feedback entries.
 
-## Due Diligence tab integration
-The CRM **Due Diligence** tab now has:
-- **How it works**: workflow-style architecture + block connection timeline
-- **Actual app**: launch/embed the dedicated DD app
+## Due Diligence page
+The standalone **Due Diligence** page has:
+- **Data Entry**: choose source (CRM context / Competitors / Watchlist) and define subject
+- **Watchlist**: track entities that require monitoring
+- **Launch**: open the DD workflow/app entrypoint
 
 Set this in `.env` or Streamlit secrets to connect the external DD app:
 ```toml
