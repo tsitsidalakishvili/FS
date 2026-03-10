@@ -1,6 +1,7 @@
 import json
 import os
 from urllib.parse import parse_qsl, quote_plus, urlencode, urlparse, urlunparse
+from uuid import uuid4
 
 import streamlit as st
 
@@ -302,6 +303,11 @@ def render_questionnaire_block(kind, show_expander=True):
                 return
 
             convo_id = convo_options[selected_topic]
+            sid_key = f"questionnaire_delib_sid_{kind}_{convo_id}"
+            sid = str(st.session_state.get(sid_key) or "").strip()
+            if not sid:
+                sid = uuid4().hex[:10]
+                st.session_state[sid_key] = sid
             public_link = _build_app_link(
                 {
                     "questionnaire": "deliberation",
@@ -309,6 +315,7 @@ def render_questionnaire_block(kind, show_expander=True):
                     "mobile": "1",
                     "view": "mobile",
                     "embed": "true",
+                    "sid": sid,
                 }
             )
             admin_link = _build_app_link(
@@ -318,6 +325,7 @@ def render_questionnaire_block(kind, show_expander=True):
                     "mobile": "1",
                     "view": "mobile",
                     "embed": "true",
+                    "sid": sid,
                 }
             )
             public_link_key = f"questionnaire_link_public_{kind}"

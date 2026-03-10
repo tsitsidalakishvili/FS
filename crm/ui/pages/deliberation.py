@@ -412,13 +412,14 @@ def _get_query_param(name):
     return value
 
 
-def _resolve_participant_id(conversation_id: str, *, questionnaire_mode: bool) -> str:
+def _resolve_participant_id(conversation_id: str, *, questionnaire_mode: bool, sid: str = "") -> str:
     explicit_id = str(_get_query_param("participant_id") or "").strip()
     if explicit_id:
         return explicit_id
     normalized_convo_id = str(conversation_id or "").strip()
+    normalized_sid = str(sid or "").strip()
     if questionnaire_mode and normalized_convo_id:
-        state_key = f"delib_anon_id_{normalized_convo_id}"
+        state_key = f"delib_anon_id_{normalized_convo_id}_{normalized_sid or 'default'}"
     else:
         state_key = "delib_anon_id"
     participant_id = str(st.session_state.get(state_key) or "").strip()
@@ -539,6 +540,16 @@ def _render_swipe_component(
         if isinstance(result, dict)
         else []
     )
+    stale_key = f"delib_swipe_stale_fix_{convo_id}_{mode_suffix}_{scope_token}"
+    stale_runs = int(st.session_state.get(stale_key, 0) or 0)
+    # Recover from stale component payloads that can arrive pre-filled on first render.
+    if comments and len(swiped_cards) >= len(comments) and len(casted_ids) < len(comments):
+        if stale_runs < 1:
+            st.session_state[stale_key] = stale_runs + 1
+            st.session_state[reset_nonce_key] = nonce + 1
+            st.rerun()
+        return {"current_comment_id": None, "total_swiped": len(casted_ids), "deck_ok": False}
+    st.session_state[stale_key] = 0
     total_swiped = len(swiped_cards)
     current_comment_id = None
     if comments and total_swiped < len(comments):
@@ -1100,6 +1111,7 @@ def render_deliberation(public_only: bool):
     if questionnaire_mode:
         _apply_questionnaire_card_only_layout()
         _inject_questionnaire_parent_hide_script()
+        sid = str(_get_query_param("sid") or "").strip()
         convo_id = str(
             _get_query_param("conversation_id")
             or _get_query_param("conversation")
@@ -1111,7 +1123,8 @@ def render_deliberation(public_only: bool):
             return
         st.session_state["delib_conversation_id"] = convo_id
         _ensure_questionnaire_query_defaults(convo_id)
-        participant_id = _resolve_participant_id(convo_id, questionnaire_mode=True)
+        participant_id = _resolve_participant_id(convo_id, questionnaire_mode=True, sid=sid)
+        participant_scope = f"{participant_id}_{sid}" if sid else participant_id
         headers = {"X-Participant-Id": participant_id}
         convo_cache_key = f"delib_questionnaire_convo_cache_{convo_id}"
         convo = delib_api_get(f"/conversations/{convo_id}", show_error=False)
@@ -1149,7 +1162,7 @@ def render_deliberation(public_only: bool):
                 convo_id,
                 headers,
                 compact=True,
-                participant_scope=participant_id,
+                participant_scope=participant_scope,
             )
             if not bool((swipe_state or {}).get("deck_ok", True)):
                 st.info("Recovered card deck state. Continuing in stable mode.")
@@ -1157,7 +1170,7 @@ def render_deliberation(public_only: bool):
                     comments,
                     convo_id,
                     headers,
-                    participant_scope=participant_id,
+                    participant_scope=participant_scope,
                 )
         if convo.get("allow_comment_submission", True):
             _render_questionnaire_comment_form(convo_id, headers)
@@ -1286,23 +1299,13 @@ def render_deliberation(public_only: bool):
         if not comments:
             st.info("No approved comments yet.")
         else:
-            default_swipe_mode = public_only and _is_questionnaire_participation_mode()
-            swipe_mode = st.toggle(
-                "Swipe mode (mobile-friendly)",
-                value=default_swipe_mode,
-                key=f"delib_swipe_mode_{convo_id}",
-                help="Shows one statement card at a time with real touch swipe gestures.",
+            _render_swipe_component(
+                comments,
+                convo_id,
+                headers,
+                compact=False,
+                participant_scope=participant_id,
             )
-            if swipe_mode:
-                _render_swipe_component(
-                    comments,
-                    convo_id,
-                    headers,
-                    compact=False,
-                    participant_scope=participant_id,
-                )
-            else:
-                _render_classic_vote_list(comments, convo_id, headers)
 
         if convo and convo.get("allow_comment_submission", True):
             st.markdown("### Submit comment")
