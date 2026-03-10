@@ -1129,7 +1129,9 @@ def render_deliberation(public_only: bool):
         if not comments:
             st.info("No approved comments yet.")
         else:
-            _render_swipe_component(comments, convo_id, headers, compact=True)
+            # Keep questionnaire/mobile participation on the simpler
+            # one-card-at-a-time renderer to avoid touch-swipe deck drift.
+            _render_mobile_questionnaire_cards(comments, convo_id, headers)
         if convo.get("allow_comment_submission", True):
             _render_questionnaire_comment_form(convo_id, headers)
         return
