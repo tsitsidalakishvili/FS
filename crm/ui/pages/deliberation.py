@@ -486,13 +486,13 @@ def _render_swipe_component(
                 headers,
                 participant_scope=participant_scope,
             )
-            return {"current_comment_id": None, "total_swiped": 0}
+            return {"current_comment_id": None, "total_swiped": 0, "deck_ok": True}
         st.warning(
             "Swipe component is unavailable in this environment. "
             "Use classic mode below."
         )
         _render_classic_vote_list(comments, convo_id, headers)
-        return {"current_comment_id": None, "total_swiped": 0}
+        return {"current_comment_id": None, "total_swiped": 0, "deck_ok": True}
 
     mode_suffix = "compact" if compact else "full"
     scope_token = str(participant_scope or "anon").strip() or "anon"
@@ -519,7 +519,7 @@ def _render_swipe_component(
             st.session_state[casted_key] = []
             st.session_state[reset_nonce_key] = nonce + 1
             st.rerun()
-        return {"current_comment_id": None, "total_swiped": total_comments}
+        return {"current_comment_id": None, "total_swiped": total_comments, "deck_ok": True}
 
     cards = []
     for idx, comment in enumerate(remaining_comments):
@@ -597,6 +597,24 @@ def _render_swipe_component(
         st.caption("Each card shows one question/comment only.")
         st.caption(f"{total_swiped}/{total_comments} reactions recorded")
 
+    stale_guard_key = f"delib_swipe_stale_guard_{convo_id}_{mode_suffix}_{scope_token}"
+    if (
+        remaining_comments
+        and len(casted_ids) < total_comments
+        and len(swiped_cards) >= len(remaining_comments)
+    ):
+        stale_count = int(st.session_state.get(stale_guard_key, 0) or 0)
+        if stale_count < 1:
+            st.session_state[stale_guard_key] = stale_count + 1
+            st.session_state[reset_nonce_key] = nonce + 1
+            st.rerun()
+        return {
+            "current_comment_id": None,
+            "total_swiped": len(casted_ids),
+            "deck_ok": False,
+        }
+    st.session_state[stale_guard_key] = 0
+
     new_votes_cast = False
     if len(swiped_cards) > processed_count:
         new_actions = swiped_cards[processed_count:]
@@ -644,7 +662,7 @@ def _render_swipe_component(
         st.session_state[reset_nonce_key] = nonce + 1
         st.rerun()
 
-    return {"current_comment_id": current_comment_id, "total_swiped": total_swiped}
+    return {"current_comment_id": current_comment_id, "total_swiped": total_swiped, "deck_ok": True}
 
 
 def _render_mobile_questionnaire_cards(comments, convo_id, headers, participant_scope=""):
@@ -1201,13 +1219,21 @@ def render_deliberation(public_only: bool):
         if not comments:
             st.info("No approved comments yet.")
         else:
-            _render_swipe_component(
+            swipe_state = _render_swipe_component(
                 comments,
                 convo_id,
                 headers,
                 compact=True,
                 participant_scope=participant_id,
             )
+            if not bool((swipe_state or {}).get("deck_ok", True)):
+                st.info("Recovered card deck state. Continuing in stable mode.")
+                _render_mobile_questionnaire_cards(
+                    comments,
+                    convo_id,
+                    headers,
+                    participant_scope=participant_id,
+                )
         if convo.get("allow_comment_submission", True):
             _render_questionnaire_comment_form(convo_id, headers)
         return
