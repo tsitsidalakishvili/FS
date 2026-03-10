@@ -689,6 +689,297 @@ def _render_questionnaire_like_dislike_buttons(
         st.divider()
 
 
+def _render_csv_data_entry_workspace(convo_id: str) -> None:
+    st.markdown("### Seed comments from CSV column")
+    st.caption("Upload a CSV and pick a column to turn each row into a comment.")
+    csv_upload = st.file_uploader("CSV", type=["csv"], key="delib_seed_csv_upload")
+    if csv_upload is not None:
+        try:
+            df_seed = pd.read_csv(csv_upload)
+        except Exception as exc:
+            st.error(f"Could not read CSV: {exc}")
+            df_seed = pd.DataFrame()
+        if not df_seed.empty:
+            st.dataframe(df_seed.head(10), use_container_width=True)
+            col = st.selectbox(
+                "Column to use as comment text",
+                options=[""] + df_seed.columns.tolist(),
+                key="delib_seed_csv_col",
+            )
+            max_rows = st.number_input(
+                "Max rows to seed",
+                min_value=1,
+                max_value=5000,
+                value=200,
+                step=50,
+                key="delib_seed_csv_max_rows",
+            )
+            if st.button(
+                "Seed from CSV",
+                key="delib_seed_csv_btn",
+                help="Create seed comments from the selected CSV column.",
+            ):
+                if not col:
+                    st.warning("Select a column.")
+                else:
+                    values = [
+                        str(v).strip()
+                        for v in df_seed[col].head(int(max_rows)).tolist()
+                        if str(v).strip() and str(v).strip().lower() not in {"nan", "none"}
+                    ]
+                    values = list(dict.fromkeys(values))
+                    if not values:
+                        st.warning("No valid values found in that column.")
+                    else:
+                        result = delib_api_post(
+                            f"/conversations/{convo_id}/seed-comments:bulk",
+                            {"comments": values},
+                        )
+                        if result:
+                            st.success(
+                                f"Seeded {result.get('created', 0)} comments from CSV."
+                            )
+
+    st.markdown("### One-file CSV import (question + comments + reactions)")
+    st.caption(
+        "Upload one CSV containing comment records and vote reactions. "
+        "Useful columns: conversation_id, participant_id, participant_cluster, "
+        "comment_id, comment_text, is_seed, comment_created_at, vote, reaction_created_at."
+    )
+    combined_upload = st.file_uploader(
+        "Combined deliberation CSV",
+        type=["csv"],
+        key="delib_combined_csv_upload",
+    )
+    if combined_upload is None:
+        return
+    try:
+        df_combined = pd.read_csv(combined_upload)
+    except Exception as exc:
+        st.error(f"Could not read combined CSV: {exc}")
+        df_combined = pd.DataFrame()
+    if df_combined.empty:
+        return
+
+    st.dataframe(df_combined.head(10), use_container_width=True)
+    columns = df_combined.columns.tolist()
+    options = [""] + columns
+
+    conversation_default = _guess_column(
+        columns,
+        {"conversation_id", "conversation", "conversationid"},
+    )
+    participant_default = _guess_column(
+        columns,
+        {"participant_id", "participant", "voter_id", "user_id"},
+    )
+    participant_cluster_default = _guess_column(
+        columns,
+        {"participant_cluster", "cluster_id", "cluster", "segment"},
+    )
+    comment_id_default = _guess_column(
+        columns,
+        {"comment_id", "statement_id", "seed_id"},
+    )
+    comment_text_default = _guess_column(
+        columns,
+        {"comment_text", "comment", "text", "statement"},
+    )
+    is_seed_default = _guess_column(columns, {"is_seed", "seed"})
+    comment_created_default = _guess_column(
+        columns,
+        {"comment_created_at", "comment_created", "created_at"},
+    )
+    vote_default = _guess_column(
+        columns,
+        {"vote", "choice", "reaction"},
+    )
+    reaction_created_default = _guess_column(
+        columns,
+        {"reaction_created_at", "vote_created_at", "voted_at"},
+    )
+
+    map_cols = st.columns(4)
+    with map_cols[0]:
+        conversation_col = st.selectbox(
+            "Conversation ID column (optional)",
+            options=options,
+            index=options.index(conversation_default)
+            if conversation_default in options
+            else 0,
+            key="delib_combined_conversation_col",
+        )
+        participant_col = st.selectbox(
+            "Participant ID column",
+            options=options,
+            index=options.index(participant_default)
+            if participant_default in options
+            else 0,
+            key="delib_combined_participant_col",
+        )
+        participant_cluster_col = st.selectbox(
+            "Participant cluster column (optional)",
+            options=options,
+            index=options.index(participant_cluster_default)
+            if participant_cluster_default in options
+            else 0,
+            key="delib_combined_participant_cluster_col",
+        )
+    with map_cols[1]:
+        comment_id_col = st.selectbox(
+            "Comment ID column *",
+            options=options,
+            index=options.index(comment_id_default)
+            if comment_id_default in options
+            else 0,
+            key="delib_combined_comment_id_col",
+        )
+        comment_text_col = st.selectbox(
+            "Comment text column (optional)",
+            options=options,
+            index=options.index(comment_text_default)
+            if comment_text_default in options
+            else 0,
+            key="delib_combined_comment_text_col",
+        )
+    with map_cols[2]:
+        is_seed_col = st.selectbox(
+            "is_seed column (optional)",
+            options=options,
+            index=options.index(is_seed_default) if is_seed_default in options else 0,
+            key="delib_combined_is_seed_col",
+        )
+        comment_created_col = st.selectbox(
+            "comment_created_at column (optional)",
+            options=options,
+            index=options.index(comment_created_default)
+            if comment_created_default in options
+            else 0,
+            key="delib_combined_comment_created_col",
+        )
+    with map_cols[3]:
+        vote_col = st.selectbox(
+            "Vote column (optional)",
+            options=options,
+            index=options.index(vote_default) if vote_default in options else 0,
+            key="delib_combined_vote_col",
+        )
+        reaction_created_col = st.selectbox(
+            "reaction_created_at column (optional)",
+            options=options,
+            index=options.index(reaction_created_default)
+            if reaction_created_default in options
+            else 0,
+            key="delib_combined_reaction_created_col",
+        )
+
+    controls = st.columns([1, 1])
+    with controls[0]:
+        max_combined_rows = st.number_input(
+            "Max rows to import",
+            min_value=1,
+            max_value=50000,
+            value=5000,
+            step=100,
+            key="delib_combined_max_rows",
+        )
+    with controls[1]:
+        run_analysis_after_combined = st.checkbox(
+            "Run analysis after one-file import",
+            value=True,
+            key="delib_combined_run_analysis",
+        )
+
+    if not st.button(
+        "Import one-file CSV",
+        key="delib_combined_import_btn",
+        help="Import comments + reactions from a single CSV file.",
+    ):
+        return
+    if not comment_id_col:
+        st.warning("Select a Comment ID column.")
+        return
+
+    subset = df_combined.head(int(max_combined_rows))
+    rows = []
+    for source in subset.to_dict(orient="records"):
+        comment_id = _clean_id_csv_value(source.get(comment_id_col))
+        if not comment_id:
+            continue
+        row_payload = {"comment_id": comment_id}
+        if conversation_col:
+            conversation_value = _clean_optional_text_csv_value(source.get(conversation_col))
+            if conversation_value:
+                row_payload["conversation_id"] = conversation_value
+        if participant_col:
+            participant_value = _clean_id_csv_value(source.get(participant_col))
+            if participant_value:
+                row_payload["participant_id"] = participant_value
+        if participant_cluster_col:
+            participant_cluster_value = _clean_optional_text_csv_value(
+                source.get(participant_cluster_col)
+            )
+            if participant_cluster_value:
+                row_payload["participant_cluster"] = participant_cluster_value
+        if comment_text_col:
+            comment_text_value = _clean_optional_text_csv_value(source.get(comment_text_col))
+            if comment_text_value:
+                row_payload["comment_text"] = comment_text_value
+        if is_seed_col:
+            is_seed_value = _clean_optional_bool_csv_value(source.get(is_seed_col))
+            if is_seed_value is not None:
+                row_payload["is_seed"] = is_seed_value
+        if comment_created_col:
+            comment_created_value = _clean_optional_text_csv_value(
+                source.get(comment_created_col)
+            )
+            if comment_created_value:
+                row_payload["comment_created_at"] = comment_created_value
+        if vote_col:
+            vote_value = _clean_vote_csv_value(source.get(vote_col))
+            if vote_value is not None:
+                row_payload["vote"] = vote_value
+        if reaction_created_col:
+            reaction_created_value = _clean_optional_text_csv_value(
+                source.get(reaction_created_col)
+            )
+            if reaction_created_value:
+                row_payload["reaction_created_at"] = reaction_created_value
+        rows.append(row_payload)
+
+    if not rows:
+        st.warning("No valid rows found for import.")
+        return
+
+    result = delib_api_post(
+        f"/conversations/{convo_id}/dataset:bulk",
+        {"rows": rows},
+    )
+    if not result:
+        return
+
+    mismatch_rows = int(result.get("conversation_mismatch_rows", 0) or 0)
+    st.success(
+        "Imported one-file dataset: "
+        f"{result.get('comments_created', 0)} comments created, "
+        f"{result.get('comments_updated', 0)} comments updated, "
+        f"{result.get('votes_imported', 0)} votes imported, "
+        f"{result.get('skipped_rows', 0)} rows skipped."
+    )
+    if mismatch_rows > 0:
+        st.caption(
+            f"Note: {mismatch_rows} row(s) had a different conversation_id in the file; "
+            "they were still imported into the selected conversation."
+        )
+    if run_analysis_after_combined:
+        refreshed = delib_api_post(
+            f"/conversations/{convo_id}/analyze",
+            {},
+        )
+        if refreshed:
+            st.success("Monitor / Reports has been refreshed with the imported dataset.")
+
+
 def render_deliberation(public_only: bool):
     if "delib_anon_id" not in st.session_state:
         st.session_state["delib_anon_id"] = str(uuid4())
@@ -891,9 +1182,16 @@ def render_deliberation(public_only: bool):
             st.markdown("### Participation")
             _render_participation_workspace()
     else:
-        tab_conversation, tab_config, tab_moderate, tab_reports = st.tabs(
-            ["Conversation", "Configure", "Moderate", "Monitor / Reports"]
+        tab_data_entry, tab_conversation, tab_config, tab_moderate, tab_reports = st.tabs(
+            ["Data Entry", "Conversation", "Configure", "Moderate", "Monitor / Reports"]
         )
+        with tab_data_entry:
+            convo_id = st.session_state.get("delib_conversation_id")
+            if not convo_id:
+                st.info("Select an active conversation in Conversation tab first.")
+            else:
+                st.markdown("### Data Entry")
+                _render_csv_data_entry_workspace(str(convo_id))
         with tab_conversation:
             _render_conversation_workspace()
             st.markdown("---")
@@ -1091,303 +1389,12 @@ def render_deliberation(public_only: bool):
                         else:
                             st.warning("Add at least one comment.")
 
-                    st.markdown("### Seed comments from CSV column")
-                    st.caption("Upload a CSV and pick a column to turn each row into a comment.")
-                    csv_upload = st.file_uploader("CSV", type=["csv"], key="delib_seed_csv_upload")
-                    if csv_upload is not None:
-                        try:
-                            df_seed = pd.read_csv(csv_upload)
-                        except Exception as exc:
-                            st.error(f"Could not read CSV: {exc}")
-                            df_seed = pd.DataFrame()
-                        if not df_seed.empty:
-                            st.dataframe(df_seed.head(10), use_container_width=True)
-                            col = st.selectbox(
-                                "Column to use as comment text",
-                                options=[""] + df_seed.columns.tolist(),
-                                key="delib_seed_csv_col",
-                            )
-                            max_rows = st.number_input(
-                                "Max rows to seed",
-                                min_value=1,
-                                max_value=5000,
-                                value=200,
-                                step=50,
-                                key="delib_seed_csv_max_rows",
-                            )
-                            if st.button(
-                                "Seed from CSV",
-                                key="delib_seed_csv_btn",
-                                help="Create seed comments from the selected CSV column.",
-                            ):
-                                if not col:
-                                    st.warning("Select a column.")
-                                else:
-                                    values = [
-                                        str(v).strip()
-                                        for v in df_seed[col].head(int(max_rows)).tolist()
-                                        if str(v).strip() and str(v).strip().lower() not in {"nan", "none"}
-                                    ]
-                                    values = list(dict.fromkeys(values))
-                                    if not values:
-                                        st.warning("No valid values found in that column.")
-                                    else:
-                                        result = delib_api_post(
-                                            f"/conversations/{convo_id}/seed-comments:bulk",
-                                            {"comments": values},
-                                        )
-                                        if result:
-                                            st.success(
-                                                f"Seeded {result.get('created', 0)} comments from CSV."
-                                            )
-
-                    st.markdown("### One-file CSV import (question + comments + reactions)")
                     st.caption(
-                        "Upload one CSV containing comment records and vote reactions. "
-                        "Useful columns: conversation_id, participant_id, participant_cluster, "
-                        "comment_id, comment_text, is_seed, comment_created_at, vote, reaction_created_at."
+                        "CSV upload/import tools moved to the Data Entry tab."
                     )
-                    combined_upload = st.file_uploader(
-                        "Combined deliberation CSV",
-                        type=["csv"],
-                        key="delib_combined_csv_upload",
-                    )
-                    if combined_upload is not None:
-                        try:
-                            df_combined = pd.read_csv(combined_upload)
-                        except Exception as exc:
-                            st.error(f"Could not read combined CSV: {exc}")
-                            df_combined = pd.DataFrame()
-                        if not df_combined.empty:
-                            st.dataframe(df_combined.head(10), use_container_width=True)
-                            columns = df_combined.columns.tolist()
-                            options = [""] + columns
-
-                            conversation_default = _guess_column(
-                                columns,
-                                {"conversation_id", "conversation", "conversationid"},
-                            )
-                            participant_default = _guess_column(
-                                columns,
-                                {"participant_id", "participant", "voter_id", "user_id"},
-                            )
-                            participant_cluster_default = _guess_column(
-                                columns,
-                                {"participant_cluster", "cluster_id", "cluster", "segment"},
-                            )
-                            comment_id_default = _guess_column(
-                                columns,
-                                {"comment_id", "statement_id", "seed_id"},
-                            )
-                            comment_text_default = _guess_column(
-                                columns,
-                                {"comment_text", "comment", "text", "statement"},
-                            )
-                            is_seed_default = _guess_column(columns, {"is_seed", "seed"})
-                            comment_created_default = _guess_column(
-                                columns,
-                                {"comment_created_at", "comment_created", "created_at"},
-                            )
-                            vote_default = _guess_column(
-                                columns,
-                                {"vote", "choice", "reaction"},
-                            )
-                            reaction_created_default = _guess_column(
-                                columns,
-                                {"reaction_created_at", "vote_created_at", "voted_at"},
-                            )
-
-                            map_cols = st.columns(4)
-                            with map_cols[0]:
-                                conversation_col = st.selectbox(
-                                    "Conversation ID column (optional)",
-                                    options=options,
-                                    index=options.index(conversation_default)
-                                    if conversation_default in options
-                                    else 0,
-                                    key="delib_combined_conversation_col",
-                                )
-                                participant_col = st.selectbox(
-                                    "Participant ID column",
-                                    options=options,
-                                    index=options.index(participant_default)
-                                    if participant_default in options
-                                    else 0,
-                                    key="delib_combined_participant_col",
-                                )
-                                participant_cluster_col = st.selectbox(
-                                    "Participant cluster column (optional)",
-                                    options=options,
-                                    index=options.index(participant_cluster_default)
-                                    if participant_cluster_default in options
-                                    else 0,
-                                    key="delib_combined_participant_cluster_col",
-                                )
-                            with map_cols[1]:
-                                comment_id_col = st.selectbox(
-                                    "Comment ID column *",
-                                    options=options,
-                                    index=options.index(comment_id_default)
-                                    if comment_id_default in options
-                                    else 0,
-                                    key="delib_combined_comment_id_col",
-                                )
-                                comment_text_col = st.selectbox(
-                                    "Comment text column (optional)",
-                                    options=options,
-                                    index=options.index(comment_text_default)
-                                    if comment_text_default in options
-                                    else 0,
-                                    key="delib_combined_comment_text_col",
-                                )
-                            with map_cols[2]:
-                                is_seed_col = st.selectbox(
-                                    "is_seed column (optional)",
-                                    options=options,
-                                    index=options.index(is_seed_default)
-                                    if is_seed_default in options
-                                    else 0,
-                                    key="delib_combined_is_seed_col",
-                                )
-                                comment_created_col = st.selectbox(
-                                    "comment_created_at column (optional)",
-                                    options=options,
-                                    index=options.index(comment_created_default)
-                                    if comment_created_default in options
-                                    else 0,
-                                    key="delib_combined_comment_created_col",
-                                )
-                            with map_cols[3]:
-                                vote_col = st.selectbox(
-                                    "Vote column (optional)",
-                                    options=options,
-                                    index=options.index(vote_default)
-                                    if vote_default in options
-                                    else 0,
-                                    key="delib_combined_vote_col",
-                                )
-                                reaction_created_col = st.selectbox(
-                                    "reaction_created_at column (optional)",
-                                    options=options,
-                                    index=options.index(reaction_created_default)
-                                    if reaction_created_default in options
-                                    else 0,
-                                    key="delib_combined_reaction_created_col",
-                                )
-
-                            controls = st.columns([1, 1])
-                            with controls[0]:
-                                max_combined_rows = st.number_input(
-                                    "Max rows to import",
-                                    min_value=1,
-                                    max_value=50000,
-                                    value=5000,
-                                    step=100,
-                                    key="delib_combined_max_rows",
-                                )
-                            with controls[1]:
-                                run_analysis_after_combined = st.checkbox(
-                                    "Run analysis after one-file import",
-                                    value=True,
-                                    key="delib_combined_run_analysis",
-                                )
-
-                            if st.button(
-                                "Import one-file CSV",
-                                key="delib_combined_import_btn",
-                                help="Import comments + reactions from a single CSV file.",
-                            ):
-                                if not comment_id_col:
-                                    st.warning("Select a Comment ID column.")
-                                else:
-                                    subset = df_combined.head(int(max_combined_rows))
-                                    rows = []
-                                    for source in subset.to_dict(orient="records"):
-                                        comment_id = _clean_id_csv_value(source.get(comment_id_col))
-                                        if not comment_id:
-                                            continue
-                                        row_payload = {"comment_id": comment_id}
-                                        if conversation_col:
-                                            conversation_value = _clean_optional_text_csv_value(
-                                                source.get(conversation_col)
-                                            )
-                                            if conversation_value:
-                                                row_payload["conversation_id"] = conversation_value
-                                        if participant_col:
-                                            participant_value = _clean_id_csv_value(
-                                                source.get(participant_col)
-                                            )
-                                            if participant_value:
-                                                row_payload["participant_id"] = participant_value
-                                        if participant_cluster_col:
-                                            participant_cluster_value = _clean_optional_text_csv_value(
-                                                source.get(participant_cluster_col)
-                                            )
-                                            if participant_cluster_value:
-                                                row_payload["participant_cluster"] = participant_cluster_value
-                                        if comment_text_col:
-                                            comment_text_value = _clean_optional_text_csv_value(
-                                                source.get(comment_text_col)
-                                            )
-                                            if comment_text_value:
-                                                row_payload["comment_text"] = comment_text_value
-                                        if is_seed_col:
-                                            is_seed_value = _clean_optional_bool_csv_value(
-                                                source.get(is_seed_col)
-                                            )
-                                            if is_seed_value is not None:
-                                                row_payload["is_seed"] = is_seed_value
-                                        if comment_created_col:
-                                            comment_created_value = _clean_optional_text_csv_value(
-                                                source.get(comment_created_col)
-                                            )
-                                            if comment_created_value:
-                                                row_payload["comment_created_at"] = comment_created_value
-                                        if vote_col:
-                                            vote_value = _clean_vote_csv_value(source.get(vote_col))
-                                            if vote_value is not None:
-                                                row_payload["vote"] = vote_value
-                                        if reaction_created_col:
-                                            reaction_created_value = _clean_optional_text_csv_value(
-                                                source.get(reaction_created_col)
-                                            )
-                                            if reaction_created_value:
-                                                row_payload["reaction_created_at"] = reaction_created_value
-                                        rows.append(row_payload)
-
-                                    if not rows:
-                                        st.warning("No valid rows found for import.")
-                                    else:
-                                        result = delib_api_post(
-                                            f"/conversations/{convo_id}/dataset:bulk",
-                                            {"rows": rows},
-                                        )
-                                        if result:
-                                            mismatch_rows = int(result.get("conversation_mismatch_rows", 0) or 0)
-                                            st.success(
-                                                "Imported one-file dataset: "
-                                                f"{result.get('comments_created', 0)} comments created, "
-                                                f"{result.get('comments_updated', 0)} comments updated, "
-                                                f"{result.get('votes_imported', 0)} votes imported, "
-                                                f"{result.get('skipped_rows', 0)} rows skipped."
-                                            )
-                                            if mismatch_rows > 0:
-                                                st.caption(
-                                                    f"Note: {mismatch_rows} row(s) had a different conversation_id in the file; "
-                                                    "they were still imported into the selected conversation."
-                                                )
-                                            if run_analysis_after_combined:
-                                                refreshed = delib_api_post(
-                                                    f"/conversations/{convo_id}/analyze",
-                                                    {},
-                                                )
-                                                if refreshed:
-                                                    st.success(
-                                                        "Monitor / Reports has been refreshed with the imported dataset."
-                                                    )
 
             else:
-                st.info("Select a conversation to edit settings or seed comments.")
+                st.info("Select a conversation to edit settings.")
 
     if not public_only:
         with tab_moderate:
@@ -1459,7 +1466,7 @@ def render_deliberation(public_only: bool):
                     elif total_votes < 6:
                         st.info(
                             "Vote volume is still low; clustering may look unstable. "
-                            "You can import a one-file CSV dataset from Configure."
+                            "You can import a one-file CSV dataset from Data Entry."
                         )
 
                     st.subheader("Potential agreement topics")
@@ -1548,7 +1555,7 @@ def render_deliberation(public_only: bool):
             with csv_tab:
                 st.subheader("CSV clustering workflow")
                 st.caption(
-                    "Use Configure → One-file CSV import (question + comments + reactions) to import data, then click Run analysis in "
+                    "Use Data Entry → One-file CSV import (question + comments + reactions) to import data, then click Run analysis in "
                     "Vote-based report."
                 )
                 sample_df = pd.DataFrame(

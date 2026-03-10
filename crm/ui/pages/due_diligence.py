@@ -240,17 +240,17 @@ def _render_competitor_watchlist() -> tuple[str, str]:
 
 def render_due_diligence_page():
     st.subheader("Due Diligence")
-    st.caption("Simple flow: 1) Intake subject, 2) manage watchlist, 3) launch DD.")
+    st.caption("Simple flow: Data Entry subject, watchlist, and launch DD.")
 
     def _set_subject(name: str, subject_type: str, start_mode: str) -> None:
         st.session_state["dd_subject_name"] = str(name or "").strip()
         st.session_state["dd_subject_type"] = str(subject_type or "").strip()
         st.session_state["dd_start_mode"] = str(start_mode or "").strip()
 
-    intake_tab, watchlist_tab, launch_tab = st.tabs(["Intake", "Watchlist", "Launch"])
+    data_entry_tab, watchlist_tab, launch_tab = st.tabs(["Data Entry", "Watchlist", "Launch"])
 
-    with intake_tab:
-        st.markdown("#### Intake")
+    with data_entry_tab:
+        st.markdown("#### Data Entry")
         st.caption("Choose one source and set the subject for the investigation.")
         start_mode = st.radio(
             "Source",
