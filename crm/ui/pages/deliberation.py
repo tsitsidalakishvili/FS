@@ -1171,7 +1171,8 @@ def render_deliberation(public_only: bool):
     participant_id = _resolve_participant_id("", questionnaire_mode=False)
     headers = {"X-Participant-Id": participant_id}
 
-    st.subheader("Deliberation")
+    st.subheader("Deliberation Workspace")
+    st.caption("Plan, launch, moderate, and analyze each conversation from one workflow.")
     convo_lookup = {}
     convo_options = {}
     for convo in conversations:
@@ -1186,7 +1187,8 @@ def render_deliberation(public_only: bool):
         convo_options[label] = convo_id
 
     def _render_conversation_workspace() -> None:
-        st.markdown("### Conversation workspace")
+        st.markdown("### Conversation control center")
+        st.caption("Select one active conversation, then run setup, participation, moderation, and insights.")
         convo_labels = list(convo_options.keys())
         selected_index = 0
         active_convo_id = str(st.session_state.get("delib_conversation_id") or "").strip()
@@ -1227,18 +1229,39 @@ def render_deliberation(public_only: bool):
             description = str(convo.get("description") or "").strip()
             if description:
                 st.write(description)
+            approved_preview = (
+                delib_api_get(
+                    f"/conversations/{convo_id}/comments?status=approved",
+                    show_error=False,
+                )
+                or []
+            )
+            pending_preview = (
+                delib_api_get(
+                    f"/conversations/{convo_id}/comments?status=pending",
+                    show_error=False,
+                )
+                or []
+            )
+            metric_cols = st.columns(3)
+            metric_cols[0].metric("Approved comments", len(approved_preview))
+            metric_cols[1].metric("Pending moderation", len(pending_preview))
+            metric_cols[2].metric(
+                "Participation",
+                "Open" if convo.get("is_open", True) else "Closed",
+            )
             if public_only:
-                st.caption("Continue in Reports tab.")
+                st.caption("Continue in Join Conversation and Results tabs.")
             else:
                 st.caption(
-                    "Continue in Configure, Moderation, and Reports tabs."
+                    "Recommended flow: Overview -> Setup & Links -> Participant Preview -> Moderation -> Insights."
                 )
         elif conversations:
             st.info("Select an active conversation to unlock participation and reports.")
         elif public_only:
             st.info("No conversations are available right now.")
         else:
-            st.info("No conversations yet. Create one in Configure.")
+            st.info("No conversations yet. Create one in Setup & Links.")
 
     def _render_participation_workspace() -> None:
         convo_id = st.session_state.get("delib_conversation_id")
@@ -1312,35 +1335,41 @@ def render_deliberation(public_only: bool):
             st.caption("Comment submission is disabled for this conversation.")
 
     if public_only:
-        tab_conversation, tab_reports = st.tabs(["Conversation", "Reports"])
-        with tab_conversation:
+        tab_join, tab_reports = st.tabs(["Join Conversation", "Results"])
+        with tab_join:
             _render_conversation_workspace()
             st.markdown("---")
-            st.markdown("### Participation")
+            st.markdown("### Participate")
             _render_participation_workspace()
     else:
-        tab_data_entry, tab_conversation, tab_config, tab_moderate, tab_reports = st.tabs(
-            ["Data Entry", "Conversation", "Configure", "Moderation", "Reports"]
+        tab_overview, tab_setup, tab_participation, tab_moderate, tab_reports, tab_data_entry = st.tabs(
+            [
+                "Overview",
+                "Setup & Links",
+                "Participant Preview",
+                "Moderation",
+                "Insights",
+                "Data Entry",
+            ]
         )
-        with tab_data_entry:
-            convo_id = st.session_state.get("delib_conversation_id")
-            if not convo_id:
-                st.info("Select an active conversation in Conversation tab first.")
-            else:
-                st.markdown("### Data Entry")
-                _render_csv_data_entry_workspace(str(convo_id))
-        with tab_conversation:
+        with tab_overview:
             _render_conversation_workspace()
             st.markdown("---")
-            st.markdown("### Participation")
+            st.markdown("### Workspace guide")
+            st.info(
+                "Use Setup & Links to configure and share, Participant Preview to test end-user flow, "
+                "Moderation to approve pending comments, and Insights for analytics."
+            )
+        with tab_participation:
+            st.markdown("### Participant experience preview")
             _render_participation_workspace()
 
-        with tab_config:
-            st.markdown("### Questionnaire templates (shareable)")
+        with tab_setup:
+            st.markdown("### Shareable links")
             render_questionnaire_block("all", show_expander=False)
 
             st.markdown("---")
-            st.markdown("### Create conversation")
+            st.markdown("### Create new conversation")
             topic = st.text_input(
                 "Topic",
                 key="delib_topic",
@@ -1532,6 +1561,14 @@ def render_deliberation(public_only: bool):
 
             else:
                 st.info("Select a conversation to edit settings.")
+
+        with tab_data_entry:
+            convo_id = st.session_state.get("delib_conversation_id")
+            if not convo_id:
+                st.info("Select an active conversation in Overview first.")
+            else:
+                st.markdown("### Data entry & imports")
+                _render_csv_data_entry_workspace(str(convo_id))
 
     if not public_only:
         with tab_moderate:
