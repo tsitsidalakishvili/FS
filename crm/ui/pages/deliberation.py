@@ -1342,11 +1342,10 @@ def render_deliberation(public_only: bool):
             st.markdown("### Participate")
             _render_participation_workspace()
     else:
-        tab_overview, tab_setup, tab_participation, tab_moderate, tab_reports, tab_data_entry = st.tabs(
+        tab_overview, tab_setup, tab_moderate, tab_reports, tab_data_entry = st.tabs(
             [
                 "Overview",
                 "Setup & Links",
-                "Participant Preview",
                 "Moderation",
                 "Insights",
                 "Data Entry",
@@ -1357,12 +1356,9 @@ def render_deliberation(public_only: bool):
             st.markdown("---")
             st.markdown("### Workspace guide")
             st.info(
-                "Use Setup & Links to configure and share, Participant Preview to test end-user flow, "
-                "Moderation to approve pending comments, and Insights for analytics."
+                "Use Setup & Links to configure and share, Moderation to approve pending comments, "
+                "and Insights for analytics."
             )
-        with tab_participation:
-            st.markdown("### Participant experience preview")
-            _render_participation_workspace()
 
         with tab_setup:
             st.markdown("### Shareable links")
