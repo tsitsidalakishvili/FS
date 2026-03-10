@@ -183,8 +183,14 @@ def _is_questionnaire_kiosk_request() -> bool:
 
 
 def apply_global_styles() -> None:
+    kiosk_mode = _is_questionnaire_kiosk_request()
+    try:
+        st.set_option("client.showSidebarNavigation", not kiosk_mode)
+    except Exception:
+        pass
+
     style = _GLOBAL_STYLE
-    if _is_questionnaire_kiosk_request():
+    if kiosk_mode:
         style += _QUESTIONNAIRE_KIOSK_STYLE
     st.markdown(style, unsafe_allow_html=True)
 

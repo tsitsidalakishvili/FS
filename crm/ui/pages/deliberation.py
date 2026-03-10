@@ -2,6 +2,7 @@ import altair as alt
 import html
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 import textwrap
 from uuid import uuid4
 from urllib.parse import quote
@@ -310,6 +311,65 @@ def _apply_questionnaire_card_only_layout():
     )
 
 
+def _inject_questionnaire_parent_hide_script() -> None:
+    components.html(
+        """
+        <script>
+        (function () {
+          function hideNav(doc) {
+            const selectors = [
+              'aside',
+              'nav',
+              '[data-testid="stSidebar"]',
+              '[data-testid="stSidebarNav"]',
+              '[data-testid="stSidebarNavItems"]',
+              '[data-testid="stSidebarNavLink"]',
+              '[data-testid="stPageLink"]',
+              '[data-testid="collapsedControl"]',
+              '[data-testid="stSidebarCollapsedControl"]',
+              '[data-testid="stToolbar"]',
+              'header[data-testid="stHeader"]',
+              '#MainMenu',
+              'footer'
+            ];
+            selectors.forEach((sel) => {
+              doc.querySelectorAll(sel).forEach((el) => {
+                el.style.display = 'none';
+                el.style.visibility = 'hidden';
+                el.style.width = '0px';
+                el.style.maxWidth = '0px';
+                el.style.minWidth = '0px';
+              });
+            });
+          }
+
+          function apply() {
+            try {
+              const parentDoc = window.parent && window.parent.document ? window.parent.document : document;
+              hideNav(parentDoc);
+              const main = parentDoc.querySelector('[data-testid="stAppViewContainer"] > .main');
+              if (main) {
+                main.style.marginLeft = '0px';
+              }
+            } catch (e) {
+              hideNav(document);
+            }
+          }
+
+          apply();
+          let runs = 0;
+          const timer = setInterval(() => {
+            apply();
+            runs += 1;
+            if (runs > 60) clearInterval(timer);
+          }, 250);
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
+
 def _is_questionnaire_participation_mode():
     questionnaire = str(_get_query_param("questionnaire") or "").strip().lower()
     if questionnaire == "deliberation":
@@ -425,8 +485,8 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
         key=f"delib_swipe_component_{convo_id}_{mode_suffix}",
     )
 
-    processed_key = f"delib_swipe_processed_{convo_id}_{mode_suffix}"
-    processed_count = int(st.session_state.get(processed_key, 0))
+    casted_key = f"delib_swipe_casted_ids_{convo_id}_{mode_suffix}"
+    casted_ids = set(st.session_state.get(casted_key, []))
     swiped_cards = (
         result.get("swipedCards", [])
         if isinstance(result, dict)
@@ -448,33 +508,35 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
         st.caption("Each card shows one question/comment only.")
         st.caption(f"{total_swiped}/{len(comments)} reactions recorded")
 
-    if total_swiped > processed_count:
-        new_actions = swiped_cards[processed_count:]
-        for action_item in new_actions:
-            idx = action_item.get("index")
-            action = action_item.get("action")
-            if not isinstance(idx, int) or idx < 0 or idx >= len(comments):
-                continue
-            if action == "right":
-                choice = 1
-            elif action == "left":
-                choice = -1
-            elif action == "down":
-                choice = 0
-            else:
-                continue
-            comment_id = comments[idx].get("id")
-            if comment_id:
-                _cast_swipe_vote(convo_id, comment_id, choice, headers)
-        st.session_state[processed_key] = total_swiped
-        st.rerun()
+    new_votes_cast = False
+    for action_item in swiped_cards:
+        idx = action_item.get("index")
+        action = action_item.get("action")
+        if not isinstance(idx, int) or idx < 0 or idx >= len(comments):
+            continue
+        if action == "right":
+            choice = 1
+        elif action == "left":
+            choice = -1
+        elif action == "down":
+            choice = 0
+        else:
+            continue
+        comment_id = str(comments[idx].get("id") or "").strip()
+        if not comment_id or comment_id in casted_ids:
+            continue
+        if _cast_swipe_vote(convo_id, comment_id, choice, headers):
+            casted_ids.add(comment_id)
+            new_votes_cast = True
+    if new_votes_cast:
+        st.session_state[casted_key] = sorted(casted_ids)
 
     if not compact and st.button(
         "Reset swipe progress",
         key=f"delib_swipe_reset_{convo_id}",
         help="Reset local swipe progress for this conversation.",
     ):
-        st.session_state[processed_key] = 0
+        st.session_state[casted_key] = []
         st.rerun()
 
     return {"current_comment_id": current_comment_id, "total_swiped": total_swiped}
@@ -641,6 +703,7 @@ def render_deliberation(public_only: bool):
 
     if questionnaire_mode:
         _apply_questionnaire_card_only_layout()
+        _inject_questionnaire_parent_hide_script()
         convo_id = _get_query_param("conversation_id") or _get_query_param("conversation")
         if convo_id:
             st.session_state["delib_conversation_id"] = str(convo_id).strip()
