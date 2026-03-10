@@ -694,16 +694,10 @@ def render_deliberation(public_only: bool):
         st.session_state["delib_anon_id"] = str(uuid4())
     headers = {"X-Participant-Id": st.session_state["delib_anon_id"]}
 
-    conversations = delib_api_get("/conversations", show_error=False)
-    if conversations is None:
-        render_delib_api_unavailable()
-        return
-    conversations = conversations or []
     questionnaire_mode = _is_questionnaire_participation_mode()
 
     if questionnaire_mode:
         _apply_questionnaire_card_only_layout()
-        _inject_questionnaire_parent_hide_script()
         convo_id = _get_query_param("conversation_id") or _get_query_param("conversation")
         if convo_id:
             st.session_state["delib_conversation_id"] = str(convo_id).strip()
@@ -713,17 +707,34 @@ def render_deliberation(public_only: bool):
             st.error("Missing conversation_id in participant link.")
             return
         _ensure_questionnaire_query_defaults(str(convo_id))
-        convo = delib_api_get(f"/conversations/{convo_id}")
-        if not convo:
-            st.error("Conversation not found.")
-            return
+        convo_cache_key = f"delib_questionnaire_convo_cache_{convo_id}"
+        convo = delib_api_get(f"/conversations/{convo_id}", show_error=False)
+        if convo:
+            st.session_state[convo_cache_key] = convo
+        else:
+            convo = st.session_state.get(convo_cache_key)
+            if not convo:
+                render_delib_api_unavailable()
+                return
         q_notice_key = f"delib_questionnaire_comment_notice_{convo_id}"
         q_notice = st.session_state.pop(q_notice_key, None)
         if q_notice == "pending":
             st.info("Comment submitted. It is awaiting moderation before it appears in the feed.")
         elif q_notice == "approved":
             st.success("Comment submitted and added to the feed.")
-        comments = delib_api_get(f"/conversations/{convo_id}/comments?status=approved") or []
+        comments_cache_key = f"delib_questionnaire_comments_cache_{convo_id}"
+        fetched_comments = delib_api_get(
+            f"/conversations/{convo_id}/comments?status=approved",
+            show_error=False,
+        )
+        if fetched_comments is not None:
+            comments = fetched_comments
+            st.session_state[comments_cache_key] = comments
+        else:
+            comments = st.session_state.get(comments_cache_key) or []
+            if not comments:
+                render_delib_api_unavailable()
+                return
         if not comments:
             st.info("No approved comments yet.")
         else:
@@ -731,6 +742,12 @@ def render_deliberation(public_only: bool):
         if convo.get("allow_comment_submission", True):
             _render_questionnaire_comment_form(convo_id, headers)
         return
+
+    conversations = delib_api_get("/conversations", show_error=False)
+    if conversations is None:
+        render_delib_api_unavailable()
+        return
+    conversations = conversations or []
 
     st.subheader("Deliberation")
     convo_lookup = {}
