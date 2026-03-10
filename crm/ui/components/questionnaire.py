@@ -277,7 +277,16 @@ def render_questionnaire_block(kind, show_expander=True):
                 )
                 return
 
-            convo_options = {c["topic"]: c["id"] for c in conversations}
+            convo_options = {}
+            for convo in conversations:
+                convo_id = str(convo.get("id") or "").strip()
+                topic = str(convo.get("topic") or "").strip() or "Untitled conversation"
+                if not convo_id:
+                    continue
+                label = topic
+                if label in convo_options:
+                    label = f"{topic} [{convo_id[:8]}]"
+                convo_options[label] = convo_id
             selected_topic = st.selectbox(
                 "Conversation",
                 options=[""] + list(convo_options.keys()),

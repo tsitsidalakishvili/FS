@@ -159,21 +159,21 @@ def _build_swipe_card_image(comment, idx, total, compact=False):
         y = start_y + (i * line_height)
         line_elements.append(
             f"<text x='80' y='{y}' font-size='{font_size}' font-weight='700' "
-            f"fill='#0B3A52'>{html.escape(line)}</text>"
+            f"fill='#123F5E'>{html.escape(line)}</text>"
         )
     lines_svg = "".join(line_elements)
     subtitle_svg = (
-        f"<text x='54' y='124' font-size='18' fill='#D8ECF7'>{subtitle}</text>"
+        f"<text x='54' y='124' font-size='18' fill='#3A6786'>{subtitle}</text>"
         if compact
-        else f"<text x='54' y='130' font-size='20' fill='#D8ECF7'>{subtitle}</text>"
+        else f"<text x='54' y='130' font-size='20' fill='#3A6786'>{subtitle}</text>"
     )
     footer_svg = (
         "<rect x='32' y='598' width='656' height='92' rx='24' fill='url(#footerGrad)'/>"
-        "<line x1='360' y1='612' x2='360' y2='678' stroke='#4F8DA8' stroke-width='2'/>"
-        "<text x='56' y='632' font-size='20' font-weight='700' fill='#FFFFFF'>DISAGREE · SWIPE LEFT</text>"
-        "<text x='392' y='632' font-size='20' font-weight='700' fill='#FFFFFF'>AGREE · SWIPE RIGHT</text>"
-        "<text x='56' y='666' font-size='16' fill='#D8ECF7'>PASS · SWIPE DOWN</text>"
-        f"<text x='340' y='666' font-size='14' fill='#D8ECF7'>{footer_text}</text>"
+        "<line x1='360' y1='612' x2='360' y2='678' stroke='#9FC5E2' stroke-width='2'/>"
+        "<text x='56' y='632' font-size='20' font-weight='700' fill='#123F5E'>DISAGREE · SWIPE LEFT</text>"
+        "<text x='392' y='632' font-size='20' font-weight='700' fill='#123F5E'>AGREE · SWIPE RIGHT</text>"
+        "<text x='56' y='666' font-size='16' fill='#3A6786'>PASS · SWIPE DOWN</text>"
+        f"<text x='340' y='666' font-size='14' fill='#3A6786'>{footer_text}</text>"
         if not compact
         else ""
     )
@@ -182,31 +182,31 @@ def _build_swipe_card_image(comment, idx, total, compact=False):
         "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 720 720'>"
         "<defs>"
         "<linearGradient id='bgGrad' x1='0%' y1='0%' x2='100%' y2='100%'>"
-        "<stop offset='0%' stop-color='#0B3A52'/>"
-        "<stop offset='55%' stop-color='#167CA7'/>"
-        "<stop offset='100%' stop-color='#42B5D9'/>"
+        "<stop offset='0%' stop-color='#EAF6FF'/>"
+        "<stop offset='55%' stop-color='#D4EBFF'/>"
+        "<stop offset='100%' stop-color='#C1E2FF'/>"
         "</linearGradient>"
         "<linearGradient id='headerGrad' x1='0%' y1='0%' x2='100%' y2='0%'>"
-        "<stop offset='0%' stop-color='#0A3146'/>"
-        "<stop offset='100%' stop-color='#12769F'/>"
+        "<stop offset='0%' stop-color='#DDF0FF'/>"
+        "<stop offset='100%' stop-color='#C6E5FF'/>"
         "</linearGradient>"
         "<linearGradient id='questionGrad' x1='0%' y1='0%' x2='0%' y2='100%'>"
-        "<stop offset='0%' stop-color='#FFFFFF'/>"
-        "<stop offset='100%' stop-color='#F0F9FF'/>"
+        "<stop offset='0%' stop-color='#F6FBFF'/>"
+        "<stop offset='100%' stop-color='#EAF4FF'/>"
         "</linearGradient>"
         "<linearGradient id='footerGrad' x1='0%' y1='0%' x2='100%' y2='100%'>"
-        "<stop offset='0%' stop-color='#0D435C'/>"
-        "<stop offset='100%' stop-color='#0A2D3D'/>"
+        "<stop offset='0%' stop-color='#D9EEFF'/>"
+        "<stop offset='100%' stop-color='#C3E2FF'/>"
         "</linearGradient>"
         "</defs>"
         "<rect width='720' height='720' rx='38' fill='url(#bgGrad)'/>"
-        "<circle cx='640' cy='90' r='98' fill='#FFFFFF' opacity='0.10'/>"
-        "<circle cx='86' cy='658' r='120' fill='#FFFFFF' opacity='0.08'/>"
-        "<rect x='20' y='20' width='680' height='680' rx='34' fill='#FFFFFF' opacity='0.16'/>"
+        "<circle cx='640' cy='90' r='98' fill='#F4FAFF' opacity='0.45'/>"
+        "<circle cx='86' cy='658' r='120' fill='#F4FAFF' opacity='0.4'/>"
+        "<rect x='20' y='20' width='680' height='680' rx='34' fill='#F4FAFF' opacity='0.5'/>"
         "<rect x='32' y='32' width='656' height='104' rx='22' fill='url(#headerGrad)'/>"
-        f"<text x='54' y='98' font-size='32' font-weight='700' fill='#FFFFFF'>{title}</text>"
+        f"<text x='54' y='98' font-size='32' font-weight='700' fill='#123F5E'>{title}</text>"
         f"{subtitle_svg}"
-        f"<rect x='32' y='{panel_y}' width='656' height='{panel_h}' rx='34' fill='url(#questionGrad)' stroke='#A9D2E6' stroke-width='3'/>"
+        f"<rect x='32' y='{panel_y}' width='656' height='{panel_h}' rx='34' fill='url(#questionGrad)' stroke='#B7D7EF' stroke-width='3'/>"
         f"{lines_svg}"
         f"{footer_svg}"
         "</svg>"
@@ -242,7 +242,7 @@ def _apply_questionnaire_card_only_layout():
           margin-left: 0 !important;
         }
         [data-testid="stAppViewContainer"] {
-          background: linear-gradient(145deg, #0B3A52 0%, #167CA7 52%, #44BEE0 100%) !important;
+          background: linear-gradient(145deg, #EAF6FF 0%, #D4EBFF 52%, #C1E2FF 100%) !important;
         }
         header[data-testid="stHeader"],
         [data-testid="stToolbar"],
@@ -263,46 +263,46 @@ def _apply_questionnaire_card_only_layout():
           background: transparent !important;
         }
         [data-testid="stExpander"] details {
-          background: #F8FCFF !important;
-          border: 1px solid #CFE2EC !important;
+          background: #EAF4FF !important;
+          border: 1px solid #B7D7EF !important;
           border-radius: 14px !important;
         }
         [data-testid="stExpander"] details > summary {
-          background: #FFFFFF !important;
-          color: #0B3A52 !important;
+          background: #F6FBFF !important;
+          color: #123F5E !important;
           border-radius: 14px !important;
           padding: 0.4rem 0.7rem !important;
         }
         [data-testid="stExpander"] details > div {
-          background: #F8FCFF !important;
+          background: #EAF4FF !important;
           border-radius: 0 0 14px 14px !important;
           padding: 0.45rem 0.6rem 0.7rem 0.6rem !important;
         }
         [data-testid="stExpander"] details * {
-          color: #0B3A52 !important;
+          color: #123F5E !important;
         }
         [data-testid="stForm"] {
-          background: #F8FCFF !important;
-          border: 1px solid #CFE2EC !important;
+          background: #EAF4FF !important;
+          border: 1px solid #B7D7EF !important;
           border-radius: 14px !important;
           padding: 0.6rem !important;
         }
         .fs-questionnaire-note {
-          background: #F8FCFF;
-          border: 1px solid #CFE2EC;
+          background: #EAF4FF;
+          border: 1px solid #B7D7EF;
           border-radius: 12px;
           padding: 0.5rem 0.7rem;
           margin: 0.35rem 0 0.55rem 0;
-          color: #0B3A52;
+          color: #123F5E;
         }
         .fs-questionnaire-note h4 {
           margin: 0;
           font-size: 1.02rem;
-          color: #0B3A52;
+          color: #123F5E;
         }
         .fs-questionnaire-note p {
           margin: 0.2rem 0 0 0;
-          color: #365D72;
+          color: #3A6786;
           font-size: 0.9rem;
         }
         </style>
@@ -453,19 +453,41 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
         _render_classic_vote_list(comments, convo_id, headers)
         return {"current_comment_id": None, "total_swiped": 0}
 
+    mode_suffix = "compact" if compact else "full"
+    casted_key = f"delib_swipe_casted_ids_{convo_id}_{mode_suffix}"
+    casted_ids = set(st.session_state.get(casted_key, []))
+    reset_nonce_key = f"delib_swipe_nonce_{convo_id}_{mode_suffix}"
+    nonce = int(st.session_state.get(reset_nonce_key, 0) or 0)
+    total_comments = len(comments)
+
+    remaining_comments = []
+    for comment in comments:
+        comment_id = str(comment.get("id") or "").strip()
+        if comment_id and comment_id not in casted_ids:
+            remaining_comments.append(comment)
+
+    if not remaining_comments:
+        if not compact:
+            st.progress(1.0 if total_comments else 0.0)
+        st.info("You have reviewed all statements.")
+        if st.button("Restart cards", key=f"delib_swipe_restart_{convo_id}_{mode_suffix}"):
+            st.session_state[casted_key] = []
+            st.session_state[reset_nonce_key] = nonce + 1
+            st.rerun()
+        return {"current_comment_id": None, "total_swiped": total_comments}
+
     cards = []
-    for idx, comment in enumerate(comments):
+    for idx, comment in enumerate(remaining_comments):
         cards.append(
             {
-                "name": " " if compact else f"Question {idx + 1}/{len(comments)}",
+                "name": " " if compact else f"Question {idx + 1}/{len(remaining_comments)}",
                 "description": " ",
-                "image": _build_swipe_card_image(comment, idx, len(comments), compact=compact),
+                "image": _build_swipe_card_image(
+                    comment, idx, len(remaining_comments), compact=compact
+                ),
             }
         )
 
-    mode_suffix = "compact" if compact else "full"
-    nonce_key = f"delib_swipe_nonce_{convo_id}_{mode_suffix}"
-    nonce = int(st.session_state.get(nonce_key, 0) or 0)
     result = streamlit_swipecards(
         cards=cards,
         display_mode="cards",
@@ -473,48 +495,56 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
         show_border=False,
         last_card_message="You have reviewed all statements.",
         colors={
-            "like_bg": "#FFFFFF",
-            "like_fg": "#0B3A52",
-            "pass_bg": "#FFFFFF",
-            "pass_fg": "#0B3A52",
-            "back_bg": "#FFFFFF",
-            "back_fg": "#0B3A52",
-            "btn_border": "#CFE2EC",
-            "card_bg": "#FFFFFF",
-            "background_color": "#F8FCFF",
-            "text_color": "#0B3A52",
+            "like_bg": "#EAF4FF",
+            "like_fg": "#123F5E",
+            "pass_bg": "#EAF4FF",
+            "pass_fg": "#123F5E",
+            "back_bg": "#EAF4FF",
+            "back_fg": "#123F5E",
+            "btn_border": "#B7D7EF",
+            "card_bg": "#EAF4FF",
+            "background_color": "#F1F8FF",
+            "text_color": "#123F5E",
         },
-        key=f"delib_swipe_component_{convo_id}_{mode_suffix}_{nonce}",
+        key=f"delib_swipe_component_{convo_id}_{mode_suffix}_{nonce}_{len(casted_ids)}",
     )
 
-    casted_key = f"delib_swipe_casted_ids_{convo_id}_{mode_suffix}"
-    casted_ids = set(st.session_state.get(casted_key, []))
     swiped_cards = (
         result.get("swipedCards", [])
         if isinstance(result, dict)
         else []
     )
-    total_swiped = len(swiped_cards)
+    total_swiped = min(total_comments, len(casted_ids) + len(swiped_cards))
     current_comment_id = None
-    if comments and total_swiped < len(comments):
-        active_comment = comments[total_swiped]
+    if remaining_comments and total_swiped < total_comments:
+        active_idx = min(len(swiped_cards), len(remaining_comments) - 1)
+        active_comment = remaining_comments[active_idx]
         if isinstance(active_comment, dict):
             current_comment_id = active_comment.get("id")
 
+    processed_key = (
+        f"delib_swipe_processed_{convo_id}_{mode_suffix}_{nonce}_{len(casted_ids)}"
+    )
+    processed_count = int(st.session_state.get(processed_key, 0) or 0)
+
     if not compact:
-        st.progress((total_swiped / len(comments)) if comments else 0.0)
+        st.progress((total_swiped / total_comments) if total_comments else 0.0)
         hint_cols = st.columns(3)
         hint_cols[0].markdown("**AGREE**  \nSWIPE RIGHT")
         hint_cols[1].markdown("**DISAGREE**  \nSWIPE LEFT")
         hint_cols[2].markdown("**PASS**  \nSWIPE DOWN")
         st.caption("Each card shows one question/comment only.")
-        st.caption(f"{total_swiped}/{len(comments)} reactions recorded")
+        st.caption(f"{total_swiped}/{total_comments} reactions recorded")
 
     new_votes_cast = False
-    for action_item in swiped_cards:
+    if len(swiped_cards) > processed_count:
+        new_actions = swiped_cards[processed_count:]
+    else:
+        new_actions = []
+    for action_item in new_actions:
         idx = action_item.get("index")
         action = action_item.get("action")
-        if not isinstance(idx, int) or idx < 0 or idx >= len(comments):
+        if not isinstance(idx, int) or idx < 0 or idx >= len(remaining_comments):
             continue
         if action == "right":
             choice = 1
@@ -524,31 +554,17 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
             choice = 0
         else:
             continue
-        comment_id = str(comments[idx].get("id") or "").strip()
+        comment_id = str(remaining_comments[idx].get("id") or "").strip()
         if not comment_id or comment_id in casted_ids:
             continue
         if _cast_swipe_vote(convo_id, comment_id, choice, headers):
             casted_ids.add(comment_id)
             new_votes_cast = True
+    if new_actions:
+        st.session_state[processed_key] = len(swiped_cards)
     if new_votes_cast:
         st.session_state[casted_key] = sorted(casted_ids)
-
-    # Guard against stale frontend state (known issue where previous progress
-    # can reappear and collapse the deck after only a few swipes).
-    if compact and comments and total_swiped >= len(comments):
-        casted_count = len(casted_ids)
-        if casted_count < min(5, len(comments)):
-            stale_guard_key = f"delib_swipe_stale_guard_{convo_id}_{mode_suffix}_{nonce}"
-            if not st.session_state.get(stale_guard_key):
-                st.session_state[stale_guard_key] = True
-                st.session_state[casted_key] = []
-                st.session_state[nonce_key] = nonce + 1
-                st.rerun()
-        st.info("You have reviewed all statements.")
-        if st.button("Restart cards", key=f"delib_swipe_restart_{convo_id}_{mode_suffix}"):
-            st.session_state[casted_key] = []
-            st.session_state[nonce_key] = nonce + 1
-            st.rerun()
+        st.rerun()
 
     if not compact and st.button(
         "Reset swipe progress",
@@ -556,7 +572,7 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
         help="Reset local swipe progress for this conversation.",
     ):
         st.session_state[casted_key] = []
-        st.session_state[nonce_key] = nonce + 1
+        st.session_state[reset_nonce_key] = nonce + 1
         st.rerun()
 
     return {"current_comment_id": current_comment_id, "total_swiped": total_swiped}
@@ -1017,7 +1033,6 @@ def render_deliberation(public_only: bool):
         if not convo_id:
             st.error("Missing conversation_id in participant link.")
             return
-        _ensure_questionnaire_query_defaults(str(convo_id))
         convo_cache_key = f"delib_questionnaire_convo_cache_{convo_id}"
         convo = delib_api_get(f"/conversations/{convo_id}", show_error=False)
         if convo:

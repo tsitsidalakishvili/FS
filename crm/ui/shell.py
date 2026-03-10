@@ -295,13 +295,6 @@ def handle_special_entrypoints() -> bool:
             from crm.ui.pages.deliberation import render_deliberation
 
             _apply_questionnaire_kiosk_shell()
-            # Ensure shared admin-style questionnaire links open the same
-            # participant mobile flow (cards/comments, no app navigation).
-            if kind == "deliberation_admin":
-                try:
-                    st.query_params["questionnaire"] = "deliberation"
-                except Exception:
-                    pass
             convo_id = get_query_param("conversation_id") or get_query_param("conversation")
             if convo_id:
                 # Always trust explicit deeplink conversation id to avoid stale session state.
