@@ -497,57 +497,20 @@ def _render_swipe_component(
     mode_suffix = "compact" if compact else "full"
     scope_token = str(participant_scope or "anon").strip() or "anon"
     casted_key = f"delib_swipe_casted_ids_{convo_id}_{mode_suffix}_{scope_token}"
-    casted_ids = set(st.session_state.get(casted_key, []))
     reset_nonce_key = f"delib_swipe_nonce_{convo_id}_{mode_suffix}_{scope_token}"
     nonce = int(st.session_state.get(reset_nonce_key, 0) or 0)
-    total_comments = len(comments)
-
-    remaining_comments = []
-    for comment in comments:
-        comment_id = str(comment.get("id") or "").strip()
-        if comment_id and comment_id not in casted_ids:
-            remaining_comments.append(comment)
-
-    if not remaining_comments:
-        if not compact:
-            st.progress(1.0 if total_comments else 0.0)
-        st.info("You have reviewed all statements.")
-        if st.button(
-            "Restart cards",
-            key=f"delib_swipe_restart_{convo_id}_{mode_suffix}_{scope_token}",
-        ):
-            st.session_state[casted_key] = []
-            st.session_state[reset_nonce_key] = nonce + 1
-            st.rerun()
-        return {"current_comment_id": None, "total_swiped": total_comments, "deck_ok": True}
 
     cards = []
-    for idx, comment in enumerate(remaining_comments):
+    for idx, comment in enumerate(comments):
         cards.append(
             {
-                "name": f"Question {idx + 1}/{len(remaining_comments)}",
+                "name": " " if compact else f"Question {idx + 1}/{len(comments)}",
                 "description": " ",
                 "image": _build_swipe_card_image(
-                    comment, idx, len(remaining_comments), compact=compact
+                    comment, idx, len(comments), compact=compact
                 ),
             }
         )
-
-    component_key = (
-        f"delib_swipe_component_{convo_id}_{mode_suffix}_{scope_token}_"
-        f"{nonce}_{len(casted_ids)}"
-    )
-    processed_key = (
-        f"delib_swipe_processed_{convo_id}_{mode_suffix}_{scope_token}_"
-        f"{nonce}_{len(casted_ids)}"
-    )
-    mount_guard_key = (
-        f"delib_swipe_mounted_{convo_id}_{mode_suffix}_{scope_token}_{nonce}"
-    )
-    component_just_mounted = st.session_state.get(mount_guard_key) != component_key
-    if component_just_mounted:
-        st.session_state[mount_guard_key] = component_key
-        st.session_state[processed_key] = 0
 
     result = streamlit_swipecards(
         cards=cards,
@@ -567,65 +530,36 @@ def _render_swipe_component(
             "background_color": "#F1F8FF",
             "text_color": "#123F5E",
         },
-        key=component_key,
+        key=f"delib_swipe_component_{convo_id}_{mode_suffix}_{scope_token}_{nonce}",
     )
 
+    casted_ids = set(st.session_state.get(casted_key, []))
     swiped_cards = (
         result.get("swipedCards", [])
         if isinstance(result, dict)
         else []
     )
-    if component_just_mounted:
-        # Ignore stale component payload on the first mount after a rerun.
-        swiped_cards = []
-    total_swiped = min(total_comments, len(casted_ids) + len(swiped_cards))
+    total_swiped = len(swiped_cards)
     current_comment_id = None
-    if remaining_comments and total_swiped < total_comments:
-        active_idx = min(len(swiped_cards), len(remaining_comments) - 1)
-        active_comment = remaining_comments[active_idx]
+    if comments and total_swiped < len(comments):
+        active_comment = comments[total_swiped]
         if isinstance(active_comment, dict):
             current_comment_id = active_comment.get("id")
 
-    processed_count = int(st.session_state.get(processed_key, 0) or 0)
-
     if not compact:
-        st.progress((total_swiped / total_comments) if total_comments else 0.0)
+        st.progress((total_swiped / len(comments)) if comments else 0.0)
         hint_cols = st.columns(3)
         hint_cols[0].markdown("**AGREE**  \nSWIPE RIGHT")
         hint_cols[1].markdown("**DISAGREE**  \nSWIPE LEFT")
         hint_cols[2].markdown("**PASS**  \nSWIPE DOWN")
         st.caption("Each card shows one question/comment only.")
-        st.caption(f"{total_swiped}/{total_comments} reactions recorded")
-
-    stale_guard_key = f"delib_swipe_stale_guard_{convo_id}_{mode_suffix}_{scope_token}"
-    if (
-        remaining_comments
-        and len(casted_ids) < total_comments
-        and len(swiped_cards) >= len(remaining_comments)
-    ):
-        stale_count = int(st.session_state.get(stale_guard_key, 0) or 0)
-        if stale_count < 1:
-            st.session_state[stale_guard_key] = stale_count + 1
-            st.session_state[reset_nonce_key] = nonce + 1
-            st.rerun()
-        return {
-            "current_comment_id": None,
-            "total_swiped": len(casted_ids),
-            "deck_ok": False,
-        }
-    st.session_state[stale_guard_key] = 0
+        st.caption(f"{total_swiped}/{len(comments)} reactions recorded")
 
     new_votes_cast = False
-    if len(swiped_cards) > processed_count:
-        new_actions = swiped_cards[processed_count:]
-    else:
-        new_actions = []
-    processed_advance = 0
-    for action_item in new_actions:
+    for action_item in swiped_cards:
         idx = action_item.get("index")
         action = action_item.get("action")
-        if not isinstance(idx, int) or idx < 0 or idx >= len(remaining_comments):
-            processed_advance += 1
+        if not isinstance(idx, int) or idx < 0 or idx >= len(comments):
             continue
         if action == "right":
             choice = 1
@@ -634,24 +568,15 @@ def _render_swipe_component(
         elif action == "down":
             choice = 0
         else:
-            processed_advance += 1
             continue
-        comment_id = str(remaining_comments[idx].get("id") or "").strip()
+        comment_id = str(comments[idx].get("id") or "").strip()
         if not comment_id or comment_id in casted_ids:
-            processed_advance += 1
             continue
         if _cast_swipe_vote(convo_id, comment_id, choice, headers):
             casted_ids.add(comment_id)
             new_votes_cast = True
-            processed_advance += 1
-        else:
-            # Keep failed action pending so it can be retried.
-            break
-    if processed_advance:
-        st.session_state[processed_key] = processed_count + processed_advance
     if new_votes_cast:
         st.session_state[casted_key] = sorted(casted_ids)
-        st.rerun()
 
     if not compact and st.button(
         "Reset swipe progress",
@@ -876,11 +801,6 @@ def _render_questionnaire_like_dislike_buttons(
                 st.session_state[f"delib_questionnaire_focus_comment_{convo_id}"] = comment_id
                 st.rerun()
         st.divider()
-
-
-def _is_true_query_flag(name: str) -> bool:
-    value = str(_get_query_param(name) or "").strip().lower()
-    return value in {"1", "true", "yes", "on"}
 
 
 def _render_csv_data_entry_workspace(convo_id: str) -> None:
@@ -1224,26 +1144,15 @@ def render_deliberation(public_only: bool):
         if not comments:
             st.info("No approved comments yet.")
         else:
-            # Default to the deterministic renderer in questionnaire mode to prevent
-            # swipe-deck disappearances on Streamlit reruns.
-            use_gesture_swipe = _is_true_query_flag("gesture")
-            if use_gesture_swipe:
-                swipe_state = _render_swipe_component(
-                    comments,
-                    convo_id,
-                    headers,
-                    compact=True,
-                    participant_scope=participant_id,
-                )
-                if not bool((swipe_state or {}).get("deck_ok", True)):
-                    st.info("Recovered card deck state. Continuing in stable mode.")
-                    _render_mobile_questionnaire_cards(
-                        comments,
-                        convo_id,
-                        headers,
-                        participant_scope=participant_id,
-                    )
-            else:
+            swipe_state = _render_swipe_component(
+                comments,
+                convo_id,
+                headers,
+                compact=True,
+                participant_scope=participant_id,
+            )
+            if not bool((swipe_state or {}).get("deck_ok", True)):
+                st.info("Recovered card deck state. Continuing in stable mode.")
                 _render_mobile_questionnaire_cards(
                     comments,
                     convo_id,
