@@ -578,6 +578,71 @@ def _render_swipe_component(comments, convo_id, headers, compact=False):
     return {"current_comment_id": current_comment_id, "total_swiped": total_swiped}
 
 
+def _render_mobile_questionnaire_cards(comments, convo_id, headers):
+    mode_suffix = "compact"
+    casted_key = f"delib_swipe_casted_ids_{convo_id}_{mode_suffix}"
+    casted_ids = set(st.session_state.get(casted_key, []))
+    total_comments = len(comments)
+    remaining_comments = []
+    for comment in comments:
+        comment_id = str(comment.get("id") or "").strip()
+        if comment_id and comment_id not in casted_ids:
+            remaining_comments.append(comment)
+
+    reviewed_count = total_comments - len(remaining_comments)
+    st.progress((reviewed_count / total_comments) if total_comments else 0.0)
+    st.caption(f"{reviewed_count}/{total_comments} reactions recorded")
+    st.caption("Use actions below: AGREE (right), DISAGREE (left), PASS (down).")
+
+    if not remaining_comments:
+        st.success("You have reviewed all statements.")
+        if st.button("Restart cards", key=f"delib_mobile_restart_{convo_id}"):
+            st.session_state[casted_key] = []
+            st.rerun()
+        return
+
+    current_comment = remaining_comments[0]
+    current_id = str(current_comment.get("id") or "").strip()
+    card_image = _build_swipe_card_image(
+        current_comment,
+        idx=reviewed_count,
+        total=total_comments,
+        compact=True,
+    )
+    st.image(card_image, use_container_width=True)
+
+    action_cols = st.columns(3)
+    agree = action_cols[0].button(
+        "AGREE\nSWIPE RIGHT",
+        key=f"delib_mobile_agree_{convo_id}_{current_id}",
+        use_container_width=True,
+    )
+    disagree = action_cols[1].button(
+        "DISAGREE\nSWIPE LEFT",
+        key=f"delib_mobile_disagree_{convo_id}_{current_id}",
+        use_container_width=True,
+    )
+    passed = action_cols[2].button(
+        "PASS\nSWIPE DOWN",
+        key=f"delib_mobile_pass_{convo_id}_{current_id}",
+        use_container_width=True,
+    )
+
+    choice = None
+    if agree:
+        choice = 1
+    elif disagree:
+        choice = -1
+    elif passed:
+        choice = 0
+    if choice is None:
+        return
+    if _cast_swipe_vote(convo_id, current_id, choice, headers):
+        casted_ids.add(current_id)
+        st.session_state[casted_key] = sorted(casted_ids)
+        st.rerun()
+
+
 def _render_classic_vote_list(comments, convo_id, headers):
     for comment in comments:
         st.markdown(f"**{comment['text']}**")
@@ -1013,7 +1078,7 @@ def _render_csv_data_entry_workspace(convo_id: str) -> None:
             {},
         )
         if refreshed:
-            st.success("Monitor / Reports has been refreshed with the imported dataset.")
+            st.success("Reports has been refreshed with the imported dataset.")
 
 
 def render_deliberation(public_only: bool):
@@ -1064,7 +1129,7 @@ def render_deliberation(public_only: bool):
         if not comments:
             st.info("No approved comments yet.")
         else:
-            _render_swipe_component(comments, convo_id, headers, compact=True)
+            _render_mobile_questionnaire_cards(comments, convo_id, headers)
         if convo.get("allow_comment_submission", True):
             _render_questionnaire_comment_form(convo_id, headers)
         return
@@ -1135,7 +1200,7 @@ def render_deliberation(public_only: bool):
                 st.caption("Continue in Reports tab.")
             else:
                 st.caption(
-                    "Continue in Configure, Moderate, and Monitor / Reports tabs."
+                    "Continue in Configure, Moderation, and Reports tabs."
                 )
         elif conversations:
             st.info("Select an active conversation to unlock participation and reports.")
@@ -1218,7 +1283,7 @@ def render_deliberation(public_only: bool):
             _render_participation_workspace()
     else:
         tab_data_entry, tab_conversation, tab_config, tab_moderate, tab_reports = st.tabs(
-            ["Data Entry", "Conversation", "Configure", "Moderate", "Monitor / Reports"]
+            ["Data Entry", "Conversation", "Configure", "Moderation", "Reports"]
         )
         with tab_data_entry:
             convo_id = st.session_state.get("delib_conversation_id")

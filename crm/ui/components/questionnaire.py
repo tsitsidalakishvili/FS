@@ -329,7 +329,7 @@ def render_questionnaire_block(kind, show_expander=True):
             st.text_input(
                 "Admin preview link",
                 key=admin_link_key,
-                help="Internal link with Configure/Moderate/Reports tabs.",
+                help="Internal link with Configure/Moderation/Reports tabs.",
             )
             _show_link_hint_if_needed(public_link)
             message = (
