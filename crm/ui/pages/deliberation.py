@@ -878,6 +878,11 @@ def _render_questionnaire_like_dislike_buttons(
         st.divider()
 
 
+def _is_true_query_flag(name: str) -> bool:
+    value = str(_get_query_param(name) or "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
 def _render_csv_data_entry_workspace(convo_id: str) -> None:
     st.markdown("### Seed comments from CSV column")
     st.caption("Upload a CSV and pick a column to turn each row into a comment.")
@@ -1219,15 +1224,26 @@ def render_deliberation(public_only: bool):
         if not comments:
             st.info("No approved comments yet.")
         else:
-            swipe_state = _render_swipe_component(
-                comments,
-                convo_id,
-                headers,
-                compact=True,
-                participant_scope=participant_id,
-            )
-            if not bool((swipe_state or {}).get("deck_ok", True)):
-                st.info("Recovered card deck state. Continuing in stable mode.")
+            # Default to the deterministic renderer in questionnaire mode to prevent
+            # swipe-deck disappearances on Streamlit reruns.
+            use_gesture_swipe = _is_true_query_flag("gesture")
+            if use_gesture_swipe:
+                swipe_state = _render_swipe_component(
+                    comments,
+                    convo_id,
+                    headers,
+                    compact=True,
+                    participant_scope=participant_id,
+                )
+                if not bool((swipe_state or {}).get("deck_ok", True)):
+                    st.info("Recovered card deck state. Continuing in stable mode.")
+                    _render_mobile_questionnaire_cards(
+                        comments,
+                        convo_id,
+                        headers,
+                        participant_scope=participant_id,
+                    )
+            else:
                 _render_mobile_questionnaire_cards(
                     comments,
                     convo_id,
