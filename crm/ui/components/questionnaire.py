@@ -181,7 +181,6 @@ def render_survey_block(kind):
     _sync_text_widget_value(survey_link_key, link)
     st.text_input(
         "Shareable link",
-        value=link,
         key=survey_link_key,
         help="Auto-generated from current app URL. You can override with APP_URL secret.",
     )
@@ -309,13 +308,11 @@ def render_questionnaire_block(kind, show_expander=True):
 
             st.text_input(
                 "Participant link",
-                value=public_link,
                 key=public_link_key,
                 help="Auto-generated from current app URL. You can override with APP_URL secret.",
             )
             st.text_input(
                 "Admin preview link",
-                value=admin_link,
                 key=admin_link_key,
                 help="Internal link with Configure/Moderate/Reports tabs.",
             )
