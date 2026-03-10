@@ -1129,7 +1129,7 @@ def render_deliberation(public_only: bool):
         if not comments:
             st.info("No approved comments yet.")
         else:
-            _render_mobile_questionnaire_cards(comments, convo_id, headers)
+            _render_swipe_component(comments, convo_id, headers, compact=True)
         if convo.get("allow_comment_submission", True):
             _render_questionnaire_comment_form(convo_id, headers)
         return
