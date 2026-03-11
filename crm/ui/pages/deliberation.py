@@ -30,6 +30,7 @@ from crm.clients.deliberation import (
 from crm.ui.components.questionnaire import render_questionnaire_block
 
 MOBILE_QUESTIONNAIRE_CARD_LIMIT = 5
+MOBILE_QUESTIONNAIRE_USE_THIRD_PARTY_SWIPE = True
 
 
 def _safe_int(value):
@@ -1162,14 +1163,29 @@ def render_deliberation(public_only: bool):
         else:
             comments = comments[:MOBILE_QUESTIONNAIRE_CARD_LIMIT]
             st.caption(f"Mobile deck size: {len(comments)}/{MOBILE_QUESTIONNAIRE_CARD_LIMIT} cards")
-            # Hard-reliability mode for shared mobile links:
-            # use deterministic one-card flow and avoid component state drift.
-            _render_mobile_questionnaire_cards(
-                comments,
-                convo_id,
-                headers,
-                participant_scope=participant_scope,
-            )
+            if MOBILE_QUESTIONNAIRE_USE_THIRD_PARTY_SWIPE:
+                swipe_state = _render_swipe_component(
+                    comments,
+                    convo_id,
+                    headers,
+                    compact=True,
+                    participant_scope=participant_scope,
+                )
+                if not bool((swipe_state or {}).get("deck_ok", True)):
+                    st.info("Swipe deck recovered in stable mode.")
+                    _render_mobile_questionnaire_cards(
+                        comments,
+                        convo_id,
+                        headers,
+                        participant_scope=participant_scope,
+                    )
+            else:
+                _render_mobile_questionnaire_cards(
+                    comments,
+                    convo_id,
+                    headers,
+                    participant_scope=participant_scope,
+                )
         if convo.get("allow_comment_submission", True):
             _render_questionnaire_comment_form(convo_id, headers)
         return
