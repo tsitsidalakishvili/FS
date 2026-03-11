@@ -7,6 +7,8 @@ import requests
 
 from app.ingestion.models import Entity, IngestionBatch, Relationship
 
+NEWSAPI_SOURCE_ID = "source:newsapi"
+
 
 def fetch_news_articles(
     api_key: str | None, query: str, max_results: int = 10
@@ -26,7 +28,17 @@ def fetch_news_articles(
     response.raise_for_status()
     data: dict[str, Any] = response.json()
 
-    entities: list[Entity] = []
+    entities: list[Entity] = [
+        Entity(
+            label="Source",
+            properties={
+                "id": NEWSAPI_SOURCE_ID,
+                "name": "NewsAPI",
+                "type": "news_api",
+                "url": "https://newsapi.org/",
+            },
+        )
+    ]
     relationships: list[Relationship] = []
     for article in data.get("articles", []):
         article_id = article.get("url")
@@ -47,7 +59,18 @@ def fetch_news_articles(
                     "published_date": published_date,
                     "url": article.get("url"),
                     "summary": article.get("description"),
+                    "source_refs": [article.get("url")] if article.get("url") else [],
                 },
+            )
+        )
+        relationships.append(
+            Relationship(
+                source_label="NewsArticle",
+                source_id=article_id,
+                rel_type="PROVIDED_BY",
+                target_label="Source",
+                target_id=NEWSAPI_SOURCE_ID,
+                properties={"source": "newsapi", "query": str(query).strip()},
             )
         )
 

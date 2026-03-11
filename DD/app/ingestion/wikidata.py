@@ -185,6 +185,8 @@ def _build_primary_entity(
     else:
         props["name"] = _get_lang_value(entity.get("labels"), "en") or entity_name
 
+    props["wikidata_id"] = wikidata_id
+    props["wikidata_url"] = wikidata_url
     props["source_refs"] = [wikidata_url]
     return Entity(label=label, properties=props)
 
@@ -214,7 +216,9 @@ def _build_related_entity(
     if summary:
         props["summary"] = summary
 
-    props["source_refs"] = [f"https://www.wikidata.org/wiki/{wikidata_id}"]
+    props["wikidata_id"] = wikidata_id
+    props["wikidata_url"] = f"https://www.wikidata.org/wiki/{wikidata_id}"
+    props["source_refs"] = [props["wikidata_url"]]
     return Entity(label=label, properties=props)
 
 

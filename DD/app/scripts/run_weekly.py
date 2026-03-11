@@ -14,8 +14,8 @@ def main() -> None:
         )
     )
     try:
-        run_weekly_monitoring(client, settings)
-        print("Weekly monitoring completed.")
+        summary = run_weekly_monitoring(client, settings)
+        print(f"Weekly monitoring completed: {summary}")
     finally:
         client.close()
 

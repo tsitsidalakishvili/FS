@@ -73,8 +73,10 @@ def _build_dd_launch_url(
     subject_type: str,
     start_mode: str,
     use_wikidata: bool,
+    use_wikipedia: bool,
     use_opensanctions: bool,
     use_news: bool,
+    use_gdelt: bool,
     opensanctions_dataset: str,
     autorun: bool = False,
     crm_subject_source: str = "",
@@ -87,8 +89,10 @@ def _build_dd_launch_url(
             "subject_type": subject_type,
             "start_mode": start_mode.replace(" ", "_").lower(),
             "use_wikidata": "1" if use_wikidata else "0",
+            "use_wikipedia": "1" if use_wikipedia else "0",
             "use_opensanctions": "1" if use_opensanctions else "0",
             "use_news": "1" if use_news else "0",
+            "use_gdelt": "1" if use_gdelt else "0",
             "opensanctions_dataset": opensanctions_dataset,
             "autorun": "1" if autorun else "0",
             "crm_subject_source": crm_subject_source,
@@ -397,13 +401,17 @@ def render_due_diligence_page():
 
         st.markdown("---")
         st.markdown("##### External analysis sources")
-        src_cols = st.columns(3)
+        src_cols = st.columns(5)
         with src_cols[0]:
             st.checkbox("Wikidata", key="dd_cfg_use_wikidata", value=True)
         with src_cols[1]:
-            st.checkbox("OpenSanctions", key="dd_cfg_use_opensanctions", value=True)
+            st.checkbox("Wikipedia", key="dd_cfg_use_wikipedia", value=True)
         with src_cols[2]:
-            st.checkbox("News / Web", key="dd_cfg_use_news", value=True)
+            st.checkbox("OpenSanctions", key="dd_cfg_use_opensanctions", value=True)
+        with src_cols[3]:
+            st.checkbox("NewsAPI", key="dd_cfg_use_news", value=True)
+        with src_cols[4]:
+            st.checkbox("GDELT", key="dd_cfg_use_gdelt", value=True)
         dataset_options = list(OPENSANCTIONS_DATASET_OPTIONS) + ["custom"]
         current_dataset = str(st.session_state.get("dd_cfg_opensanctions_dataset") or "").strip()
         current_dataset = current_dataset or "ge_declarations"
@@ -450,20 +458,26 @@ def render_due_diligence_page():
                 enabled = []
                 if st.session_state.get("dd_cfg_use_wikidata"):
                     enabled.append("Wikidata")
+                if st.session_state.get("dd_cfg_use_wikipedia"):
+                    enabled.append("Wikipedia")
                 if st.session_state.get("dd_cfg_use_opensanctions"):
                     enabled.append(
                         f"OpenSanctions ({st.session_state.get('dd_cfg_opensanctions_dataset')})"
                     )
                 if st.session_state.get("dd_cfg_use_news"):
-                    enabled.append("News/Web")
+                    enabled.append("NewsAPI")
+                if st.session_state.get("dd_cfg_use_gdelt"):
+                    enabled.append("GDELT")
                 autorun_launch_url = _build_dd_launch_url(
                     app_url,
                     subject_name=subject_name,
                     subject_type=subject_type,
                     start_mode="Analysis",
                     use_wikidata=bool(st.session_state.get("dd_cfg_use_wikidata")),
+                    use_wikipedia=bool(st.session_state.get("dd_cfg_use_wikipedia")),
                     use_opensanctions=bool(st.session_state.get("dd_cfg_use_opensanctions")),
                     use_news=bool(st.session_state.get("dd_cfg_use_news")),
+                    use_gdelt=bool(st.session_state.get("dd_cfg_use_gdelt")),
                     opensanctions_dataset=str(
                         st.session_state.get("dd_cfg_opensanctions_dataset") or "ge_declarations"
                     ),
@@ -518,8 +532,10 @@ def render_due_diligence_page():
         with cfg_sources_tab:
             st.caption("Control which external sources are used during analysis.")
             st.checkbox("Enable Wikidata", key="dd_cfg_use_wikidata")
+            st.checkbox("Enable Wikipedia", key="dd_cfg_use_wikipedia")
             st.checkbox("Enable OpenSanctions", key="dd_cfg_use_opensanctions")
-            st.checkbox("Enable News / Web", key="dd_cfg_use_news")
+            st.checkbox("Enable NewsAPI", key="dd_cfg_use_news")
+            st.checkbox("Enable GDELT", key="dd_cfg_use_gdelt")
             st.text_input(
                 "Selected OpenSanctions dataset",
                 key="dd_cfg_opensanctions_dataset",
@@ -530,6 +546,8 @@ def render_due_diligence_page():
             news_key = str(get_config("NEWS_API_KEY") or "").strip()
             st.write(f"- OpenSanctions API key: {'Configured' if open_key else 'Not configured'}")
             st.write(f"- News API key: {'Configured' if news_key else 'Not configured'}")
+            st.write("- Wikipedia: Public source (no key required)")
+            st.write("- GDELT: Public source (no key required)")
             st.caption(
                 "API keys and base URLs are managed in .env / Streamlit secrets."
             )
@@ -564,8 +582,10 @@ def render_due_diligence_page():
             st.warning("No subject selected yet. Set one in Analysis or Watchlist.")
 
         use_wikidata = bool(st.session_state.get("dd_cfg_use_wikidata", True))
+        use_wikipedia = bool(st.session_state.get("dd_cfg_use_wikipedia", True))
         use_opensanctions = bool(st.session_state.get("dd_cfg_use_opensanctions", True))
         use_news = bool(st.session_state.get("dd_cfg_use_news", True))
+        use_gdelt = bool(st.session_state.get("dd_cfg_use_gdelt", True))
         opensanctions_dataset = str(
             st.session_state.get("dd_cfg_opensanctions_dataset") or "ge_declarations"
         ).strip() or "ge_declarations"
@@ -578,8 +598,10 @@ def render_due_diligence_page():
                 subject_type=subject_type,
                 start_mode=start_mode,
                 use_wikidata=use_wikidata,
+                use_wikipedia=use_wikipedia,
                 use_opensanctions=use_opensanctions,
                 use_news=use_news,
+                use_gdelt=use_gdelt,
                 opensanctions_dataset=opensanctions_dataset,
                 crm_subject_source=crm_subject_source,
                 crm_subject_id=crm_subject_id,
@@ -590,8 +612,10 @@ def render_due_diligence_page():
                 subject_type=subject_type,
                 start_mode=start_mode,
                 use_wikidata=use_wikidata,
+                use_wikipedia=use_wikipedia,
                 use_opensanctions=use_opensanctions,
                 use_news=use_news,
+                use_gdelt=use_gdelt,
                 opensanctions_dataset=opensanctions_dataset,
                 autorun=True,
                 crm_subject_source=crm_subject_source,
@@ -623,9 +647,11 @@ def render_due_diligence_page():
                         f"Subject: {subject_name or 'not set'}\n"
                         f"Subject type: {subject_type or 'not set'}\n\n"
                         f"Wikidata: {'on' if use_wikidata else 'off'}\n"
+                        f"Wikipedia: {'on' if use_wikipedia else 'off'}\n"
                         f"OpenSanctions: {'on' if use_opensanctions else 'off'}\n"
                         f"OpenSanctions dataset: {opensanctions_dataset}\n"
-                        f"News/Web: {'on' if use_news else 'off'}\n\n"
+                        f"NewsAPI: {'on' if use_news else 'off'}\n"
+                        f"GDELT: {'on' if use_gdelt else 'off'}\n\n"
                         f"Due Diligence app:\n{autorun_launch_url or app_launch_url or app_url}"
                     ),
                 )

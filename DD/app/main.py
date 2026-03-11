@@ -16,7 +16,13 @@ if str(ROOT_DIR) not in sys.path:
 
 from app.config import get_settings
 from app.graph.neo4j import Neo4jClient, Neo4jConfig
-from app.graph.queries import get_entity, get_neighbors, get_risky_neighbors, search_entities
+from app.graph.queries import (
+    get_entity,
+    get_latest_monitoring_run,
+    get_neighbors,
+    get_risky_neighbors,
+    search_entities,
+)
 from app.graph.schema import initialize_schema
 from app.graph.seed import seed_demo_graph, seed_sample_data
 from app.graph.visualize import build_graph_html
@@ -164,6 +170,43 @@ def _create_intake_subject(
     return {"label": subject_label, "id": entity_id, "name": subject_name}
 
 
+def _stamp_subject_launch_context(
+    subject: dict[str, str], context: dict[str, object]
+) -> None:
+    props: dict[str, object] = {
+        "id": subject["id"],
+        "last_launch_mode": str(context.get("start_mode") or "").strip(),
+        "last_launch_at": datetime.utcnow().isoformat() + "Z",
+        "last_launch_sources": [
+            source
+            for source, enabled in [
+                ("wikidata", bool(context.get("use_wikidata"))),
+                ("wikipedia", bool(context.get("use_wikipedia"))),
+                ("opensanctions", bool(context.get("use_opensanctions"))),
+                ("newsapi", bool(context.get("use_news"))),
+                ("gdelt", bool(context.get("use_gdelt"))),
+            ]
+            if enabled
+        ],
+    }
+    if str(context.get("crm_subject_source") or "").strip():
+        props["crm_subject_source"] = str(context["crm_subject_source"]).strip()
+    if str(context.get("crm_subject_id") or "").strip():
+        props["crm_subject_id"] = str(context["crm_subject_id"]).strip()
+    if subject["label"] == "Person":
+        props["full_name"] = subject["name"]
+    else:
+        props["name"] = subject["name"]
+    apply_batch(
+        client,
+        IngestionBatch(
+            source="crm_launch",
+            entities=[Entity(label=subject["label"], properties=props)],
+            relationships=[],
+        ),
+    )
+
+
 def _bootstrap_launch_context() -> dict[str, object]:
     subject_name = str(_get_query_param("subject") or "").strip()
     if not subject_name:
@@ -177,8 +220,10 @@ def _bootstrap_launch_context() -> dict[str, object]:
         .replace("_", " ")
         .title(),
         "use_wikidata": _query_flag("use_wikidata", True),
+        "use_wikipedia": _query_flag("use_wikipedia", False),
         "use_opensanctions": _query_flag("use_opensanctions", True),
         "use_news": _query_flag("use_news", False),
+        "use_gdelt": _query_flag("use_gdelt", False),
         "autorun": _query_flag("autorun", False),
         "opensanctions_dataset": (
             str(_get_query_param("opensanctions_dataset") or "").strip()
@@ -193,8 +238,10 @@ def _bootstrap_launch_context() -> dict[str, object]:
 
     st.session_state["dd_search_term"] = context["subject_name"]
     st.session_state["dd_dossier_src_wikidata"] = bool(context["use_wikidata"])
+    st.session_state["dd_dossier_src_wikipedia"] = bool(context["use_wikipedia"])
     st.session_state["dd_dossier_src_opensanctions"] = bool(context["use_opensanctions"])
     st.session_state["dd_dossier_src_newsapi"] = bool(context["use_news"])
+    st.session_state["dd_dossier_src_gdelt"] = bool(context["use_gdelt"])
     st.session_state["dd_opensanctions_mode"] = "Match"
     st.session_state["dd_cfg_opensanctions_dataset"] = context["opensanctions_dataset"]
 
@@ -217,6 +264,13 @@ def _bootstrap_launch_context() -> dict[str, object]:
         st.session_state["dd_selected_entity_id"] = selected["id"]
         st.session_state["dd_selected_entity_label"] = selected["label"]
         st.session_state["dd_selected_entity_name"] = selected["name"]
+        safe_neo4j_call(
+            "Persist launch context",
+            _stamp_subject_launch_context,
+            None,
+            selected,
+            context,
+        )
 
     st.session_state["dd_launch_signature"] = signature
     st.session_state["dd_launch_context"] = context
@@ -242,12 +296,16 @@ if launch_context:
     enabled_sources = []
     if launch_context.get("use_wikidata"):
         enabled_sources.append("Wikidata")
+    if launch_context.get("use_wikipedia"):
+        enabled_sources.append("Wikipedia")
     if launch_context.get("use_opensanctions"):
         enabled_sources.append(
             f"OpenSanctions ({launch_context.get('opensanctions_dataset')})"
         )
     if launch_context.get("use_news"):
-        enabled_sources.append("News/Web")
+        enabled_sources.append("NewsAPI")
+    if launch_context.get("use_gdelt"):
+        enabled_sources.append("GDELT")
     source_text = ", ".join(enabled_sources) if enabled_sources else "no sources selected"
     st.info(
         f"Launch context loaded for {launch_context['subject_name']} "
@@ -320,11 +378,28 @@ with st.sidebar:
     st.divider()
     st.header("Weekly Monitoring")
     if st.button("Run Weekly Job"):
-        ok, _ = safe_neo4j_call(
+        ok, monitoring_summary = safe_neo4j_call(
             "Weekly monitoring", run_weekly_monitoring, None, client, settings
         )
         if ok:
             st.success("Weekly monitoring run completed.")
+            if isinstance(monitoring_summary, dict):
+                st.session_state["dd_last_monitoring_summary"] = monitoring_summary
+                st.json(monitoring_summary)
+
+    latest_monitoring_run = safe_neo4j_call(
+        "Load monitoring status", get_latest_monitoring_run, None, client
+    )[1]
+    if latest_monitoring_run:
+        st.caption("Latest monitoring run")
+        st.write(
+            f"Status: {latest_monitoring_run.get('status', 'unknown')} | "
+            f"Articles: {latest_monitoring_run.get('article_count', 0)} | "
+            f"Failures: {latest_monitoring_run.get('failure_count', 0)}"
+        )
+        completed_at = str(latest_monitoring_run.get("completed_at") or "").strip()
+        if completed_at:
+            st.caption(f"Completed at: {completed_at}")
 
 
 st.subheader("Search")
@@ -566,6 +641,8 @@ with col_right:
                 steps: list[tuple[str, str]] = []
                 if st.session_state.get("dd_dossier_src_wikidata"):
                     steps.append(("wikidata", "Profile + relationship graph"))
+                if st.session_state.get("dd_dossier_src_wikipedia"):
+                    steps.append(("wikipedia", "Public profile and summary"))
                 if st.session_state.get("dd_dossier_src_opensanctions"):
                     steps.append(
                         (
@@ -638,6 +715,29 @@ with col_right:
                             "items": 0,
                             "detail": str(exc),
                         }
+                elif source == "wikipedia":
+                    try:
+                        batch = fetch_wikipedia_profile(
+                            selected["name"],
+                            target_label=selected["label"],
+                            target_id=selected["id"],
+                        )
+                        ok, _ = safe_neo4j_call(
+                            "Wikipedia enrichment", apply_batch, None, client, batch
+                        )
+                        run = {
+                            "source": "wikipedia",
+                            "ok": bool(ok),
+                            "items": len(batch.entities),
+                            "detail": "public profile",
+                        }
+                    except Exception as exc:
+                        run = {
+                            "source": "wikipedia",
+                            "ok": False,
+                            "items": 0,
+                            "detail": str(exc),
+                        }
                 elif source.startswith("opensanctions:"):
                     if not settings.opensanctions_api_key:
                         run = {
@@ -664,7 +764,7 @@ with col_right:
                                 "items": 0,
                                 "detail": str(exc),
                             }
-                else:
+                elif source == "newsapi":
                     if not settings.news_api_key:
                         run = {
                             "source": "newsapi",

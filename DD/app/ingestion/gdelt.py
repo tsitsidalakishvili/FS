@@ -5,10 +5,11 @@ from typing import Any
 
 import requests
 
-from app.ingestion.models import Entity, IngestionBatch
+from app.ingestion.models import Entity, IngestionBatch, Relationship
 
 
 GDELT_DOC_API = "https://api.gdeltproject.org/api/v2/doc/doc"
+GDELT_SOURCE_ID = "source:gdelt"
 
 
 def fetch_gdelt_articles(query: str, max_results: int = 15) -> IngestionBatch:
@@ -30,7 +31,18 @@ def fetch_gdelt_articles(query: str, max_results: int = 15) -> IngestionBatch:
     response.raise_for_status()
     payload: dict[str, Any] = response.json()
 
-    entities: list[Entity] = []
+    entities: list[Entity] = [
+        Entity(
+            label="Source",
+            properties={
+                "id": GDELT_SOURCE_ID,
+                "name": "GDELT",
+                "type": "news_index",
+                "url": "https://www.gdeltproject.org/",
+            },
+        )
+    ]
+    relationships: list[Relationship] = []
     for article in payload.get("articles", []) or []:
         url = str(article.get("url") or "").strip()
         if not url:
@@ -54,8 +66,18 @@ def fetch_gdelt_articles(query: str, max_results: int = 15) -> IngestionBatch:
                 },
             )
         )
+        relationships.append(
+            Relationship(
+                source_label="NewsArticle",
+                source_id=url,
+                rel_type="PROVIDED_BY",
+                target_label="Source",
+                target_id=GDELT_SOURCE_ID,
+                properties={"source": "gdelt", "query": search_term},
+            )
+        )
 
-    return IngestionBatch(source="gdelt", entities=entities, relationships=[])
+    return IngestionBatch(source="gdelt", entities=entities, relationships=relationships)
 
 
 def _parse_seen_date(value: str) -> str | None:

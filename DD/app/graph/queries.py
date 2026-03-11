@@ -61,20 +61,42 @@ def list_tracked_entities(client: Neo4jClient, limit: int = 100) -> list[dict[st
         """
         CALL {
             MATCH (p:Person)
-            RETURN "Person" AS label, p.id AS id, coalesce(p.full_name, p.name) AS name
+            RETURN "Person" AS label, p.id AS id, coalesce(p.full_name, p.name) AS name, coalesce(p.aliases, []) AS aliases
             UNION ALL
             MATCH (c:Company)
-            RETURN "Company" AS label, c.id AS id, coalesce(c.name, c.full_name) AS name
+            RETURN "Company" AS label, c.id AS id, coalesce(c.name, c.full_name) AS name, coalesce(c.aliases, []) AS aliases
         }
-        WITH label, id, name
+        WITH label, id, name, aliases
         WHERE id IS NOT NULL AND name IS NOT NULL AND trim(name) <> ""
-        RETURN label, id, name
+        RETURN label, id, name, aliases
         ORDER BY toLower(name) ASC
         LIMIT $limit
         """,
         {"limit": limit},
     )
-    return [{"label": row["label"], "id": row["id"], "name": row["name"]} for row in rows]
+    return [
+        {
+            "label": row["label"],
+            "id": row["id"],
+            "name": row["name"],
+            "aliases": row.get("aliases") or [],
+        }
+        for row in rows
+    ]
+
+
+def get_latest_monitoring_run(client: Neo4jClient) -> dict[str, Any] | None:
+    rows = client.run(
+        """
+        MATCH (run:MonitoringRun)
+        RETURN run
+        ORDER BY coalesce(run.started_at, run.completed_at) DESC
+        LIMIT 1
+        """
+    )
+    if not rows:
+        return None
+    return dict(rows[0]["run"])
 
 
 def _build_fulltext_query(term: str) -> str:

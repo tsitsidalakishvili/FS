@@ -114,6 +114,15 @@ def _build_batch_from_results(
             entity_id=target_id,
             label_override=target_label,
         )
+        top_score = top_result.get("score")
+        top_result_id = top_result.get("id")
+        if top_result_id:
+            entity.properties["opensanctions_id"] = top_result_id
+            entity.properties["opensanctions_url"] = (
+                f"https://www.opensanctions.org/entities/{top_result_id}"
+            )
+        if top_score is not None:
+            entity.properties["opensanctions_match_score"] = float(top_score)
         entities.append(entity)
         dataset_entities, dataset_relationships = _build_dataset_relationships(
             entity_id=target_id,
@@ -237,6 +246,8 @@ def _build_entity_from_detail(
     result_id = result.get("id")
     source_refs = list(source_urls)
     if result_id:
+        props["opensanctions_id"] = result_id
+        props["opensanctions_url"] = f"https://www.opensanctions.org/entities/{result_id}"
         source_refs.append(f"https://www.opensanctions.org/entities/{result_id}")
     if source_refs:
         props["source_refs"] = list(dict.fromkeys(source_refs))
