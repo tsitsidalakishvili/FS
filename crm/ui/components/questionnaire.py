@@ -6,6 +6,7 @@ from uuid import uuid4
 import streamlit as st
 
 from crm.clients.deliberation import delib_api_get, render_delib_api_unavailable
+from crm.config import get_config
 from crm.ui.components.slack_share import render_slack_link_sender
 from crm.ui.components.whatsapp_share import render_whatsapp_group_link_sender
 
@@ -70,7 +71,16 @@ def _normalize_base_url(value):
 
 def _detect_base_url():
     configured = _normalize_base_url(
-        os.getenv("APP_URL") or os.getenv("PUBLIC_APP_URL") or os.getenv("STREAMLIT_APP_URL")
+        get_config("DELIBERATION_APP_URL")
+        or get_config("DELIBERATION_UI_URL")
+        or get_config("APP_URL")
+        or get_config("PUBLIC_APP_URL")
+        or get_config("STREAMLIT_APP_URL")
+        or os.getenv("DELIBERATION_APP_URL")
+        or os.getenv("DELIBERATION_UI_URL")
+        or os.getenv("APP_URL")
+        or os.getenv("PUBLIC_APP_URL")
+        or os.getenv("STREAMLIT_APP_URL")
     )
     if configured:
         return configured
@@ -128,7 +138,7 @@ def _show_link_hint_if_needed(link):
     if link.startswith("<APP_URL>"):
         st.caption(
             "Could not auto-detect your app URL in this environment. "
-            "Set APP_URL in Streamlit secrets for fully qualified links."
+            "Set DELIBERATION_APP_URL (preferred) or APP_URL in Streamlit secrets for fully qualified links."
         )
 
 
@@ -320,7 +330,7 @@ def render_questionnaire_block(kind, show_expander=True):
             )
             admin_link = _build_app_link(
                 {
-                    "questionnaire": "deliberation",
+                    "questionnaire": "deliberation_admin",
                     "conversation_id": convo_id,
                     "mobile": "1",
                     "view": "mobile",
@@ -336,12 +346,18 @@ def render_questionnaire_block(kind, show_expander=True):
             st.text_input(
                 "Participant link",
                 key=public_link_key,
-                help="Auto-generated from current app URL. You can override with APP_URL secret.",
+                help=(
+                    "Auto-generated from the current app URL. "
+                    "Override with DELIBERATION_APP_URL (preferred) or APP_URL in env/secrets."
+                ),
             )
             st.text_input(
                 "Admin preview link",
                 key=admin_link_key,
-                help="Uses the same mobile participant view for quick verification.",
+                help=(
+                    "Uses deliberation_admin mode for review/testing. "
+                    "Override with DELIBERATION_APP_URL (preferred) or APP_URL in env/secrets."
+                ),
             )
             _show_link_hint_if_needed(public_link)
             message = (
