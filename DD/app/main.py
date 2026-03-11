@@ -224,6 +224,19 @@ def _bootstrap_launch_context() -> dict[str, object]:
     return context
 
 
+def _render_analysis_progress(rows: list[dict[str, str]]) -> str:
+    lines: list[str] = []
+    for row in rows:
+        status = str(row.get("status") or "").strip().upper() or "PENDING"
+        source = str(row.get("source") or "").strip() or "step"
+        detail = str(row.get("detail") or "").strip()
+        if detail:
+            lines.append(f"- [{status}] {source}: {detail}")
+        else:
+            lines.append(f"- [{status}] {source}")
+    return "\n".join(lines)
+
+
 launch_context = _bootstrap_launch_context()
 if launch_context:
     enabled_sources = []
@@ -547,102 +560,151 @@ with col_right:
 
         def _run_launch_selected_sources() -> list[dict[str, object]]:
             source_runs: list[dict[str, object]] = []
+            progress_rows: list[dict[str, str]] = []
 
-            if st.session_state.get("dd_dossier_src_wikidata"):
-                try:
-                    batch = fetch_wikidata(
-                        selected["name"],
-                        target_label=selected["label"],
-                        target_id=selected["id"],
+            def _selected_steps() -> list[tuple[str, str]]:
+                steps: list[tuple[str, str]] = []
+                if st.session_state.get("dd_dossier_src_wikidata"):
+                    steps.append(("wikidata", "Profile + relationship graph"))
+                if st.session_state.get("dd_dossier_src_opensanctions"):
+                    steps.append(
+                        (
+                            f"opensanctions:{opensanctions_dataset}",
+                            f"Georgia and sanctions screening via {opensanctions_dataset}",
+                        )
                     )
-                    ok, _ = safe_neo4j_call(
-                        "Wikidata enrichment", apply_batch, None, client, batch
-                    )
-                    source_runs.append(
-                        {
+                if st.session_state.get("dd_dossier_src_newsapi"):
+                    steps.append(("newsapi", "Recent headlines and web mentions"))
+                return steps
+
+            planned_steps = _selected_steps()
+            progress_placeholder = st.empty()
+            detail_placeholder = st.empty()
+            total_steps = max(len(planned_steps), 1)
+            progress_placeholder.progress(0, text="Preparing analysis...")
+            if planned_steps:
+                progress_rows = [
+                    {"source": source, "status": "pending", "detail": detail}
+                    for source, detail in planned_steps
+                ]
+                detail_placeholder.markdown(_render_analysis_progress(progress_rows))
+            else:
+                progress_rows = [
+                    {
+                        "source": "analysis",
+                        "status": "completed",
+                        "detail": "No sources selected for this run.",
+                    }
+                ]
+                progress_placeholder.progress(100, text="No sources selected.")
+                detail_placeholder.markdown(_render_analysis_progress(progress_rows))
+
+            def _mark_step(source: str, status: str, detail: str) -> None:
+                for row in progress_rows:
+                    if row["source"] == source:
+                        row["status"] = status
+                        row["detail"] = detail
+                        break
+                detail_placeholder.markdown(_render_analysis_progress(progress_rows))
+
+            completed_steps = 0
+            for source, detail in planned_steps:
+                progress_placeholder.progress(
+                    int((completed_steps / total_steps) * 100),
+                    text=f"Running {source} ({completed_steps + 1}/{total_steps})...",
+                )
+                _mark_step(source, "running", detail)
+
+                if source == "wikidata":
+                    try:
+                        batch = fetch_wikidata(
+                            selected["name"],
+                            target_label=selected["label"],
+                            target_id=selected["id"],
+                        )
+                        ok, _ = safe_neo4j_call(
+                            "Wikidata enrichment", apply_batch, None, client, batch
+                        )
+                        run = {
                             "source": "wikidata",
                             "ok": bool(ok),
                             "items": len(batch.entities),
                             "detail": "profile + relationship graph",
                         }
-                    )
-                except Exception as exc:
-                    source_runs.append(
-                        {
+                    except Exception as exc:
+                        run = {
                             "source": "wikidata",
                             "ok": False,
                             "items": 0,
                             "detail": str(exc),
                         }
-                    )
-
-            if st.session_state.get("dd_dossier_src_opensanctions"):
-                if not settings.opensanctions_api_key:
-                    source_runs.append(
-                        {
-                            "source": f"opensanctions:{opensanctions_dataset}",
+                elif source.startswith("opensanctions:"):
+                    if not settings.opensanctions_api_key:
+                        run = {
+                            "source": source,
                             "ok": False,
                             "items": 0,
                             "detail": "missing OPENSANCTIONS_API_KEY",
                         }
-                    )
-                else:
-                    try:
-                        ok, batch, matches = _run_opensanctions_enrichment(
-                            opensanctions_dataset, entity_snapshot
-                        )
-                        source_runs.append(
-                            {
-                                "source": f"opensanctions:{opensanctions_dataset}",
+                    else:
+                        try:
+                            ok, batch, matches = _run_opensanctions_enrichment(
+                                opensanctions_dataset, entity_snapshot
+                            )
+                            run = {
+                                "source": source,
                                 "ok": bool(ok),
                                 "items": len(batch.entities),
                                 "detail": f"matches={len(matches)}",
                             }
-                        )
-                    except Exception as exc:
-                        source_runs.append(
-                            {
-                                "source": f"opensanctions:{opensanctions_dataset}",
+                        except Exception as exc:
+                            run = {
+                                "source": source,
                                 "ok": False,
                                 "items": 0,
                                 "detail": str(exc),
                             }
-                        )
-
-            if st.session_state.get("dd_dossier_src_newsapi"):
-                if not settings.news_api_key:
-                    source_runs.append(
-                        {
+                else:
+                    if not settings.news_api_key:
+                        run = {
                             "source": "newsapi",
                             "ok": False,
                             "items": 0,
                             "detail": "missing NEWS_API_KEY",
                         }
-                    )
-                else:
-                    try:
-                        batch = fetch_news_articles(settings.news_api_key, selected["name"])
-                        batch = _attach_mentions(batch)
-                        ok, _ = safe_neo4j_call(
-                            "News ingestion", apply_batch, None, client, batch
-                        )
-                        source_runs.append(
-                            {
+                    else:
+                        try:
+                            batch = fetch_news_articles(settings.news_api_key, selected["name"])
+                            batch = _attach_mentions(batch)
+                            ok, _ = safe_neo4j_call(
+                                "News ingestion", apply_batch, None, client, batch
+                            )
+                            run = {
                                 "source": "newsapi",
                                 "ok": bool(ok),
                                 "items": len(batch.entities),
                                 "detail": "recent headlines",
                             }
-                        )
-                    except Exception as exc:
-                        source_runs.append(
-                            {
+                        except Exception as exc:
+                            run = {
                                 "source": "newsapi",
                                 "ok": False,
                                 "items": 0,
                                 "detail": str(exc),
                             }
-                        )
+
+                source_runs.append(run)
+                completed_steps += 1
+                final_status = "completed" if run.get("ok") else "failed"
+                final_detail = (
+                    f"{run.get('detail')} (items={int(run.get('items') or 0)})"
+                    if run.get("detail")
+                    else f"items={int(run.get('items') or 0)}"
+                )
+                _mark_step(source, final_status, final_detail)
+
+            progress_placeholder.progress(100, text="Analysis complete.")
+            st.session_state["dd_last_autorun_progress_rows"] = progress_rows
             return source_runs
 
         pending_autorun_signature = str(
@@ -658,11 +720,15 @@ with col_right:
             st.rerun()
 
         latest_autorun_runs = st.session_state.get("dd_last_autorun_source_runs")
+        latest_autorun_progress_rows = st.session_state.get("dd_last_autorun_progress_rows")
         latest_autorun_subject_id = str(
             st.session_state.get("dd_last_autorun_subject_id") or ""
         ).strip()
         if isinstance(latest_autorun_runs, list) and latest_autorun_subject_id == selected["id"]:
             st.caption("Latest launch-triggered enrichment")
+            if isinstance(latest_autorun_progress_rows, list) and latest_autorun_progress_rows:
+                st.progress(100, text="Latest launch-triggered analysis completed.")
+                st.markdown(_render_analysis_progress(latest_autorun_progress_rows))
             st.dataframe(latest_autorun_runs, use_container_width=True)
 
         st.subheader("Dossier Generator")

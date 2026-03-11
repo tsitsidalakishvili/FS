@@ -476,6 +476,9 @@ def render_due_diligence_page():
                         f"Due Diligence launch is ready for {subject_name} ({subject_type}) using: "
                         f"{', '.join(enabled) if enabled else 'no sources selected'}."
                     )
+                    st.caption(
+                        "The DD app shows a live progress bar while each selected source is running."
+                    )
                     _link_button("🚀 Open DD app and run selected sources", autorun_launch_url)
                 else:
                     st.info(
