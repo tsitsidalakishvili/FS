@@ -179,16 +179,22 @@ def render_due_diligence_how_it_works() -> None:
     components.html(html, height=770, scrolling=False)
 
 
-def _render_competitor_watchlist() -> tuple[str, str]:
+def _render_competitor_watchlist(key_prefix: str = "dd_watchlist") -> tuple[str, str]:
     st.markdown("#### Competitor watchlist")
-    with st.form("dd_competitor_form", clear_on_submit=True):
+    prefix = str(key_prefix or "dd_watchlist").strip()
+    with st.form(f"{prefix}_competitor_form", clear_on_submit=True):
         form_cols = st.columns([2, 1])
         with form_cols[0]:
-            comp_name = st.text_input("Competitor name")
+            comp_name = st.text_input("Competitor name", key=f"{prefix}_competitor_name")
         with form_cols[1]:
-            comp_type = st.selectbox("Type", list(COMPETITOR_TYPES), index=0)
-        comp_notes = st.text_area("Notes (optional)", height=80)
-        save_clicked = st.form_submit_button("Save competitor")
+            comp_type = st.selectbox(
+                "Type",
+                list(COMPETITOR_TYPES),
+                index=0,
+                key=f"{prefix}_competitor_type",
+            )
+        comp_notes = st.text_area("Notes (optional)", height=80, key=f"{prefix}_competitor_notes")
+        save_clicked = st.form_submit_button("Save competitor", use_container_width=True)
     if save_clicked:
         if not str(comp_name or "").strip():
             st.warning("Competitor name is required.")
@@ -222,14 +228,14 @@ def _render_competitor_watchlist() -> tuple[str, str]:
     selected_label = st.selectbox(
         "Select competitor",
         options=[""] + list(options.keys()),
-        key="dd_competitor_select",
+        key=f"{prefix}_competitor_select",
     )
     selected = options.get(selected_label)
     if selected:
         name, competitor_type, competitor_id = selected
         delete_cols = st.columns([2, 1])
         with delete_cols[1]:
-            if st.button("Delete selected", key="dd_delete_competitor"):
+            if st.button("Delete selected", key=f"{prefix}_delete_competitor"):
                 if delete_competitor(competitor_id):
                     st.success("Competitor deleted.")
                     st.rerun()
@@ -411,7 +417,9 @@ def render_due_diligence_page():
             mcols[1].metric("Supporters", total_supporters)
             mcols[2].metric("Members", total_members)
             st.markdown("##### Competitor records")
-            selected_name, selected_type = _render_competitor_watchlist()
+            selected_name, selected_type = _render_competitor_watchlist(
+                key_prefix="dd_cfg_competitor"
+            )
             if selected_name and selected_type:
                 if st.button("Set selected as active subject", key="dd_cfg_use_selected_subject"):
                     _set_subject(selected_name, selected_type, "Configure")
@@ -450,7 +458,9 @@ def render_due_diligence_page():
     with watchlist_tab:
         st.markdown("#### Watchlist")
         st.caption("Save competitors and optionally use one as your intake subject.")
-        selected_name, selected_type = _render_competitor_watchlist()
+        selected_name, selected_type = _render_competitor_watchlist(
+            key_prefix="dd_watchlist_competitor"
+        )
         if selected_name and selected_type:
             st.success(f"Selected watchlist item: {selected_name} ({selected_type})")
             if st.button("Use selected as intake subject", key="dd_use_watchlist_subject"):
