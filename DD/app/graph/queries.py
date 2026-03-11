@@ -99,6 +99,24 @@ def get_latest_monitoring_run(client: Neo4jClient) -> dict[str, Any] | None:
     return dict(rows[0]["run"])
 
 
+def list_investigation_runs(
+    client: Neo4jClient, subject_id: str, limit: int = 10
+) -> list[dict[str, Any]]:
+    clean_subject_id = str(subject_id or "").strip()
+    if not clean_subject_id:
+        return []
+    rows = client.run(
+        """
+        MATCH (s {id: $subject_id})-[:HAS_INVESTIGATION]->(run:InvestigationRun)
+        RETURN run
+        ORDER BY coalesce(run.started_at, run.completed_at, run.created_at) DESC
+        LIMIT $limit
+        """,
+        {"subject_id": clean_subject_id, "limit": limit},
+    )
+    return [dict(row["run"]) for row in rows]
+
+
 def _build_fulltext_query(term: str) -> str:
     cleaned = LUCENE_SPECIAL_CHARS_RE.sub(" ", term)
     tokens = [token.strip().lower() for token in cleaned.split() if token.strip()]

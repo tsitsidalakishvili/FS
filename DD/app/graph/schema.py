@@ -10,6 +10,7 @@ CONSTRAINTS = [
     "CREATE CONSTRAINT source_id IF NOT EXISTS FOR (n:Source) REQUIRE n.id IS UNIQUE",
     "CREATE CONSTRAINT dataset_id IF NOT EXISTS FOR (n:Dataset) REQUIRE n.id IS UNIQUE",
     "CREATE CONSTRAINT monitoring_run_id IF NOT EXISTS FOR (n:MonitoringRun) REQUIRE n.id IS UNIQUE",
+    "CREATE CONSTRAINT investigation_run_id IF NOT EXISTS FOR (n:InvestigationRun) REQUIRE n.id IS UNIQUE",
 ]
 
 INDEXES = [

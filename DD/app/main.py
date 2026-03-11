@@ -18,6 +18,7 @@ from app.config import get_settings
 from app.graph.neo4j import Neo4jClient, Neo4jConfig
 from app.graph.queries import (
     get_entity,
+    list_investigation_runs,
     get_latest_monitoring_run,
     get_neighbors,
     get_risky_neighbors,
@@ -271,6 +272,18 @@ def _bootstrap_launch_context() -> dict[str, object]:
             selected,
             context,
         )
+        investigation_id = _start_investigation_run(
+            subject=selected,
+            run_kind="launch",
+            start_mode=str(context.get("start_mode") or "Launch"),
+            selected_sources=_selected_sources_from_context(context),
+            opensanctions_dataset=str(context.get("opensanctions_dataset") or settings.opensanctions_dataset),
+            crm_subject_source=str(context.get("crm_subject_source") or ""),
+            crm_subject_id=str(context.get("crm_subject_id") or ""),
+            status="launched",
+        )
+        st.session_state["dd_active_investigation_id"] = investigation_id
+        st.session_state["dd_active_investigation_subject_id"] = selected["id"]
 
     st.session_state["dd_launch_signature"] = signature
     st.session_state["dd_launch_context"] = context
@@ -289,6 +302,166 @@ def _render_analysis_progress(rows: list[dict[str, str]]) -> str:
         else:
             lines.append(f"- [{status}] {source}")
     return "\n".join(lines)
+
+
+def _utc_now_iso() -> str:
+    return datetime.utcnow().isoformat() + "Z"
+
+
+def _selected_sources_from_flags(
+    *,
+    use_wikidata: bool,
+    use_wikipedia: bool,
+    use_opensanctions: bool,
+    use_news: bool,
+    use_gdelt: bool,
+    opensanctions_dataset: str,
+) -> list[str]:
+    sources: list[str] = []
+    if use_wikidata:
+        sources.append("wikidata")
+    if use_wikipedia:
+        sources.append("wikipedia")
+    if use_opensanctions:
+        sources.append(f"opensanctions:{opensanctions_dataset}")
+    if use_news:
+        sources.append("newsapi")
+    if use_gdelt:
+        sources.append("gdelt")
+    return sources
+
+
+def _selected_sources_from_context(context: dict[str, object]) -> list[str]:
+    return _selected_sources_from_flags(
+        use_wikidata=bool(context.get("use_wikidata")),
+        use_wikipedia=bool(context.get("use_wikipedia")),
+        use_opensanctions=bool(context.get("use_opensanctions")),
+        use_news=bool(context.get("use_news")),
+        use_gdelt=bool(context.get("use_gdelt")),
+        opensanctions_dataset=str(context.get("opensanctions_dataset") or settings.opensanctions_dataset),
+    )
+
+
+def _persist_investigation_run(
+    *,
+    run_id: str,
+    subject: dict[str, str],
+    status: str,
+    run_kind: str,
+    start_mode: str,
+    selected_sources: list[str],
+    opensanctions_dataset: str,
+    crm_subject_source: str = "",
+    crm_subject_id: str = "",
+    source_runs: list[dict[str, object]] | None = None,
+    dossier_generated_at: str = "",
+    report_generated_at: str = "",
+) -> None:
+    if subject.get("label") not in {"Person", "Company"} or not subject.get("id"):
+        return
+
+    source_runs_json = ""
+    source_run_count = -1
+    error_count = -1
+    if source_runs is not None:
+        source_runs_json = json.dumps(source_runs, ensure_ascii=False)
+        source_run_count = len(source_runs)
+        error_count = sum(1 for row in source_runs if not bool(row.get("ok", False)))
+
+    client.run_write(
+        f"""
+        MATCH (subject:{subject['label']} {{id: $subject_id}})
+        MERGE (run:InvestigationRun {{id: $run_id}})
+        ON CREATE SET run.created_at = $created_at
+        SET run.subject_id = $subject_id,
+            run.subject_label = $subject_label,
+            run.subject_name = $subject_name,
+            run.status = $status,
+            run.run_kind = $run_kind,
+            run.start_mode = $start_mode,
+            run.selected_sources = $selected_sources,
+            run.opensanctions_dataset = $opensanctions_dataset,
+            run.crm_subject_source = $crm_subject_source,
+            run.crm_subject_id = $crm_subject_id,
+            run.last_updated_at = $updated_at,
+            run.started_at = coalesce(run.started_at, $started_at),
+            run.completed_at = CASE
+                WHEN $completed_at = "" THEN run.completed_at
+                ELSE $completed_at
+            END,
+            run.source_run_count = CASE
+                WHEN $source_run_count < 0 THEN coalesce(run.source_run_count, 0)
+                ELSE $source_run_count
+            END,
+            run.error_count = CASE
+                WHEN $error_count < 0 THEN coalesce(run.error_count, 0)
+                ELSE $error_count
+            END,
+            run.source_runs_json = CASE
+                WHEN $source_runs_json = "" THEN coalesce(run.source_runs_json, "")
+                ELSE $source_runs_json
+            END,
+            run.dossier_generated_at = CASE
+                WHEN $dossier_generated_at = "" THEN run.dossier_generated_at
+                ELSE $dossier_generated_at
+            END,
+            run.report_generated_at = CASE
+                WHEN $report_generated_at = "" THEN run.report_generated_at
+                ELSE $report_generated_at
+            END
+        MERGE (subject)-[:HAS_INVESTIGATION]->(run)
+        """,
+        {
+            "run_id": run_id,
+            "created_at": _utc_now_iso(),
+            "started_at": _utc_now_iso(),
+            "updated_at": _utc_now_iso(),
+            "completed_at": _utc_now_iso()
+            if status in {"completed", "completed_with_errors", "failed"}
+            else "",
+            "subject_id": str(subject["id"]),
+            "subject_label": str(subject["label"]),
+            "subject_name": str(subject["name"]),
+            "status": str(status),
+            "run_kind": str(run_kind),
+            "start_mode": str(start_mode),
+            "selected_sources": list(selected_sources),
+            "opensanctions_dataset": str(opensanctions_dataset or ""),
+            "crm_subject_source": str(crm_subject_source or ""),
+            "crm_subject_id": str(crm_subject_id or ""),
+            "source_run_count": source_run_count,
+            "error_count": error_count,
+            "source_runs_json": source_runs_json,
+            "dossier_generated_at": str(dossier_generated_at or ""),
+            "report_generated_at": str(report_generated_at or ""),
+        },
+    )
+
+
+def _start_investigation_run(
+    *,
+    subject: dict[str, str],
+    run_kind: str,
+    start_mode: str,
+    selected_sources: list[str],
+    opensanctions_dataset: str,
+    crm_subject_source: str = "",
+    crm_subject_id: str = "",
+    status: str = "launched",
+) -> str:
+    run_id = f"investigation-{uuid4()}"
+    _persist_investigation_run(
+        run_id=run_id,
+        subject=subject,
+        status=status,
+        run_kind=run_kind,
+        start_mode=start_mode,
+        selected_sources=selected_sources,
+        opensanctions_dataset=opensanctions_dataset,
+        crm_subject_source=crm_subject_source,
+        crm_subject_id=crm_subject_id,
+    )
+    return run_id
 
 
 launch_context = _bootstrap_launch_context()
@@ -635,6 +808,46 @@ with col_right:
 
         def _run_launch_selected_sources() -> list[dict[str, object]]:
             source_runs: list[dict[str, object]] = []
+            launch_context_data = st.session_state.get("dd_launch_context") or {}
+            selected_sources = _selected_sources_from_flags(
+                use_wikidata=bool(st.session_state.get("dd_dossier_src_wikidata")),
+                use_wikipedia=bool(st.session_state.get("dd_dossier_src_wikipedia")),
+                use_opensanctions=bool(st.session_state.get("dd_dossier_src_opensanctions")),
+                use_news=bool(st.session_state.get("dd_dossier_src_newsapi")),
+                use_gdelt=bool(st.session_state.get("dd_dossier_src_gdelt")),
+                opensanctions_dataset=opensanctions_dataset,
+            )
+            investigation_id = str(
+                st.session_state.get("dd_active_investigation_id") or ""
+            ).strip()
+            active_run_subject_id = str(
+                st.session_state.get("dd_active_investigation_subject_id") or ""
+            ).strip()
+            if not investigation_id or active_run_subject_id != selected["id"]:
+                investigation_id = _start_investigation_run(
+                    subject=selected,
+                    run_kind="launch",
+                    start_mode=str(launch_context_data.get("start_mode") or "Analysis"),
+                    selected_sources=selected_sources,
+                    opensanctions_dataset=opensanctions_dataset,
+                    crm_subject_source=str(launch_context_data.get("crm_subject_source") or ""),
+                    crm_subject_id=str(launch_context_data.get("crm_subject_id") or ""),
+                    status="running",
+                )
+                st.session_state["dd_active_investigation_id"] = investigation_id
+                st.session_state["dd_active_investigation_subject_id"] = selected["id"]
+            else:
+                _persist_investigation_run(
+                    run_id=investigation_id,
+                    subject=selected,
+                    status="running",
+                    run_kind="launch",
+                    start_mode=str(launch_context_data.get("start_mode") or "Analysis"),
+                    selected_sources=selected_sources,
+                    opensanctions_dataset=opensanctions_dataset,
+                    crm_subject_source=str(launch_context_data.get("crm_subject_source") or ""),
+                    crm_subject_id=str(launch_context_data.get("crm_subject_id") or ""),
+                )
             progress_rows: list[dict[str, str]] = []
 
             def _selected_steps() -> list[tuple[str, str]]:
@@ -805,6 +1018,23 @@ with col_right:
 
             progress_placeholder.progress(100, text="Analysis complete.")
             st.session_state["dd_last_autorun_progress_rows"] = progress_rows
+            final_status = (
+                "completed_with_errors"
+                if any(not bool(row.get("ok", False)) for row in source_runs)
+                else "completed"
+            )
+            _persist_investigation_run(
+                run_id=investigation_id,
+                subject=selected,
+                status=final_status,
+                run_kind="launch",
+                start_mode=str(launch_context_data.get("start_mode") or "Analysis"),
+                selected_sources=selected_sources,
+                opensanctions_dataset=opensanctions_dataset,
+                crm_subject_source=str(launch_context_data.get("crm_subject_source") or ""),
+                crm_subject_id=str(launch_context_data.get("crm_subject_id") or ""),
+                source_runs=source_runs,
+            )
             return source_runs
 
         pending_autorun_signature = str(
@@ -830,6 +1060,51 @@ with col_right:
                 st.progress(100, text="Latest launch-triggered analysis completed.")
                 st.markdown(_render_analysis_progress(latest_autorun_progress_rows))
             st.dataframe(latest_autorun_runs, use_container_width=True)
+
+        st.subheader("Investigation History")
+        _, investigation_runs = safe_neo4j_call(
+            "Load investigation history",
+            list_investigation_runs,
+            [],
+            client,
+            selected["id"],
+            12,
+        )
+        if investigation_runs:
+            history_rows = []
+            for run in investigation_runs:
+                history_rows.append(
+                    {
+                        "started_at": run.get("started_at") or run.get("created_at"),
+                        "status": run.get("status"),
+                        "kind": run.get("run_kind"),
+                        "mode": run.get("start_mode"),
+                        "sources": ", ".join(run.get("selected_sources") or []),
+                        "errors": int(run.get("error_count") or 0),
+                    }
+                )
+            st.dataframe(history_rows, use_container_width=True, height=220)
+            with st.expander("Inspect investigation details", expanded=False):
+                run_options = {
+                    f"{str(run.get('started_at') or run.get('created_at') or '')} | "
+                    f"{run.get('run_kind')} | {run.get('status')} | {run.get('id')}": run
+                    for run in investigation_runs
+                }
+                selected_label = st.selectbox(
+                    "Recent investigations",
+                    options=list(run_options.keys()),
+                    key="dd_investigation_history_select",
+                )
+                selected_run = dict(run_options[selected_label])
+                source_runs_json = str(selected_run.get("source_runs_json") or "").strip()
+                if source_runs_json:
+                    try:
+                        selected_run["source_runs"] = json.loads(source_runs_json)
+                    except json.JSONDecodeError:
+                        selected_run["source_runs"] = source_runs_json
+                st.json(selected_run)
+        else:
+            st.caption("No persisted investigation runs for this subject yet.")
 
         st.subheader("Dossier Generator")
         st.caption(
@@ -867,6 +1142,29 @@ with col_right:
 
         if st.button("Generate Dossier (all selected sources)", type="primary"):
             source_runs: list[dict[str, object]] = []
+            dossier_selected_sources = _selected_sources_from_flags(
+                use_wikidata=use_wikidata,
+                use_wikipedia=use_wikipedia,
+                use_opensanctions=use_opensanctions,
+                use_news=use_newsapi,
+                use_gdelt=use_gdelt,
+                opensanctions_dataset=opensanctions_dataset,
+            )
+            dossier_investigation_id = _start_investigation_run(
+                subject=selected,
+                run_kind="dossier",
+                start_mode="Dossier",
+                selected_sources=dossier_selected_sources,
+                opensanctions_dataset=opensanctions_dataset,
+                crm_subject_source=str(
+                    (st.session_state.get("dd_launch_context") or {}).get("crm_subject_source")
+                    or ""
+                ),
+                crm_subject_id=str(
+                    (st.session_state.get("dd_launch_context") or {}).get("crm_subject_id") or ""
+                ),
+                status="running",
+            )
             _, working_entity = safe_neo4j_call(
                 "Load entity", get_entity, {}, client, selected["label"], selected["id"]
             )
@@ -1087,6 +1385,30 @@ with col_right:
             markdown_text = dossier_markdown(snapshot)
             st.session_state["dd_last_dossier_snapshot"] = snapshot
             st.session_state["dd_last_dossier_markdown"] = markdown_text
+            st.session_state["dd_last_dossier_run_id"] = dossier_investigation_id
+            dossier_status = (
+                "completed_with_errors"
+                if any(not bool(row.get("ok", False)) for row in source_runs)
+                else "completed"
+            )
+            _persist_investigation_run(
+                run_id=dossier_investigation_id,
+                subject=selected,
+                status=dossier_status,
+                run_kind="dossier",
+                start_mode="Dossier",
+                selected_sources=dossier_selected_sources,
+                opensanctions_dataset=opensanctions_dataset,
+                crm_subject_source=str(
+                    (st.session_state.get("dd_launch_context") or {}).get("crm_subject_source")
+                    or ""
+                ),
+                crm_subject_id=str(
+                    (st.session_state.get("dd_launch_context") or {}).get("crm_subject_id") or ""
+                ),
+                source_runs=source_runs,
+                dossier_generated_at=_utc_now_iso(),
+            )
             st.success("Dossier generation finished.")
             st.dataframe(source_runs, use_container_width=True)
 
@@ -1261,6 +1583,33 @@ with col_right:
                 st.error(str(exc))
             else:
                 report_bytes = output_path.read_bytes()
+                dossier_run_id = str(st.session_state.get("dd_last_dossier_run_id") or "").strip()
+                if dossier_run_id:
+                    _persist_investigation_run(
+                        run_id=dossier_run_id,
+                        subject=selected,
+                        status="completed",
+                        run_kind="dossier",
+                        start_mode="Dossier",
+                        selected_sources=_selected_sources_from_flags(
+                            use_wikidata=use_wikidata,
+                            use_wikipedia=use_wikipedia,
+                            use_opensanctions=use_opensanctions,
+                            use_news=use_newsapi,
+                            use_gdelt=use_gdelt,
+                            opensanctions_dataset=opensanctions_dataset,
+                        ),
+                        opensanctions_dataset=opensanctions_dataset,
+                        crm_subject_source=str(
+                            (st.session_state.get("dd_launch_context") or {}).get("crm_subject_source")
+                            or ""
+                        ),
+                        crm_subject_id=str(
+                            (st.session_state.get("dd_launch_context") or {}).get("crm_subject_id")
+                            or ""
+                        ),
+                        report_generated_at=_utc_now_iso(),
+                    )
                 st.download_button(
                     label="Download report",
                     data=report_bytes,
