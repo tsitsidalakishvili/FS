@@ -1,3 +1,5 @@
+import ast
+
 import streamlit as st
 import streamlit.components.v1 as components
 from urllib.parse import parse_qsl, quote_plus, urlencode, urlparse, urlunparse
@@ -10,6 +12,7 @@ from crm.data.competitors import (
     list_competitors,
     upsert_competitor,
 )
+from crm.data.due_diligence import list_investigation_runs_for_subject
 
 OPENSANCTIONS_DATASET_OPTIONS = (
     "ge_declarations",
@@ -122,6 +125,72 @@ def _selected_dd_sources(
     if use_gdelt:
         sources.append("GDELT")
     return sources
+
+
+def _coerce_list(value) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item or "").strip()]
+    if isinstance(value, tuple):
+        return [str(item) for item in value if str(item or "").strip()]
+    text = str(value or "").strip()
+    if not text:
+        return []
+    if text.startswith("[") and text.endswith("]"):
+        try:
+            parsed = ast.literal_eval(text)
+        except Exception:
+            return [text]
+        if isinstance(parsed, (list, tuple)):
+            return [str(item) for item in parsed if str(item or "").strip()]
+    return [text]
+
+
+def _decode_selected_run_sources(selected_sources, fallback_dataset: str) -> dict[str, object]:
+    decoded = {
+        "use_wikidata": False,
+        "use_wikipedia": False,
+        "use_opensanctions": False,
+        "use_news": False,
+        "use_gdelt": False,
+        "opensanctions_dataset": str(fallback_dataset or "ge_declarations").strip()
+        or "ge_declarations",
+    }
+    for source in _coerce_list(selected_sources):
+        normalized = source.strip().lower()
+        if normalized == "wikidata":
+            decoded["use_wikidata"] = True
+        elif normalized == "wikipedia":
+            decoded["use_wikipedia"] = True
+        elif normalized == "newsapi":
+            decoded["use_news"] = True
+        elif normalized == "gdelt":
+            decoded["use_gdelt"] = True
+        elif normalized.startswith("opensanctions"):
+            decoded["use_opensanctions"] = True
+            _, _, dataset_name = source.partition(":")
+            dataset_name = str(dataset_name or "").strip()
+            if dataset_name:
+                decoded["opensanctions_dataset"] = dataset_name
+    return decoded
+
+
+def _apply_run_settings(subject_name: str, subject_type: str, run_row: dict[str, object]) -> None:
+    decoded = _decode_selected_run_sources(
+        run_row.get("selectedSources"), str(run_row.get("opensanctionsDataset") or "")
+    )
+    st.session_state["dd_subject_name"] = str(subject_name or "").strip()
+    st.session_state["dd_subject_type"] = str(subject_type or "").strip()
+    st.session_state["dd_start_mode"] = str(run_row.get("startMode") or "Analysis").strip()
+    st.session_state["dd_subject_source"] = str(run_row.get("crmSubjectSource") or "").strip()
+    st.session_state["dd_subject_source_id"] = str(run_row.get("crmSubjectId") or "").strip()
+    st.session_state["dd_cfg_use_wikidata"] = bool(decoded["use_wikidata"])
+    st.session_state["dd_cfg_use_wikipedia"] = bool(decoded["use_wikipedia"])
+    st.session_state["dd_cfg_use_opensanctions"] = bool(decoded["use_opensanctions"])
+    st.session_state["dd_cfg_use_news"] = bool(decoded["use_news"])
+    st.session_state["dd_cfg_use_gdelt"] = bool(decoded["use_gdelt"])
+    st.session_state["dd_cfg_opensanctions_dataset"] = str(
+        decoded["opensanctions_dataset"]
+    ).strip() or "ge_declarations"
 
 
 def _render_architecture_card(title: str, concept: str, outcome: str, tone: str = "default") -> None:
@@ -677,6 +746,118 @@ def render_due_diligence_page():
         effective_app_url = override_url or app_url
         if override_url:
             st.caption("Launch tab is using the temporary override URL above.")
+
+        st.markdown("##### Recent investigations")
+        if subject_name:
+            recent_runs_df = list_investigation_runs_for_subject(
+                subject_name,
+                subject_type,
+                crm_subject_source=crm_subject_source,
+                crm_subject_id=crm_subject_id,
+                limit=12,
+            )
+        else:
+            recent_runs_df = None
+        if recent_runs_df is not None and not recent_runs_df.empty:
+            display_df = recent_runs_df.copy()
+            display_df["selectedSources"] = display_df["selectedSources"].apply(
+                lambda value: ", ".join(_coerce_list(value))
+            )
+            display_df = display_df.rename(
+                columns={
+                    "startedAt": "Started",
+                    "status": "Status",
+                    "runKind": "Kind",
+                    "startMode": "Mode",
+                    "selectedSources": "Sources",
+                    "errorCount": "Errors",
+                    "dossierGeneratedAt": "Dossier",
+                    "reportGeneratedAt": "Report",
+                }
+            )
+            visible_cols = [
+                col
+                for col in ["Started", "Status", "Kind", "Mode", "Sources", "Errors", "Dossier", "Report"]
+                if col in display_df.columns
+            ]
+            st.dataframe(display_df[visible_cols], use_container_width=True, height=220)
+
+            run_records = recent_runs_df.to_dict(orient="records")
+            run_labels = {}
+            for row in run_records:
+                label = (
+                    f"{str(row.get('startedAt') or '').strip() or 'unknown time'} | "
+                    f"{row.get('runKind') or 'run'} | "
+                    f"{row.get('status') or 'unknown'}"
+                )
+                run_labels[label] = row
+            with st.expander("Inspect or reuse a previous investigation", expanded=False):
+                selected_label = st.selectbox(
+                    "Recent persisted investigations",
+                    options=list(run_labels.keys()),
+                    key="dd_recent_run_select",
+                )
+                selected_run = dict(run_labels[selected_label])
+                selected_run_sources = _decode_selected_run_sources(
+                    selected_run.get("selectedSources"),
+                    str(selected_run.get("opensanctionsDataset") or opensanctions_dataset),
+                )
+                selected_run_launch_url = _build_dd_launch_url(
+                    effective_app_url,
+                    subject_name=str(selected_run.get("subjectName") or subject_name),
+                    subject_type=str(selected_run.get("subjectLabel") or subject_type),
+                    start_mode=str(selected_run.get("startMode") or start_mode),
+                    use_wikidata=bool(selected_run_sources["use_wikidata"]),
+                    use_wikipedia=bool(selected_run_sources["use_wikipedia"]),
+                    use_opensanctions=bool(selected_run_sources["use_opensanctions"]),
+                    use_news=bool(selected_run_sources["use_news"]),
+                    use_gdelt=bool(selected_run_sources["use_gdelt"]),
+                    opensanctions_dataset=str(selected_run_sources["opensanctions_dataset"]),
+                    crm_subject_source=str(selected_run.get("crmSubjectSource") or crm_subject_source),
+                    crm_subject_id=str(selected_run.get("crmSubjectId") or crm_subject_id),
+                )
+                selected_run_autorun_url = _build_dd_launch_url(
+                    effective_app_url,
+                    subject_name=str(selected_run.get("subjectName") or subject_name),
+                    subject_type=str(selected_run.get("subjectLabel") or subject_type),
+                    start_mode=str(selected_run.get("startMode") or start_mode),
+                    use_wikidata=bool(selected_run_sources["use_wikidata"]),
+                    use_wikipedia=bool(selected_run_sources["use_wikipedia"]),
+                    use_opensanctions=bool(selected_run_sources["use_opensanctions"]),
+                    use_news=bool(selected_run_sources["use_news"]),
+                    use_gdelt=bool(selected_run_sources["use_gdelt"]),
+                    opensanctions_dataset=str(selected_run_sources["opensanctions_dataset"]),
+                    autorun=True,
+                    crm_subject_source=str(selected_run.get("crmSubjectSource") or crm_subject_source),
+                    crm_subject_id=str(selected_run.get("crmSubjectId") or crm_subject_id),
+                )
+                selected_action_cols = st.columns(3)
+                with selected_action_cols[0]:
+                    if st.button(
+                        "Use selected run settings",
+                        key="dd_apply_recent_run",
+                        use_container_width=True,
+                    ):
+                        _apply_run_settings(subject_name, subject_type, selected_run)
+                        st.success("Applied source settings from the selected investigation.")
+                        st.rerun()
+                with selected_action_cols[1]:
+                    if effective_app_url:
+                        _link_button(
+                            "Open selected run config",
+                            selected_run_launch_url or effective_app_url,
+                        )
+                with selected_action_cols[2]:
+                    if effective_app_url:
+                        _link_button(
+                            "Rerun selected investigation",
+                            selected_run_autorun_url or effective_app_url,
+                        )
+                st.json(selected_run)
+        elif subject_name:
+            st.caption("No persisted investigations found for this subject yet.")
+        else:
+            st.caption("Select a subject first to view investigation history.")
 
         app_launch_url = _build_dd_launch_url(
             effective_app_url,
