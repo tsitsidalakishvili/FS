@@ -101,6 +101,29 @@ def _build_dd_launch_url(
     )
 
 
+def _selected_dd_sources(
+    *,
+    use_wikidata: bool,
+    use_wikipedia: bool,
+    use_opensanctions: bool,
+    use_news: bool,
+    use_gdelt: bool,
+    opensanctions_dataset: str,
+) -> list[str]:
+    sources: list[str] = []
+    if use_wikidata:
+        sources.append("Wikidata")
+    if use_wikipedia:
+        sources.append("Wikipedia")
+    if use_opensanctions:
+        sources.append(f"OpenSanctions ({opensanctions_dataset})")
+    if use_news:
+        sources.append("NewsAPI")
+    if use_gdelt:
+        sources.append("GDELT")
+    return sources
+
+
 def _render_architecture_card(title: str, concept: str, outcome: str, tone: str = "default") -> None:
     palettes = {
         "default": {"bg": "#F8FAFF", "border": "#9FB8E8", "title": "#1E3A8A"},
@@ -293,6 +316,7 @@ def render_due_diligence_page():
         or str(get_config("DD_APP_URL") or "").strip()
     )
     st.session_state.setdefault("dd_cfg_opensanctions_dataset", "ge_declarations")
+    st.session_state.setdefault("dd_launch_url_override", "")
 
     def _set_subject(
         name: str,
@@ -589,44 +613,121 @@ def render_due_diligence_page():
         opensanctions_dataset = str(
             st.session_state.get("dd_cfg_opensanctions_dataset") or "ge_declarations"
         ).strip() or "ge_declarations"
+        selected_sources = _selected_dd_sources(
+            use_wikidata=use_wikidata,
+            use_wikipedia=use_wikipedia,
+            use_opensanctions=use_opensanctions,
+            use_news=use_news,
+            use_gdelt=use_gdelt,
+            opensanctions_dataset=opensanctions_dataset,
+        )
+        launch_payload = {
+            "subject": subject_name,
+            "subject_type": subject_type,
+            "start_mode": start_mode.replace(" ", "_").lower(),
+            "use_wikidata": "1" if use_wikidata else "0",
+            "use_wikipedia": "1" if use_wikipedia else "0",
+            "use_opensanctions": "1" if use_opensanctions else "0",
+            "use_news": "1" if use_news else "0",
+            "use_gdelt": "1" if use_gdelt else "0",
+            "opensanctions_dataset": opensanctions_dataset,
+            "crm_subject_source": crm_subject_source,
+            "crm_subject_id": crm_subject_id,
+        }
+        summary_cols = st.columns(4)
+        summary_cols[0].metric("Sources selected", len(selected_sources))
+        summary_cols[1].metric("Start mode", start_mode)
+        summary_cols[2].metric(
+            "Intake source",
+            crm_subject_source.replace("_", " ").title() if crm_subject_source else "Manual",
+        )
+        summary_cols[3].metric(
+            "OpenSanctions dataset",
+            opensanctions_dataset,
+        )
+        if selected_sources:
+            st.caption("Selected sources: " + ", ".join(selected_sources))
+        else:
+            st.caption("No external sources are selected for launch.")
+
+        st.markdown("##### App endpoint")
         if app_url:
-            st.success("External Due Diligence app is configured.")
-            st.text_input("Configured app URL", value=app_url, key="dd_app_url_preview")
-            app_launch_url = _build_dd_launch_url(
-                app_url,
-                subject_name=subject_name,
-                subject_type=subject_type,
-                start_mode=start_mode,
-                use_wikidata=use_wikidata,
-                use_wikipedia=use_wikipedia,
-                use_opensanctions=use_opensanctions,
-                use_news=use_news,
-                use_gdelt=use_gdelt,
-                opensanctions_dataset=opensanctions_dataset,
-                crm_subject_source=crm_subject_source,
-                crm_subject_id=crm_subject_id,
+            st.success("External Due Diligence app URL is configured.")
+        else:
+            st.info(
+                "No permanent DD app URL is configured yet. "
+                "You can still paste a temporary/local DD app URL below."
             )
-            autorun_launch_url = _build_dd_launch_url(
-                app_url,
-                subject_name=subject_name,
-                subject_type=subject_type,
-                start_mode=start_mode,
-                use_wikidata=use_wikidata,
-                use_wikipedia=use_wikipedia,
-                use_opensanctions=use_opensanctions,
-                use_news=use_news,
-                use_gdelt=use_gdelt,
-                opensanctions_dataset=opensanctions_dataset,
-                autorun=True,
-                crm_subject_source=crm_subject_source,
-                crm_subject_id=crm_subject_id,
-            )
-            st.caption(f"OpenSanctions dataset: {opensanctions_dataset}")
+        st.text_input(
+            "Configured DD app URL",
+            value=app_url,
+            key="dd_app_url_preview",
+            disabled=True,
+        )
+        override_help = (
+            "Optional one-off DD URL for local testing or a temporary deployment. "
+            "Example: http://localhost:8502"
+        )
+        override_url = st.text_input(
+            "Temporary DD app URL override",
+            key="dd_launch_url_override",
+            placeholder="http://localhost:8502",
+            help=override_help,
+        ).strip()
+        effective_app_url = override_url or app_url
+        if override_url:
+            st.caption("Launch tab is using the temporary override URL above.")
+
+        app_launch_url = _build_dd_launch_url(
+            effective_app_url,
+            subject_name=subject_name,
+            subject_type=subject_type,
+            start_mode=start_mode,
+            use_wikidata=use_wikidata,
+            use_wikipedia=use_wikipedia,
+            use_opensanctions=use_opensanctions,
+            use_news=use_news,
+            use_gdelt=use_gdelt,
+            opensanctions_dataset=opensanctions_dataset,
+            crm_subject_source=crm_subject_source,
+            crm_subject_id=crm_subject_id,
+        )
+        autorun_launch_url = _build_dd_launch_url(
+            effective_app_url,
+            subject_name=subject_name,
+            subject_type=subject_type,
+            start_mode=start_mode,
+            use_wikidata=use_wikidata,
+            use_wikipedia=use_wikipedia,
+            use_opensanctions=use_opensanctions,
+            use_news=use_news,
+            use_gdelt=use_gdelt,
+            opensanctions_dataset=opensanctions_dataset,
+            autorun=True,
+            crm_subject_source=crm_subject_source,
+            crm_subject_id=crm_subject_id,
+        )
+
+        st.markdown("##### Launch URLs")
+        st.text_input(
+            "Open DD app URL",
+            value=app_launch_url or "",
+            key="dd_launch_url_preview",
+        )
+        st.text_input(
+            "Open and run sources URL",
+            value=autorun_launch_url or "",
+            key="dd_autorun_url_preview",
+        )
+        with st.expander("Launch payload / query contract", expanded=False):
+            st.json(launch_payload)
+
+        if effective_app_url:
             action_cols = st.columns(4)
             with action_cols[0]:
-                _link_button("🚀 Open DD app", app_launch_url or app_url)
+                _link_button("🚀 Open DD app", app_launch_url or effective_app_url)
             with action_cols[1]:
-                _link_button("▶️ Open and run sources", autorun_launch_url or app_url)
+                _link_button("▶️ Open and run sources", autorun_launch_url or effective_app_url)
             with action_cols[2]:
                 if st.button("🖼️ Toggle embed", key="dd_embed_toggle", use_container_width=True):
                     st.session_state["dd_embed_external_app"] = not bool(
@@ -652,26 +753,47 @@ def render_due_diligence_page():
                         f"OpenSanctions dataset: {opensanctions_dataset}\n"
                         f"NewsAPI: {'on' if use_news else 'off'}\n"
                         f"GDELT: {'on' if use_gdelt else 'off'}\n\n"
-                        f"Due Diligence app:\n{autorun_launch_url or app_launch_url or app_url}"
+                        f"Due Diligence app:\n"
+                        f"{autorun_launch_url or app_launch_url or effective_app_url}"
                     ),
                 )
                 _link_button("✉️ Open in Gmail", gmail_url)
             with st.expander("Open app inside this tab", expanded=False):
                 if st.checkbox("Embed external DD app", key="dd_embed_external_app"):
-                    components.iframe(app_launch_url or app_url, height=900, scrolling=True)
+                    components.iframe(
+                        app_launch_url or effective_app_url, height=900, scrolling=True
+                    )
         else:
-            st.info(
-                "External DD app URL is not configured yet. "
-                "Set `DUE_DILIGENCE_APP_URL` (or `DD_APP_URL`) in secrets/.env."
-            )
-            st.markdown("**Run locally**")
+            st.markdown("##### Run locally")
             st.code(
+                "PORT=8502\n"
                 "cd DD\n"
                 "python -m pip install -r requirements.txt\n"
                 "python -m app.scripts.init_db\n"
-                "streamlit run app/main.py",
+                "streamlit run app/main.py --server.port $PORT",
                 language="bash",
             )
             st.caption(
-                "After deployment, set DUE_DILIGENCE_APP_URL so this tab can open/embed the live app."
+                "After the DD app is running, paste its URL above as a temporary override "
+                "or set DUE_DILIGENCE_APP_URL / DD_APP_URL in .env or Streamlit secrets."
+            )
+            local_example_url = _build_dd_launch_url(
+                "http://localhost:8502",
+                subject_name=subject_name,
+                subject_type=subject_type,
+                start_mode=start_mode,
+                use_wikidata=use_wikidata,
+                use_wikipedia=use_wikipedia,
+                use_opensanctions=use_opensanctions,
+                use_news=use_news,
+                use_gdelt=use_gdelt,
+                opensanctions_dataset=opensanctions_dataset,
+                autorun=True,
+                crm_subject_source=crm_subject_source,
+                crm_subject_id=crm_subject_id,
+            )
+            st.text_input(
+                "Example local autorun URL",
+                value=local_example_url,
+                key="dd_local_example_url_preview",
             )
