@@ -1157,21 +1157,14 @@ def render_deliberation(public_only: bool):
         if not comments:
             st.info("No approved comments yet.")
         else:
-            swipe_state = _render_swipe_component(
+            # Hard-reliability mode for shared mobile links:
+            # use deterministic one-card flow and avoid component state drift.
+            _render_mobile_questionnaire_cards(
                 comments,
                 convo_id,
                 headers,
-                compact=True,
                 participant_scope=participant_scope,
             )
-            if not bool((swipe_state or {}).get("deck_ok", True)):
-                st.info("Recovered card deck state. Continuing in stable mode.")
-                _render_mobile_questionnaire_cards(
-                    comments,
-                    convo_id,
-                    headers,
-                    participant_scope=participant_scope,
-                )
         if convo.get("allow_comment_submission", True):
             _render_questionnaire_comment_form(convo_id, headers)
         return
