@@ -11,6 +11,15 @@ from crm.data.competitors import (
     upsert_competitor,
 )
 
+OPENSANCTIONS_DATASET_OPTIONS = (
+    "ge_declarations",
+    "ge_ot_list",
+    "ext_ge_company_registry",
+    "wd_peps",
+    "sanctions",
+    "default",
+)
+
 
 def _link_button(label: str, url: str) -> None:
     if not url:
@@ -54,6 +63,37 @@ def _append_query_params(url: str, params: dict[str, str]) -> str:
             new_query,
             parsed.fragment,
         )
+    )
+
+
+def _build_dd_launch_url(
+    app_url: str,
+    *,
+    subject_name: str,
+    subject_type: str,
+    start_mode: str,
+    use_wikidata: bool,
+    use_opensanctions: bool,
+    use_news: bool,
+    opensanctions_dataset: str,
+    autorun: bool = False,
+    crm_subject_source: str = "",
+    crm_subject_id: str = "",
+) -> str:
+    return _append_query_params(
+        app_url,
+        {
+            "subject": subject_name,
+            "subject_type": subject_type,
+            "start_mode": start_mode.replace(" ", "_").lower(),
+            "use_wikidata": "1" if use_wikidata else "0",
+            "use_opensanctions": "1" if use_opensanctions else "0",
+            "use_news": "1" if use_news else "0",
+            "opensanctions_dataset": opensanctions_dataset,
+            "autorun": "1" if autorun else "0",
+            "crm_subject_source": crm_subject_source,
+            "crm_subject_id": crm_subject_id,
+        },
     )
 
 
@@ -179,7 +219,7 @@ def render_due_diligence_how_it_works() -> None:
     components.html(html, height=770, scrolling=False)
 
 
-def _render_competitor_watchlist() -> tuple[str, str]:
+def _render_competitor_watchlist() -> tuple[str, str, str]:
     st.markdown("#### Competitor watchlist")
     with st.form("dd_competitor_form", clear_on_submit=True):
         form_cols = st.columns([2, 1])
@@ -201,7 +241,7 @@ def _render_competitor_watchlist() -> tuple[str, str]:
     competitors_df = list_competitors()
     if competitors_df.empty:
         st.caption("No competitors saved yet.")
-        return "", ""
+        return "", "", ""
 
     st.dataframe(competitors_df, use_container_width=True, height=220)
     options = {}
@@ -217,7 +257,7 @@ def _render_competitor_watchlist() -> tuple[str, str]:
         options[label] = (name, competitor_type, competitor_id)
 
     if not options:
-        return "", ""
+        return "", "", ""
 
     selected_label = st.selectbox(
         "Select competitor",
@@ -235,8 +275,8 @@ def _render_competitor_watchlist() -> tuple[str, str]:
                     st.rerun()
                 else:
                     st.error("Could not delete competitor.")
-        return name, competitor_type
-    return "", ""
+        return name, competitor_type, competitor_id
+    return "", "", ""
 
 
 def render_due_diligence_page():
@@ -244,11 +284,25 @@ def render_due_diligence_page():
     st.caption(
         "Select person/organization, check CRM + competitors, run analysis, then launch workflow."
     )
+    app_url = (
+        str(get_config("DUE_DILIGENCE_APP_URL") or "").strip()
+        or str(get_config("DD_APP_URL") or "").strip()
+    )
+    st.session_state.setdefault("dd_cfg_opensanctions_dataset", "ge_declarations")
 
-    def _set_subject(name: str, subject_type: str, start_mode: str) -> None:
+    def _set_subject(
+        name: str,
+        subject_type: str,
+        start_mode: str,
+        *,
+        crm_subject_source: str = "",
+        crm_subject_id: str = "",
+    ) -> None:
         st.session_state["dd_subject_name"] = str(name or "").strip()
         st.session_state["dd_subject_type"] = str(subject_type or "").strip()
         st.session_state["dd_start_mode"] = str(start_mode or "").strip()
+        st.session_state["dd_subject_source"] = str(crm_subject_source or "").strip()
+        st.session_state["dd_subject_source_id"] = str(crm_subject_id or "").strip()
 
     analysis_tab, configure_tab, watchlist_tab, launch_tab = st.tabs(
         ["Analysis", "Configure", "Watchlist", "Launch"]
@@ -350,21 +404,83 @@ def render_due_diligence_page():
             st.checkbox("OpenSanctions", key="dd_cfg_use_opensanctions", value=True)
         with src_cols[2]:
             st.checkbox("News / Web", key="dd_cfg_use_news", value=True)
+        dataset_options = list(OPENSANCTIONS_DATASET_OPTIONS) + ["custom"]
+        current_dataset = str(st.session_state.get("dd_cfg_opensanctions_dataset") or "").strip()
+        current_dataset = current_dataset or "ge_declarations"
+        default_dataset = current_dataset if current_dataset in OPENSANCTIONS_DATASET_OPTIONS else "custom"
+        selected_dataset = st.selectbox(
+            "OpenSanctions dataset",
+            options=dataset_options,
+            index=dataset_options.index(default_dataset),
+            key="dd_cfg_opensanctions_dataset_choice",
+            help="Georgia declarations are the default for public official due diligence.",
+        )
+        if selected_dataset == "custom":
+            custom_dataset = st.text_input(
+                "Custom OpenSanctions dataset",
+                value=current_dataset if current_dataset not in OPENSANCTIONS_DATASET_OPTIONS else "",
+                key="dd_cfg_opensanctions_dataset_custom",
+                help="Examples: ge_declarations, ge_ot_list, ext_ge_company_registry, wd_peps",
+            ).strip()
+            st.session_state["dd_cfg_opensanctions_dataset"] = custom_dataset or "ge_declarations"
+        else:
+            st.session_state["dd_cfg_opensanctions_dataset"] = selected_dataset
         if st.button("Run analysis", key="dd_run_external_analysis"):
             if not subject_name:
                 st.warning("Set a subject first.")
             else:
+                current_subject_name = str(st.session_state.get("dd_subject_name") or "").strip()
+                current_subject_type = str(st.session_state.get("dd_subject_type") or "").strip()
+                crm_subject_source = ""
+                crm_subject_id = ""
+                if current_subject_name == subject_name and current_subject_type == subject_type:
+                    crm_subject_source = str(
+                        st.session_state.get("dd_subject_source") or ""
+                    ).strip()
+                    crm_subject_id = str(
+                        st.session_state.get("dd_subject_source_id") or ""
+                    ).strip()
+                _set_subject(
+                    subject_name,
+                    subject_type,
+                    "Analysis",
+                    crm_subject_source=crm_subject_source,
+                    crm_subject_id=crm_subject_id,
+                )
                 enabled = []
                 if st.session_state.get("dd_cfg_use_wikidata"):
                     enabled.append("Wikidata")
                 if st.session_state.get("dd_cfg_use_opensanctions"):
-                    enabled.append("OpenSanctions")
+                    enabled.append(
+                        f"OpenSanctions ({st.session_state.get('dd_cfg_opensanctions_dataset')})"
+                    )
                 if st.session_state.get("dd_cfg_use_news"):
                     enabled.append("News/Web")
-                st.success(
-                    f"Analysis started for {subject_name} ({subject_type}) using: "
-                    f"{', '.join(enabled) if enabled else 'no sources selected'}."
+                autorun_launch_url = _build_dd_launch_url(
+                    app_url,
+                    subject_name=subject_name,
+                    subject_type=subject_type,
+                    start_mode="Analysis",
+                    use_wikidata=bool(st.session_state.get("dd_cfg_use_wikidata")),
+                    use_opensanctions=bool(st.session_state.get("dd_cfg_use_opensanctions")),
+                    use_news=bool(st.session_state.get("dd_cfg_use_news")),
+                    opensanctions_dataset=str(
+                        st.session_state.get("dd_cfg_opensanctions_dataset") or "ge_declarations"
+                    ),
+                    autorun=True,
+                    crm_subject_source=crm_subject_source,
+                    crm_subject_id=crm_subject_id,
                 )
+                if app_url:
+                    st.success(
+                        f"Due Diligence launch is ready for {subject_name} ({subject_type}) using: "
+                        f"{', '.join(enabled) if enabled else 'no sources selected'}."
+                    )
+                    _link_button("🚀 Open DD app and run selected sources", autorun_launch_url)
+                else:
+                    st.info(
+                        "External DD app URL is not configured yet. Use the Launch tab for the local run instructions."
+                    )
 
     with configure_tab:
         st.markdown("#### Configure")
@@ -383,10 +499,16 @@ def render_due_diligence_page():
             mcols[1].metric("Supporters", total_supporters)
             mcols[2].metric("Members", total_members)
             st.markdown("##### Competitor records")
-            selected_name, selected_type = _render_competitor_watchlist()
+            selected_name, selected_type, selected_competitor_id = _render_competitor_watchlist()
             if selected_name and selected_type:
                 if st.button("Set selected as active subject", key="dd_cfg_use_selected_subject"):
-                    _set_subject(selected_name, selected_type, "Configure")
+                    _set_subject(
+                        selected_name,
+                        selected_type,
+                        "Configure",
+                        crm_subject_source="competitor",
+                        crm_subject_id=selected_competitor_id,
+                    )
                     st.success(f"Active subject set: {selected_name} ({selected_type})")
                     st.rerun()
 
@@ -395,6 +517,11 @@ def render_due_diligence_page():
             st.checkbox("Enable Wikidata", key="dd_cfg_use_wikidata")
             st.checkbox("Enable OpenSanctions", key="dd_cfg_use_opensanctions")
             st.checkbox("Enable News / Web", key="dd_cfg_use_news")
+            st.text_input(
+                "Selected OpenSanctions dataset",
+                key="dd_cfg_opensanctions_dataset",
+                help="Default launch dataset for the DD app.",
+            )
             st.markdown("##### Source connection status")
             open_key = str(get_config("OPENSANCTIONS_API_KEY") or "").strip()
             news_key = str(get_config("NEWS_API_KEY") or "").strip()
@@ -407,11 +534,17 @@ def render_due_diligence_page():
     with watchlist_tab:
         st.markdown("#### Watchlist")
         st.caption("Save competitors and optionally use one as your intake subject.")
-        selected_name, selected_type = _render_competitor_watchlist()
+        selected_name, selected_type, selected_competitor_id = _render_competitor_watchlist()
         if selected_name and selected_type:
             st.success(f"Selected watchlist item: {selected_name} ({selected_type})")
             if st.button("Use selected as intake subject", key="dd_use_watchlist_subject"):
-                _set_subject(selected_name, selected_type, "Watchlist")
+                _set_subject(
+                    selected_name,
+                    selected_type,
+                    "Watchlist",
+                    crm_subject_source="competitor",
+                    crm_subject_id=selected_competitor_id,
+                )
                 st.success("Watchlist subject set for intake.")
                 st.rerun()
 
@@ -420,41 +553,59 @@ def render_due_diligence_page():
         subject_name = str(st.session_state.get("dd_subject_name") or "").strip()
         subject_type = str(st.session_state.get("dd_subject_type") or "").strip()
         start_mode = str(st.session_state.get("dd_start_mode") or "Analysis")
+        crm_subject_source = str(st.session_state.get("dd_subject_source") or "").strip()
+        crm_subject_id = str(st.session_state.get("dd_subject_source_id") or "").strip()
         if subject_name:
             st.success(f"Launch subject: {subject_name} ({subject_type})")
         else:
             st.warning("No subject selected yet. Set one in Analysis or Watchlist.")
 
-        app_url = (
-            str(get_config("DUE_DILIGENCE_APP_URL") or "").strip()
-            or str(get_config("DD_APP_URL") or "").strip()
-        )
         use_wikidata = bool(st.session_state.get("dd_cfg_use_wikidata", True))
         use_opensanctions = bool(st.session_state.get("dd_cfg_use_opensanctions", True))
         use_news = bool(st.session_state.get("dd_cfg_use_news", True))
+        opensanctions_dataset = str(
+            st.session_state.get("dd_cfg_opensanctions_dataset") or "ge_declarations"
+        ).strip() or "ge_declarations"
         if app_url:
             st.success("External Due Diligence app is configured.")
             st.text_input("Configured app URL", value=app_url, key="dd_app_url_preview")
-            app_launch_url = _append_query_params(
+            app_launch_url = _build_dd_launch_url(
                 app_url,
-                {
-                    "subject": subject_name,
-                    "subject_type": subject_type,
-                    "start_mode": start_mode.replace(" ", "_").lower(),
-                    "use_wikidata": "1" if use_wikidata else "0",
-                    "use_opensanctions": "1" if use_opensanctions else "0",
-                    "use_news": "1" if use_news else "0",
-                },
+                subject_name=subject_name,
+                subject_type=subject_type,
+                start_mode=start_mode,
+                use_wikidata=use_wikidata,
+                use_opensanctions=use_opensanctions,
+                use_news=use_news,
+                opensanctions_dataset=opensanctions_dataset,
+                crm_subject_source=crm_subject_source,
+                crm_subject_id=crm_subject_id,
             )
-            action_cols = st.columns(3)
+            autorun_launch_url = _build_dd_launch_url(
+                app_url,
+                subject_name=subject_name,
+                subject_type=subject_type,
+                start_mode=start_mode,
+                use_wikidata=use_wikidata,
+                use_opensanctions=use_opensanctions,
+                use_news=use_news,
+                opensanctions_dataset=opensanctions_dataset,
+                autorun=True,
+                crm_subject_source=crm_subject_source,
+                crm_subject_id=crm_subject_id,
+            )
+            st.caption(f"OpenSanctions dataset: {opensanctions_dataset}")
+            action_cols = st.columns(4)
             with action_cols[0]:
                 _link_button("🚀 Open DD app", app_launch_url or app_url)
             with action_cols[1]:
+                _link_button("▶️ Open and run sources", autorun_launch_url or app_url)
+            with action_cols[2]:
                 if st.button("🖼️ Toggle embed", key="dd_embed_toggle", use_container_width=True):
                     st.session_state["dd_embed_external_app"] = not bool(
                         st.session_state.get("dd_embed_external_app")
                     )
-            with action_cols[2]:
+            with action_cols[3]:
                 to_email = st.text_input(
                     "Gmail to",
                     value=str(FEEDBACK_EMAIL_TO or "").strip(),
@@ -470,8 +621,9 @@ def render_due_diligence_page():
                         f"Subject type: {subject_type or 'not set'}\n\n"
                         f"Wikidata: {'on' if use_wikidata else 'off'}\n"
                         f"OpenSanctions: {'on' if use_opensanctions else 'off'}\n"
+                        f"OpenSanctions dataset: {opensanctions_dataset}\n"
                         f"News/Web: {'on' if use_news else 'off'}\n\n"
-                        f"Due Diligence app:\n{app_launch_url or app_url}"
+                        f"Due Diligence app:\n{autorun_launch_url or app_launch_url or app_url}"
                     ),
                 )
                 _link_button("✉️ Open in Gmail", gmail_url)

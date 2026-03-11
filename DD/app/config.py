@@ -1,5 +1,18 @@
 import os
 from dataclasses import dataclass
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+DD_DIR = Path(__file__).resolve().parents[1]
+
+
+def load_environment() -> None:
+    # Match CRM's root-level .env loading, while allowing DD-specific overrides.
+    load_dotenv(ROOT_DIR / ".env", override=False)
+    load_dotenv(DD_DIR / ".env", override=True)
 
 
 @dataclass(frozen=True)
@@ -14,6 +27,7 @@ class Settings:
 
 
 def get_settings() -> Settings:
+    load_environment()
     neo4j_user = os.getenv("NEO4J_USER") or os.getenv("NEO4J_USERNAME") or "neo4j"
     return Settings(
         neo4j_uri=os.getenv("NEO4J_URI", "bolt://localhost:7687"),

@@ -1,12 +1,9 @@
-from dotenv import load_dotenv
-
 from app.config import get_settings
 from app.graph.neo4j import Neo4jClient, Neo4jConfig
 from app.graph.schema import initialize_schema
 
 
 def main() -> None:
-    load_dotenv()
     settings = get_settings()
     client = Neo4jClient(
         Neo4jConfig(

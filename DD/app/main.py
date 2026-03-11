@@ -7,7 +7,6 @@ from pathlib import Path
 from uuid import uuid4
 
 import streamlit as st
-from dotenv import load_dotenv
 from neo4j.exceptions import ServiceUnavailable
 from requests.exceptions import HTTPError
 
@@ -37,7 +36,6 @@ from app.reporting.dossier import build_dossier_snapshot, dossier_markdown
 from app.reporting.pdf import generate_pdf_report
 
 
-load_dotenv()
 settings = get_settings()
 
 st.set_page_config(page_title="Graph Due Diligence", layout="wide")
@@ -81,6 +79,168 @@ def safe_neo4j_call(action: str, func, default=None, *args, **kwargs):
     except Exception as exc:
         st.error(f"{action} failed: {exc}")
         return False, default
+
+
+def _get_query_param(name: str) -> str | None:
+    value = None
+    try:
+        value = st.query_params.get(name)
+    except Exception:
+        value = None
+    if isinstance(value, list):
+        return value[0] if value else None
+    if value not in (None, ""):
+        return str(value)
+    try:
+        params = st.experimental_get_query_params()
+        fallback = params.get(name)
+        if isinstance(fallback, list):
+            return fallback[0] if fallback else None
+        if fallback in (None, ""):
+            return None
+        return str(fallback)
+    except Exception:
+        return None
+
+
+def _query_flag(name: str, default: bool = False) -> bool:
+    value = str(_get_query_param(name) or "").strip().lower()
+    if not value:
+        return default
+    return value in {"1", "true", "yes", "on"}
+
+
+def _normalize_subject_label(value: str | None) -> str:
+    text = str(value or "").strip().lower()
+    if text in {"company", "organization", "organisation", "legalentity"}:
+        return "Company"
+    return "Person"
+
+
+def _resolve_existing_subject(subject_name: str, subject_label: str) -> dict[str, str] | None:
+    _, results = safe_neo4j_call("Search subject", search_entities, [], client, subject_name)
+    normalized_name = subject_name.strip().casefold()
+    for row in results:
+        row_name = str(row.get("name") or "").strip().casefold()
+        if row.get("label") == subject_label and row_name == normalized_name:
+            return {
+                "label": str(row["label"]),
+                "id": str(row["id"]),
+                "name": str(row["name"]),
+            }
+    for row in results:
+        if row.get("label") == subject_label and row.get("id") and row.get("name"):
+            return {
+                "label": str(row["label"]),
+                "id": str(row["id"]),
+                "name": str(row["name"]),
+            }
+    return None
+
+
+def _create_intake_subject(
+    subject_name: str,
+    subject_label: str,
+    *,
+    crm_subject_source: str = "",
+    crm_subject_id: str = "",
+) -> dict[str, str]:
+    entity_id = f"{subject_label.lower()}-{uuid4()}"
+    props: dict[str, object] = {"id": entity_id}
+    if subject_label == "Person":
+        props["full_name"] = subject_name
+    else:
+        props["name"] = subject_name
+    if crm_subject_source:
+        props["crm_subject_source"] = crm_subject_source
+    if crm_subject_id:
+        props["crm_subject_id"] = crm_subject_id
+    batch = IngestionBatch(
+        source="crm_launch",
+        entities=[Entity(label=subject_label, properties=props)],
+        relationships=[],
+    )
+    apply_batch(client, batch)
+    return {"label": subject_label, "id": entity_id, "name": subject_name}
+
+
+def _bootstrap_launch_context() -> dict[str, object]:
+    subject_name = str(_get_query_param("subject") or "").strip()
+    if not subject_name:
+        return {}
+
+    context = {
+        "subject_name": subject_name,
+        "subject_label": _normalize_subject_label(_get_query_param("subject_type")),
+        "start_mode": str(_get_query_param("start_mode") or "analysis")
+        .strip()
+        .replace("_", " ")
+        .title(),
+        "use_wikidata": _query_flag("use_wikidata", True),
+        "use_opensanctions": _query_flag("use_opensanctions", True),
+        "use_news": _query_flag("use_news", False),
+        "autorun": _query_flag("autorun", False),
+        "opensanctions_dataset": (
+            str(_get_query_param("opensanctions_dataset") or "").strip()
+            or settings.opensanctions_dataset
+        ),
+        "crm_subject_source": str(_get_query_param("crm_subject_source") or "").strip(),
+        "crm_subject_id": str(_get_query_param("crm_subject_id") or "").strip(),
+    }
+    signature = json.dumps(context, sort_keys=True)
+    if st.session_state.get("dd_launch_signature") == signature:
+        return context
+
+    st.session_state["dd_search_term"] = context["subject_name"]
+    st.session_state["dd_dossier_src_wikidata"] = bool(context["use_wikidata"])
+    st.session_state["dd_dossier_src_opensanctions"] = bool(context["use_opensanctions"])
+    st.session_state["dd_dossier_src_newsapi"] = bool(context["use_news"])
+    st.session_state["dd_opensanctions_mode"] = "Match"
+    st.session_state["dd_cfg_opensanctions_dataset"] = context["opensanctions_dataset"]
+
+    selected = _resolve_existing_subject(
+        str(context["subject_name"]), str(context["subject_label"])
+    )
+    if selected is None:
+        ok, selected = safe_neo4j_call(
+            "Create intake subject",
+            _create_intake_subject,
+            None,
+            str(context["subject_name"]),
+            str(context["subject_label"]),
+            crm_subject_source=str(context["crm_subject_source"]),
+            crm_subject_id=str(context["crm_subject_id"]),
+        )
+        if not ok:
+            selected = None
+    if selected:
+        st.session_state["dd_selected_entity_id"] = selected["id"]
+        st.session_state["dd_selected_entity_label"] = selected["label"]
+        st.session_state["dd_selected_entity_name"] = selected["name"]
+
+    st.session_state["dd_launch_signature"] = signature
+    st.session_state["dd_launch_context"] = context
+    st.session_state["dd_autorun_pending_signature"] = signature if context["autorun"] else ""
+    return context
+
+
+launch_context = _bootstrap_launch_context()
+if launch_context:
+    enabled_sources = []
+    if launch_context.get("use_wikidata"):
+        enabled_sources.append("Wikidata")
+    if launch_context.get("use_opensanctions"):
+        enabled_sources.append(
+            f"OpenSanctions ({launch_context.get('opensanctions_dataset')})"
+        )
+    if launch_context.get("use_news"):
+        enabled_sources.append("News/Web")
+    source_text = ", ".join(enabled_sources) if enabled_sources else "no sources selected"
+    st.info(
+        f"Launch context loaded for {launch_context['subject_name']} "
+        f"({launch_context['subject_label']}) via {launch_context['start_mode']}. "
+        f"Selected sources: {source_text}."
+    )
 
 
 with st.sidebar:
@@ -155,7 +315,8 @@ with st.sidebar:
 
 
 st.subheader("Search")
-search_term = st.text_input("Search for a person or company")
+st.session_state.setdefault("dd_search_term", "")
+search_term = st.text_input("Search for a person or company", key="dd_search_term").strip()
 
 results = []
 if search_term.strip():
@@ -164,14 +325,39 @@ if search_term.strip():
     )
 
 selected = None
+selected_entity_id = str(st.session_state.get("dd_selected_entity_id") or "").strip()
+selected_entity_label = str(st.session_state.get("dd_selected_entity_label") or "").strip()
 if results:
     display_results = [r for r in results if r.get("name")]
     if display_results:
         label_to_display = [
             f'{r["label"]}: {r["name"]} ({r["id"]})' for r in display_results
         ]
-        selection = st.selectbox("Results", label_to_display)
+        selected_index = 0
+        for index, row in enumerate(display_results):
+            if row["id"] == selected_entity_id and row["label"] == selected_entity_label:
+                selected_index = index
+                break
+        selection = st.selectbox("Results", label_to_display, index=selected_index)
         selected = display_results[label_to_display.index(selection)]
+        st.session_state["dd_selected_entity_id"] = selected["id"]
+        st.session_state["dd_selected_entity_label"] = selected["label"]
+        st.session_state["dd_selected_entity_name"] = selected["name"]
+elif selected_entity_id and selected_entity_label:
+    _, selected_entity = safe_neo4j_call(
+        "Load selected entity", get_entity, {}, client, selected_entity_label, selected_entity_id
+    )
+    if selected_entity:
+        selected = {
+            "label": selected_entity_label,
+            "id": selected_entity_id,
+            "name": (
+                selected_entity.get("full_name")
+                or selected_entity.get("name")
+                or st.session_state.get("dd_selected_entity_name")
+                or selected_entity_id
+            ),
+        }
 
 col_left, col_right = st.columns([2, 1])
 
@@ -219,10 +405,17 @@ with col_right:
             st.caption("No risky nodes within 2 hops.")
 
         st.subheader("Enrichment")
+        st.session_state.setdefault("dd_opensanctions_mode", "Search")
         opensanctions_mode = st.selectbox(
-            "OpenSanctions mode", ["Search", "Match"], index=0
+            "OpenSanctions mode", ["Search", "Match"], key="dd_opensanctions_mode"
         )
-        opensanctions_dataset = settings.opensanctions_dataset
+        st.session_state.setdefault(
+            "dd_cfg_opensanctions_dataset", settings.opensanctions_dataset
+        )
+        opensanctions_dataset = (
+            str(st.session_state.get("dd_cfg_opensanctions_dataset") or "").strip()
+            or settings.opensanctions_dataset
+        )
         georgia_profiles: list[dict[str, object]] = []
         georgia_catalog_error = None
         try:
@@ -267,7 +460,7 @@ with col_right:
             else:
                 opensanctions_dataset = st.text_input(
                     "OpenSanctions dataset",
-                    value=settings.opensanctions_dataset,
+                    value=opensanctions_dataset,
                     help="Examples: default, sanctions, wd_peps, ge_declarations, ge_ot_list",
                 ).strip() or settings.opensanctions_dataset
 
@@ -278,9 +471,10 @@ with col_right:
                 st.caption(f"Could not load OpenSanctions catalog: {georgia_catalog_error}")
             opensanctions_dataset = st.text_input(
                 "OpenSanctions dataset",
-                value=settings.opensanctions_dataset,
+                value=opensanctions_dataset,
                 help="Common values: default, sanctions, wd_peps, ge_declarations, ge_ot_list",
             )
+        st.session_state["dd_cfg_opensanctions_dataset"] = opensanctions_dataset
 
         _, entity_snapshot = safe_neo4j_call(
             "Load entity", get_entity, {}, client, selected["label"], selected["id"]
@@ -350,6 +544,126 @@ with col_right:
                 entities=article_batch.entities,
                 relationships=relationships,
             )
+
+        def _run_launch_selected_sources() -> list[dict[str, object]]:
+            source_runs: list[dict[str, object]] = []
+
+            if st.session_state.get("dd_dossier_src_wikidata"):
+                try:
+                    batch = fetch_wikidata(
+                        selected["name"],
+                        target_label=selected["label"],
+                        target_id=selected["id"],
+                    )
+                    ok, _ = safe_neo4j_call(
+                        "Wikidata enrichment", apply_batch, None, client, batch
+                    )
+                    source_runs.append(
+                        {
+                            "source": "wikidata",
+                            "ok": bool(ok),
+                            "items": len(batch.entities),
+                            "detail": "profile + relationship graph",
+                        }
+                    )
+                except Exception as exc:
+                    source_runs.append(
+                        {
+                            "source": "wikidata",
+                            "ok": False,
+                            "items": 0,
+                            "detail": str(exc),
+                        }
+                    )
+
+            if st.session_state.get("dd_dossier_src_opensanctions"):
+                if not settings.opensanctions_api_key:
+                    source_runs.append(
+                        {
+                            "source": f"opensanctions:{opensanctions_dataset}",
+                            "ok": False,
+                            "items": 0,
+                            "detail": "missing OPENSANCTIONS_API_KEY",
+                        }
+                    )
+                else:
+                    try:
+                        ok, batch, matches = _run_opensanctions_enrichment(
+                            opensanctions_dataset, entity_snapshot
+                        )
+                        source_runs.append(
+                            {
+                                "source": f"opensanctions:{opensanctions_dataset}",
+                                "ok": bool(ok),
+                                "items": len(batch.entities),
+                                "detail": f"matches={len(matches)}",
+                            }
+                        )
+                    except Exception as exc:
+                        source_runs.append(
+                            {
+                                "source": f"opensanctions:{opensanctions_dataset}",
+                                "ok": False,
+                                "items": 0,
+                                "detail": str(exc),
+                            }
+                        )
+
+            if st.session_state.get("dd_dossier_src_newsapi"):
+                if not settings.news_api_key:
+                    source_runs.append(
+                        {
+                            "source": "newsapi",
+                            "ok": False,
+                            "items": 0,
+                            "detail": "missing NEWS_API_KEY",
+                        }
+                    )
+                else:
+                    try:
+                        batch = fetch_news_articles(settings.news_api_key, selected["name"])
+                        batch = _attach_mentions(batch)
+                        ok, _ = safe_neo4j_call(
+                            "News ingestion", apply_batch, None, client, batch
+                        )
+                        source_runs.append(
+                            {
+                                "source": "newsapi",
+                                "ok": bool(ok),
+                                "items": len(batch.entities),
+                                "detail": "recent headlines",
+                            }
+                        )
+                    except Exception as exc:
+                        source_runs.append(
+                            {
+                                "source": "newsapi",
+                                "ok": False,
+                                "items": 0,
+                                "detail": str(exc),
+                            }
+                        )
+            return source_runs
+
+        pending_autorun_signature = str(
+            st.session_state.get("dd_autorun_pending_signature") or ""
+        ).strip()
+        launch_signature = str(st.session_state.get("dd_launch_signature") or "").strip()
+        if pending_autorun_signature and pending_autorun_signature == launch_signature:
+            with st.spinner("Running launch-selected sources..."):
+                st.session_state["dd_last_autorun_source_runs"] = _run_launch_selected_sources()
+                st.session_state["dd_last_autorun_subject_id"] = selected["id"]
+                st.session_state["dd_last_autorun_dataset"] = opensanctions_dataset
+                st.session_state["dd_autorun_pending_signature"] = ""
+            st.rerun()
+
+        latest_autorun_runs = st.session_state.get("dd_last_autorun_source_runs")
+        latest_autorun_subject_id = str(
+            st.session_state.get("dd_last_autorun_subject_id") or ""
+        ).strip()
+        if isinstance(latest_autorun_runs, list) and latest_autorun_subject_id == selected["id"]:
+            st.caption("Latest launch-triggered enrichment")
+            st.dataframe(latest_autorun_runs, use_container_width=True)
 
         st.subheader("Dossier Generator")
         st.caption(
