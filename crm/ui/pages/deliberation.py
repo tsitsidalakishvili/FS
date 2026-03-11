@@ -1265,14 +1265,115 @@ def render_deliberation(public_only: bool):
                 st.caption("Continue in Join Conversation and Results tabs.")
             else:
                 st.caption(
-                    "Recommended flow: Overview -> Setup & Links -> Participant Preview -> Moderation -> Insights."
+                    "Recommended flow: Overview -> Setup -> Moderation -> Insights."
                 )
         elif conversations:
             st.info("Select an active conversation to unlock participation and reports.")
         elif public_only:
             st.info("No conversations are available right now.")
         else:
-            st.info("No conversations yet. Create one in Setup & Links.")
+            st.info("No conversations yet. Create one in Setup.")
+
+        if public_only:
+            return
+
+        st.markdown("---")
+        st.markdown("### Conversation manager")
+        active_items = [
+            c
+            for c in conversations
+            if bool(c.get("is_open", True))
+        ]
+        past_items = [
+            c
+            for c in conversations
+            if not bool(c.get("is_open", True))
+        ]
+        manager_active_tab, manager_past_tab, manager_create_tab = st.tabs(
+            ["Active conversations", "Past conversations", "Create conversation"]
+        )
+        with manager_active_tab:
+            if not active_items:
+                st.caption("No active conversations.")
+            for item in active_items:
+                cid = str(item.get("id") or "").strip()
+                topic = str(item.get("topic") or "Untitled conversation")
+                if not cid:
+                    continue
+                row_cols = st.columns([6, 1, 1])
+                row_cols[0].markdown(f"**{topic}**  \n`{cid}`")
+                if row_cols[1].button("Use", key=f"delib_mgr_use_active_{cid}"):
+                    st.session_state["delib_conversation_id"] = cid
+                    st.rerun()
+                if row_cols[2].button("Close", key=f"delib_mgr_close_{cid}"):
+                    result = delib_api_patch(f"/conversations/{cid}", {"is_open": False})
+                    if result:
+                        st.success(f"Closed: {topic}")
+                        st.rerun()
+        with manager_past_tab:
+            if not past_items:
+                st.caption("No past conversations.")
+            for item in past_items:
+                cid = str(item.get("id") or "").strip()
+                topic = str(item.get("topic") or "Untitled conversation")
+                if not cid:
+                    continue
+                row_cols = st.columns([6, 1, 1])
+                row_cols[0].markdown(f"**{topic}**  \n`{cid}`")
+                if row_cols[1].button("Use", key=f"delib_mgr_use_past_{cid}"):
+                    st.session_state["delib_conversation_id"] = cid
+                    st.rerun()
+                if row_cols[2].button("Reopen", key=f"delib_mgr_reopen_{cid}"):
+                    result = delib_api_patch(f"/conversations/{cid}", {"is_open": True})
+                    if result:
+                        st.success(f"Reopened: {topic}")
+                        st.rerun()
+        with manager_create_tab:
+            st.caption("Quick-create a new conversation. Advanced settings remain in Setup.")
+            quick_topic = st.text_input("Topic", key="delib_quick_create_topic")
+            quick_description = st.text_area(
+                "Description",
+                key="delib_quick_create_description",
+                height=90,
+            )
+            quick_cols = st.columns(3)
+            quick_allow_comments = quick_cols[0].checkbox(
+                "Allow comments",
+                value=True,
+                key="delib_quick_allow_comments",
+            )
+            quick_moderation = quick_cols[1].checkbox(
+                "Moderation required",
+                value=False,
+                key="delib_quick_moderation",
+            )
+            quick_open = quick_cols[2].checkbox(
+                "Open now",
+                value=True,
+                key="delib_quick_open",
+            )
+            if st.button("Create conversation", key="delib_quick_create_btn"):
+                topic_value = str(quick_topic or "").strip()
+                if len(topic_value) < 3:
+                    st.warning("Topic must be at least 3 characters.")
+                else:
+                    created = delib_api_post(
+                        "/conversations",
+                        {
+                            "topic": topic_value,
+                            "description": quick_description,
+                            "allow_comment_submission": quick_allow_comments,
+                            "allow_viz": True,
+                            "moderation_required": quick_moderation,
+                            "is_open": quick_open,
+                        },
+                    )
+                    if created:
+                        created_id = str(created.get("id") or "").strip()
+                        if created_id:
+                            st.session_state["delib_conversation_id"] = created_id
+                        st.success("Conversation created.")
+                        st.rerun()
 
     def _render_participation_workspace() -> None:
         convo_id = st.session_state.get("delib_conversation_id")
@@ -1346,7 +1447,7 @@ def render_deliberation(public_only: bool):
         tab_overview, tab_setup, tab_moderate, tab_reports, tab_data_entry = st.tabs(
             [
                 "Overview",
-                "Setup & Links",
+                "Setup",
                 "Moderation",
                 "Insights",
                 "Data Entry",
@@ -1357,7 +1458,7 @@ def render_deliberation(public_only: bool):
             st.markdown("---")
             st.markdown("### Workspace guide")
             st.info(
-                "Use Setup & Links to configure and share, Moderation to approve pending comments, "
+                "Use Setup to configure and share, Moderation to approve pending comments, "
                 "and Insights for analytics."
             )
 

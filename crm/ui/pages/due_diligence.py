@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from urllib.parse import parse_qsl, quote_plus, urlencode, urlparse, urlunparse
 
+from crm.analytics.people import load_supporter_summary
 from crm.config import FEEDBACK_EMAIL_TO, get_config
 from crm.data.competitors import (
     COMPETITOR_TYPES,
@@ -240,91 +241,168 @@ def _render_competitor_watchlist() -> tuple[str, str]:
 
 def render_due_diligence_page():
     st.subheader("Due Diligence")
-    st.caption("Simple flow: Data Entry subject, watchlist, and launch DD.")
+    st.caption(
+        "Select person/organization, check CRM + competitors, run analysis, then launch workflow."
+    )
 
     def _set_subject(name: str, subject_type: str, start_mode: str) -> None:
         st.session_state["dd_subject_name"] = str(name or "").strip()
         st.session_state["dd_subject_type"] = str(subject_type or "").strip()
         st.session_state["dd_start_mode"] = str(start_mode or "").strip()
 
-    data_entry_tab, watchlist_tab, launch_tab = st.tabs(["Data Entry", "Watchlist", "Launch"])
+    analysis_tab, configure_tab, watchlist_tab, launch_tab = st.tabs(
+        ["Analysis", "Configure", "Watchlist", "Launch"]
+    )
 
-    with data_entry_tab:
-        st.markdown("#### Data Entry")
-        st.caption("Choose one source and set the subject for the investigation.")
-        start_mode = st.radio(
-            "Source",
-            ["CRM context", "Competitors", "Watchlist"],
-            horizontal=True,
-            key="dd_intake_source",
-        )
+    with analysis_tab:
+        st.markdown("#### Subject analysis")
+        analysis_cols = st.columns([3, 1, 1])
+        with analysis_cols[0]:
+            default_subject = str(st.session_state.get("dd_subject_name") or "").strip()
+            if "dd_analysis_subject_name" not in st.session_state and default_subject:
+                st.session_state["dd_analysis_subject_name"] = default_subject
+            subject_name = st.text_input(
+                "Person / organization",
+                key="dd_analysis_subject_name",
+                placeholder="Enter full name or organization...",
+            ).strip()
+        with analysis_cols[1]:
+            subject_type = st.selectbox(
+                "Type",
+                ["Person", "Organization"],
+                key="dd_analysis_subject_type",
+            )
+        with analysis_cols[2]:
+            st.write("")
+            st.write("")
+            if st.button("Set active subject", key="dd_set_subject_analysis", use_container_width=True):
+                if subject_name:
+                    _set_subject(subject_name, subject_type, "Analysis")
+                    st.success(f"Active subject: {subject_name} ({subject_type})")
+                else:
+                    st.warning("Enter a subject name first.")
 
-        if start_mode == "CRM context":
-            crm_cols = st.columns([2, 1, 1])
-            with crm_cols[0]:
-                subject_name = st.text_input(
-                    "CRM subject name",
-                    key="dd_start_crm_subject",
-                    help="Search target from CRM context.",
-                ).strip()
-            with crm_cols[1]:
-                subject_type = st.selectbox(
-                    "Type",
-                    ["Person", "Company"],
-                    key="dd_start_crm_subject_type",
-                )
-            with crm_cols[2]:
-                st.write("")
-                st.write("")
-                if st.button("Set subject", key="dd_set_subject_crm", use_container_width=True):
-                    if subject_name:
-                        _set_subject(subject_name, subject_type, "CRM context")
-                        st.success(f"Subject set: {subject_name} ({subject_type})")
-                    else:
-                        st.warning("Enter a CRM subject name.")
+        if st.button("Run internal checks", key="dd_run_internal_checks"):
+            st.session_state["dd_run_internal_checks"] = True
 
-        elif start_mode == "Competitors":
-            comp_cols = st.columns([2, 1, 1])
-            with comp_cols[0]:
-                subject_name = st.text_input(
-                    "Competitor name",
-                    key="dd_start_competitor_name",
-                    help="Direct competitor intake.",
-                ).strip()
-            with comp_cols[1]:
-                subject_type = st.selectbox(
-                    "Type",
-                    ["Person", "Company"],
-                    key="dd_start_competitor_type",
-                )
-            with comp_cols[2]:
-                st.write("")
-                st.write("")
-                if st.button(
-                    "Set subject",
-                    key="dd_set_subject_competitor",
-                    use_container_width=True,
-                ):
-                    if subject_name:
-                        _set_subject(subject_name, subject_type, "Competitors")
-                        st.success(f"Subject set: {subject_name} ({subject_type})")
-                    else:
-                        st.warning("Enter a competitor name.")
-        else:
-            subject_name = str(st.session_state.get("dd_subject_name") or "").strip()
-            subject_type = str(st.session_state.get("dd_subject_type") or "").strip()
-            if subject_name and str(st.session_state.get("dd_start_mode") or "") == "Watchlist":
-                st.success(f"Subject from watchlist: {subject_name} ({subject_type})")
+        run_checks = bool(st.session_state.get("dd_run_internal_checks", False))
+        if run_checks and subject_name:
+            query = subject_name.lower()
+            crm_df = load_supporter_summary()
+            if crm_df.empty:
+                crm_matches = crm_df
             else:
-                st.info("Go to the Watchlist tab, select a record, then set it as intake subject.")
+                name_series = (
+                    crm_df["fullName"].astype(str).str.lower()
+                    if "fullName" in crm_df.columns
+                    else crm_df.index.to_series().map(lambda _: "")
+                )
+                email_series = (
+                    crm_df["email"].astype(str).str.lower()
+                    if "email" in crm_df.columns
+                    else crm_df.index.to_series().map(lambda _: "")
+                )
+                searchable = name_series + " " + email_series
+                crm_matches = crm_df[searchable.str.contains(query, na=False)]
 
-        current_name = str(st.session_state.get("dd_subject_name") or "").strip()
-        current_type = str(st.session_state.get("dd_subject_type") or "").strip()
-        current_mode = str(st.session_state.get("dd_start_mode") or "").strip()
-        if current_name:
-            st.markdown("---")
-            st.markdown("**Current intake subject**")
-            st.success(f"{current_name} ({current_type}) — source: {current_mode or 'not set'}")
+            comp_df = list_competitors()
+            if comp_df.empty:
+                comp_matches = comp_df
+            else:
+                comp_searchable = (
+                    comp_df["name"].astype(str).str.lower()
+                    if "name" in comp_df.columns
+                    else comp_df.index.to_series().map(lambda _: "")
+                )
+                comp_matches = comp_df[comp_searchable.str.contains(query, na=False)]
+
+            metric_cols = st.columns(3)
+            metric_cols[0].metric("CRM matches", len(crm_matches))
+            metric_cols[1].metric("Competitor matches", len(comp_matches))
+            metric_cols[2].metric(
+                "Subject status",
+                "Known"
+                if (len(crm_matches) + len(comp_matches)) > 0
+                else "New",
+            )
+
+            crm_match_cols = [c for c in ["fullName", "email", "group"] if c in crm_matches.columns]
+            comp_match_cols = [c for c in ["name", "competitorType", "notes"] if c in comp_matches.columns]
+
+            st.markdown("##### CRM check results")
+            if crm_matches.empty:
+                st.caption("No CRM records matched this subject.")
+            elif crm_match_cols:
+                st.dataframe(crm_matches[crm_match_cols], use_container_width=True, height=180)
+
+            st.markdown("##### Competitor check results")
+            if comp_matches.empty:
+                st.caption("No competitor records matched this subject.")
+            elif comp_match_cols:
+                st.dataframe(comp_matches[comp_match_cols], use_container_width=True, height=180)
+
+        st.markdown("---")
+        st.markdown("##### External analysis sources")
+        src_cols = st.columns(3)
+        with src_cols[0]:
+            st.checkbox("Wikidata", key="dd_cfg_use_wikidata", value=True)
+        with src_cols[1]:
+            st.checkbox("OpenSanctions", key="dd_cfg_use_opensanctions", value=True)
+        with src_cols[2]:
+            st.checkbox("News / Web", key="dd_cfg_use_news", value=True)
+        if st.button("Run analysis", key="dd_run_external_analysis"):
+            if not subject_name:
+                st.warning("Set a subject first.")
+            else:
+                enabled = []
+                if st.session_state.get("dd_cfg_use_wikidata"):
+                    enabled.append("Wikidata")
+                if st.session_state.get("dd_cfg_use_opensanctions"):
+                    enabled.append("OpenSanctions")
+                if st.session_state.get("dd_cfg_use_news"):
+                    enabled.append("News/Web")
+                st.success(
+                    f"Analysis started for {subject_name} ({subject_type}) using: "
+                    f"{', '.join(enabled) if enabled else 'no sources selected'}."
+                )
+
+    with configure_tab:
+        st.markdown("#### Configure")
+        cfg_data_tab, cfg_sources_tab = st.tabs(["CRM & Competitors", "Public sources"])
+        with cfg_data_tab:
+            summary_df = load_supporter_summary()
+            total_people = len(summary_df)
+            if not summary_df.empty and "group" in summary_df.columns:
+                total_supporters = int((summary_df["group"] == "Supporter").sum())
+                total_members = int((summary_df["group"] == "Member").sum())
+            else:
+                total_supporters = 0
+                total_members = 0
+            mcols = st.columns(3)
+            mcols[0].metric("CRM people", total_people)
+            mcols[1].metric("Supporters", total_supporters)
+            mcols[2].metric("Members", total_members)
+            st.markdown("##### Competitor records")
+            selected_name, selected_type = _render_competitor_watchlist()
+            if selected_name and selected_type:
+                if st.button("Set selected as active subject", key="dd_cfg_use_selected_subject"):
+                    _set_subject(selected_name, selected_type, "Configure")
+                    st.success(f"Active subject set: {selected_name} ({selected_type})")
+                    st.rerun()
+
+        with cfg_sources_tab:
+            st.caption("Control which external sources are used during analysis.")
+            st.checkbox("Enable Wikidata", key="dd_cfg_use_wikidata")
+            st.checkbox("Enable OpenSanctions", key="dd_cfg_use_opensanctions")
+            st.checkbox("Enable News / Web", key="dd_cfg_use_news")
+            st.markdown("##### Source connection status")
+            open_key = str(get_config("OPENSANCTIONS_API_KEY") or "").strip()
+            news_key = str(get_config("NEWS_API_KEY") or "").strip()
+            st.write(f"- OpenSanctions API key: {'Configured' if open_key else 'Not configured'}")
+            st.write(f"- News API key: {'Configured' if news_key else 'Not configured'}")
+            st.caption(
+                "API keys and base URLs are managed in .env / Streamlit secrets."
+            )
 
     with watchlist_tab:
         st.markdown("#### Watchlist")
@@ -341,16 +419,19 @@ def render_due_diligence_page():
         st.markdown("#### Launch")
         subject_name = str(st.session_state.get("dd_subject_name") or "").strip()
         subject_type = str(st.session_state.get("dd_subject_type") or "").strip()
-        start_mode = str(st.session_state.get("dd_start_mode") or "CRM context")
+        start_mode = str(st.session_state.get("dd_start_mode") or "Analysis")
         if subject_name:
             st.success(f"Launch subject: {subject_name} ({subject_type})")
         else:
-            st.warning("No subject selected yet. Set one in Intake or Watchlist.")
+            st.warning("No subject selected yet. Set one in Analysis or Watchlist.")
 
         app_url = (
             str(get_config("DUE_DILIGENCE_APP_URL") or "").strip()
             or str(get_config("DD_APP_URL") or "").strip()
         )
+        use_wikidata = bool(st.session_state.get("dd_cfg_use_wikidata", True))
+        use_opensanctions = bool(st.session_state.get("dd_cfg_use_opensanctions", True))
+        use_news = bool(st.session_state.get("dd_cfg_use_news", True))
         if app_url:
             st.success("External Due Diligence app is configured.")
             st.text_input("Configured app URL", value=app_url, key="dd_app_url_preview")
@@ -360,6 +441,9 @@ def render_due_diligence_page():
                     "subject": subject_name,
                     "subject_type": subject_type,
                     "start_mode": start_mode.replace(" ", "_").lower(),
+                    "use_wikidata": "1" if use_wikidata else "0",
+                    "use_opensanctions": "1" if use_opensanctions else "0",
+                    "use_news": "1" if use_news else "0",
                 },
             )
             action_cols = st.columns(3)
@@ -384,6 +468,9 @@ def render_due_diligence_page():
                         f"Start mode: {start_mode}\n"
                         f"Subject: {subject_name or 'not set'}\n"
                         f"Subject type: {subject_type or 'not set'}\n\n"
+                        f"Wikidata: {'on' if use_wikidata else 'off'}\n"
+                        f"OpenSanctions: {'on' if use_opensanctions else 'off'}\n"
+                        f"News/Web: {'on' if use_news else 'off'}\n\n"
                         f"Due Diligence app:\n{app_launch_url or app_url}"
                     ),
                 )
