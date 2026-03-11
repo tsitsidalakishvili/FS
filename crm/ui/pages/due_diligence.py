@@ -239,6 +239,19 @@ def _render_competitor_watchlist() -> tuple[str, str]:
     return "", ""
 
 
+def _render_synced_source_checkbox(
+    label: str,
+    *,
+    config_key: str,
+    widget_key: str,
+    default: bool = True,
+) -> bool:
+    current = bool(st.session_state.get(config_key, default))
+    selected = st.checkbox(label, value=current, key=widget_key)
+    st.session_state[config_key] = bool(selected)
+    return bool(selected)
+
+
 def render_due_diligence_page():
     st.subheader("Due Diligence")
     st.caption(
@@ -345,11 +358,26 @@ def render_due_diligence_page():
         st.markdown("##### External analysis sources")
         src_cols = st.columns(3)
         with src_cols[0]:
-            st.checkbox("Wikidata", key="dd_cfg_use_wikidata", value=True)
+            _render_synced_source_checkbox(
+                "Wikidata",
+                config_key="dd_cfg_use_wikidata",
+                widget_key="dd_cfg_use_wikidata_analysis",
+                default=True,
+            )
         with src_cols[1]:
-            st.checkbox("OpenSanctions", key="dd_cfg_use_opensanctions", value=True)
+            _render_synced_source_checkbox(
+                "OpenSanctions",
+                config_key="dd_cfg_use_opensanctions",
+                widget_key="dd_cfg_use_opensanctions_analysis",
+                default=True,
+            )
         with src_cols[2]:
-            st.checkbox("News / Web", key="dd_cfg_use_news", value=True)
+            _render_synced_source_checkbox(
+                "News / Web",
+                config_key="dd_cfg_use_news",
+                widget_key="dd_cfg_use_news_analysis",
+                default=True,
+            )
         if st.button("Run analysis", key="dd_run_external_analysis"):
             if not subject_name:
                 st.warning("Set a subject first.")
@@ -392,9 +420,24 @@ def render_due_diligence_page():
 
         with cfg_sources_tab:
             st.caption("Control which external sources are used during analysis.")
-            st.checkbox("Enable Wikidata", key="dd_cfg_use_wikidata")
-            st.checkbox("Enable OpenSanctions", key="dd_cfg_use_opensanctions")
-            st.checkbox("Enable News / Web", key="dd_cfg_use_news")
+            _render_synced_source_checkbox(
+                "Enable Wikidata",
+                config_key="dd_cfg_use_wikidata",
+                widget_key="dd_cfg_use_wikidata_configure",
+                default=True,
+            )
+            _render_synced_source_checkbox(
+                "Enable OpenSanctions",
+                config_key="dd_cfg_use_opensanctions",
+                widget_key="dd_cfg_use_opensanctions_configure",
+                default=True,
+            )
+            _render_synced_source_checkbox(
+                "Enable News / Web",
+                config_key="dd_cfg_use_news",
+                widget_key="dd_cfg_use_news_configure",
+                default=True,
+            )
             st.markdown("##### Source connection status")
             open_key = str(get_config("OPENSANCTIONS_API_KEY") or "").strip()
             news_key = str(get_config("NEWS_API_KEY") or "").strip()
