@@ -29,6 +29,9 @@ from crm.clients.deliberation import (
 )
 from crm.ui.components.questionnaire import render_questionnaire_block
 
+MOBILE_QUESTIONNAIRE_CARD_LIMIT = 5
+
+
 def _safe_int(value):
     try:
         return int(value)
@@ -1157,6 +1160,8 @@ def render_deliberation(public_only: bool):
         if not comments:
             st.info("No approved comments yet.")
         else:
+            comments = comments[:MOBILE_QUESTIONNAIRE_CARD_LIMIT]
+            st.caption(f"Mobile deck size: {len(comments)}/{MOBILE_QUESTIONNAIRE_CARD_LIMIT} cards")
             # Hard-reliability mode for shared mobile links:
             # use deterministic one-card flow and avoid component state drift.
             _render_mobile_questionnaire_cards(
