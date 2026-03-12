@@ -107,38 +107,54 @@ def _detect_base_url():
             return _normalize_base_url(f"{proto}://{host}{prefix}")
     except Exception:
         pass
-    return "<APP_URL>"
+    return ""
 
 
-def _build_app_link(params):
-    base = _detect_base_url()
+def _build_app_link(params, base_override: str = ""):
+    base = _normalize_base_url(base_override) or _detect_base_url()
     clean_base = str(base or "").strip()
+    if clean_base:
+        parsed = urlparse(clean_base)
+        merged = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    else:
+        parsed = urlparse("")
+        merged = {}
     if not clean_base:
-        return ""
-    parsed = urlparse(clean_base)
-    merged = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        path = ""
+        params_path = ""
+        fragment = ""
+    else:
+        path = parsed.path
+        params_path = parsed.params
+        fragment = parsed.fragment
     for key, value in params.items():
         text = str(value or "").strip()
         if text:
             merged[key] = text
     new_query = urlencode(merged, quote_via=quote_plus)
+    if not clean_base:
+        return f"?{new_query}" if new_query else ""
     return urlunparse(
         (
             parsed.scheme,
             parsed.netloc,
-            parsed.path,
-            parsed.params,
+            path,
+            params_path,
             new_query,
-            parsed.fragment,
+            fragment,
         )
     )
 
 
 def _show_link_hint_if_needed(link):
-    if link.startswith("<APP_URL>"):
+    if not str(link or "").strip():
         st.caption(
-            "Could not auto-detect your app URL in this environment. "
-            "Set DELIBERATION_APP_URL (preferred) or APP_URL in Streamlit secrets for fully qualified links."
+            "Could not build a link yet. Paste a public app URL override if auto-detection fails."
+        )
+    elif str(link).startswith("?"):
+        st.caption(
+            "Generated a relative link from the current app context. "
+            "For fully qualified share links, set DELIBERATION_APP_URL or paste a public app URL override below."
         )
 
 
@@ -312,6 +328,26 @@ def render_questionnaire_block(kind, show_expander=True):
                 st.caption("Select a conversation to generate the link.")
                 return
 
+            override_key = f"questionnaire_base_override_{kind}"
+            configured_base = _normalize_base_url(
+                get_config("DELIBERATION_APP_URL")
+                or get_config("DELIBERATION_UI_URL")
+                or get_config("APP_URL")
+                or get_config("PUBLIC_APP_URL")
+                or get_config("STREAMLIT_APP_URL")
+            )
+            if override_key not in st.session_state and configured_base:
+                st.session_state[override_key] = configured_base
+            base_override = st.text_input(
+                "Public app URL override",
+                key=override_key,
+                placeholder="https://your-streamlit-app.example",
+                help=(
+                    "Optional. Paste the public Streamlit URL to generate fully qualified "
+                    "participant/admin links when auto-detection is not reliable."
+                ),
+            ).strip()
+
             convo_id = convo_options[selected_topic]
             sid_key = f"questionnaire_delib_sid_{kind}_{convo_id}"
             sid = str(st.session_state.get(sid_key) or "").strip()
@@ -326,7 +362,8 @@ def render_questionnaire_block(kind, show_expander=True):
                     "view": "mobile",
                     "embed": "true",
                     "sid": sid,
-                }
+                },
+                base_override=base_override,
             )
             admin_link = _build_app_link(
                 {
@@ -336,7 +373,8 @@ def render_questionnaire_block(kind, show_expander=True):
                     "view": "mobile",
                     "embed": "true",
                     "sid": sid,
-                }
+                },
+                base_override=base_override,
             )
             public_link_key = f"questionnaire_link_public_{kind}"
             admin_link_key = f"questionnaire_link_admin_{kind}"

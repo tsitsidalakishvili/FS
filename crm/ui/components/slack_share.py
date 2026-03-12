@@ -24,9 +24,13 @@ def render_slack_link_sender(
         st.caption("Slack is not configured. Set SLACK_WEBHOOK_URL in secrets or .env.")
         return {"sent": False, "final_message": "", "error": "not_configured"}
 
-    if str(link or "").strip().startswith("<APP_URL>"):
+    clean_link = str(link or "").strip()
+    if clean_link and not (
+        clean_link.startswith("http://") or clean_link.startswith("https://")
+    ):
         st.warning(
-            "Link base URL is unresolved (<APP_URL>). Set APP_URL in secrets before sending."
+            "Link base URL is unresolved. Set DELIBERATION_APP_URL/APP_URL or use the "
+            "public app URL override before sending to Slack."
         )
         return {"sent": False, "final_message": "", "error": "unresolved_link"}
 
@@ -40,7 +44,6 @@ def render_slack_link_sender(
 
     if st.button(send_button_label, key=f"{key_prefix}_slack_send_btn"):
         final_message = message
-        clean_link = str(link or "").strip()
         if append_link and clean_link:
             final_message = (final_message + f"\n\n{clean_link}").strip()
 

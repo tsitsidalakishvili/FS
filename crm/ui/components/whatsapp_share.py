@@ -52,9 +52,13 @@ def render_whatsapp_group_link_sender(
             "error": "no_groups",
         }
 
-    if str(link or "").strip().startswith("<APP_URL>"):
+    clean_link = str(link or "").strip()
+    if clean_link and not (
+        clean_link.startswith("http://") or clean_link.startswith("https://")
+    ):
         st.warning(
-            "Link base URL is unresolved (<APP_URL>). Set APP_URL in secrets before sending."
+            "Link base URL is unresolved. Set DELIBERATION_APP_URL/APP_URL or use the "
+            "public app URL override before sending to WhatsApp."
         )
         return {
             "sent": False,
@@ -118,7 +122,6 @@ def render_whatsapp_group_link_sender(
             }
 
         final_message = message
-        clean_link = str(link or "").strip()
         if append_link and clean_link:
             final_message = (final_message + f"\n\n{clean_link}").strip()
         invite = str(selected_group.get("inviteLink") or "").strip()
